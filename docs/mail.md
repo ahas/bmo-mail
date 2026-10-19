@@ -344,7 +344,9 @@ flowchart TD
   dragged in, and capped at two megabytes each. A signature has no message to hang an attachment
   on and a draft must survive being saved and reopened, so nothing is uploaded for one; the message
   that goes out turns each such picture into an inline part and points the markup at it by its
-  content id, which is how a signature's picture arrives with the mail.
+  content id, which is how a signature's picture arrives with the mail. A saved draft is written the
+  same way, and reopening it carries each picture its markup names by content id as its own bytes
+  again, so a draft sent after being reopened still sends its pictures.
 - **Reply and reply-all** set `In-Reply-To` and `References`, prefix the subject once with
   `Re:`, quote the message under the new text with an attribution line in the service's own words,
   and mark the original `\Answered` once sent. A reply to a message the account itself sent goes to

@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use mail_parser::{Address, HeaderName, MessageParser};
+use mail_parser::{Address, HeaderName, MessageParser, MimeHeaders};
 
 use crate::imap::conversation::id_key;
 use crate::imap::folders::ensure_role_folder;
@@ -14,7 +14,8 @@ use crate::imap::{append_landing, expunge, flag_name, store_flags, uid_fetch};
 use crate::routes::requests::{Asked, MailFault};
 use crate::wire::{AttachmentRef, Draft, DraftKind, FolderRole, MailAddress, MailRef};
 use crate::writing::compose::{
-  DRAFT_KIND_HEADER, DRAFT_ORIGINAL_HEADER, Purpose, ResolvedAttachment, build_message, escape_html,
+  DRAFT_KIND_HEADER, DRAFT_ORIGINAL_HEADER, Purpose, ResolvedAttachment, build_message, data_images,
+  escape_html,
 };
 use crate::writing::staging::read_staged;
 
@@ -178,6 +179,14 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Draft, Ma
     .body_html(0)
     .map(|html| html.into_owned())
     .unwrap_or_else(|| escape_html(parsed.body_text(0).as_deref().unwrap_or("")).replace('\n', "<br>"));
+  let html = data_images(&html, |cid| {
+    parsed.parts.iter().find_map(|part| {
+      let named = part.content_id()?.trim_start_matches('<').trim_end_matches('>');
+      let kind = part.content_type().filter(|kind| kind.ctype().eq_ignore_ascii_case("image"))?;
+      let kind = format!("image/{}", kind.subtype()?).to_lowercase();
+      (named == cid && !part.contents().is_empty()).then(|| (kind, part.contents().to_vec()))
+    })
+  });
   let ids = |value: &mail_parser::HeaderValue<'_>| -> Vec<String> {
     value
       .as_text_list()

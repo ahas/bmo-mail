@@ -416,6 +416,33 @@ pub fn inline_images(html: &str, id: &str) -> (String, Vec<InlineImage>) {
   }
 }
 
+/// The way back from [`inline_images`]: every picture the markup names by `cid:` is carried as its own
+/// bytes again, as a `data:` address, where `part` finds the inline part of that content id as its type
+/// and its bytes. A `cid:` no part answers is left as it stands.
+pub fn data_images(html: &str, part: impl Fn(&str) -> Option<(String, Vec<u8>)>) -> String {
+  let rewritten = rewrite_str(
+    html,
+    RewriteStrSettings::default().append_element_content_handler(element!("[src]", |picture| {
+      let Some(src) = picture.get_attribute("src") else {
+        return Ok(());
+      };
+      let cid = src
+        .get(..4)
+        .filter(|scheme| scheme.eq_ignore_ascii_case("cid:"))
+        .map(|_| src[4..].trim_start_matches('<').trim_end_matches('>'));
+      let Some((kind, content)) = cid.and_then(&part) else {
+        return Ok(());
+      };
+
+      picture.set_attribute("src", &format!("data:{kind};base64,{}", STANDARD.encode(content)))?;
+
+      Ok(())
+    })),
+  );
+
+  rewritten.unwrap_or_else(|_| html.to_owned())
+}
+
 /// What a message is built for. A draft carries the headers that say what it answers, and its Bcc; a
 /// message sent carries neither, and the copy kept in the sent folder keeps its Bcc.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
