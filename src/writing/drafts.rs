@@ -159,7 +159,7 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Draft, Ma
     .header_text(HeaderName::Subject)
     .header_text(HeaderName::Other(DRAFT_KIND_HEADER.into()))
     .header_text(HeaderName::Other(DRAFT_ORIGINAL_HEADER.into()))
-    .header_raw(HeaderName::Other("Disposition-Notification-To".into()));
+    .header_raw(HeaderName::DispositionNotificationTo);
   let Some(parsed) = parser.parse(&source) else {
     return Err(MailFault::asked("draft_not_found", "the draft is not on the server"));
   };
@@ -209,7 +209,7 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Draft, Ma
         size: part.decoded_size(),
       })
       .collect(),
-    receipt: parsed.header(HeaderName::Other("Disposition-Notification-To".into())).is_some(),
+    receipt: parsed.header(HeaderName::DispositionNotificationTo).is_some(),
     kind,
     original: text_header(DRAFT_ORIGINAL_HEADER).map(|id| id_key(&id)),
     in_reply_to: ids(parsed.in_reply_to()).into_iter().next(),

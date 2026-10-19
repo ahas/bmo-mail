@@ -48,9 +48,6 @@ const SETTABLE: [&str; 7] =
 /// The headers a row and a message are read from.
 const HEADER_FIELDS: &str = "BODY.PEEK[HEADER.FIELDS (DATE SUBJECT FROM TO CC BCC REPLY-TO MESSAGE-ID IN-REPLY-TO REFERENCES DISPOSITION-NOTIFICATION-TO)]";
 
-/// The receipt request's header, read as an address.
-const RECEIPT_HEADER: &str = "Disposition-Notification-To";
-
 /// What a fetch of rows asks for.
 fn row_items() -> String {
   format!("(UID FLAGS BODYSTRUCTURE INTERNALDATE {HEADER_FIELDS})")
@@ -101,7 +98,7 @@ pub fn heads(raw: Option<&[u8]>) -> Heads {
     .with_date_headers()
     .with_message_ids()
     .header_text(HeaderName::Subject)
-    .header_address(HeaderName::Other(RECEIPT_HEADER.into()));
+    .header_address(HeaderName::DispositionNotificationTo);
   let Some(message) = parser.parse_headers(raw) else {
     return Heads::default();
   };
@@ -124,7 +121,7 @@ pub fn heads(raw: Option<&[u8]>) -> Heads {
     in_reply_to: ids(message.in_reply_to()),
     references: ids(message.references()),
     receipt_to: message
-      .header(HeaderName::Other(RECEIPT_HEADER.into()))
+      .header(HeaderName::DispositionNotificationTo)
       .and_then(|value| value.as_address())
       .and_then(|address| address.first())
       .and_then(|one| one.address())
