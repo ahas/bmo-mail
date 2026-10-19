@@ -326,7 +326,11 @@ with every address below it (`docs/mail.md`, 「The screen」).
     `unread`, the mark the host's `/mail` navigation entry carries while any inbox holds unread mail;
   - the components `DeployMark`, `TodoOpenButton` and `UsageMeters` of the console's title bar, registered by
     name and handed no props;
-  - its i18n module, which merges the bundle's own pack into the host's locale of the same code.
+  - its i18n module, which merges the bundle's own pack into the host's locale of the same code;
+  - everything bmo-ui's boundary document says its host owes, since extending the bundle brings bmo-ui's
+    layer with it: among them the pack answering bmo-ui's 76 wording keys, which the screen's shared
+    pieces read (the list's choose-all among them), and the locale and time zone in the host's app
+    configuration.
 - **Wording:** every word the screen shows is the bundle's language pack, `client/i18n/locales/ko.yaml`,
   registered by code (`ko`), language tag (`ko-KR`) and file, as the host registers its own locales. It
   holds the 292 keys under `mail`, `screens.label.mail`, `screens.aria.mail_unread` and the 17 `common` keys

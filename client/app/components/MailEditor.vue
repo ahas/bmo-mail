@@ -14,6 +14,7 @@
     content-type="html"
     :placeholder="props.placeholder"
     :extensions="extensions"
+    :image="IMAGE"
     :editor-props="editorProps"
     :class="props.class"
     :ui="{ base: props.compact ? 'min-h-32 px-3 py-2' : 'min-h-48 px-3 py-2' }"
@@ -80,7 +81,6 @@ import { editorToolbar, imageIn, MailImageError, readImageData } from "../domain
 
 import type { Editor } from "@tiptap/vue-3";
 import type { DropdownMenuItem } from "@nuxt/ui";
-import type { ShallowRef } from "vue";
 
 defineOptions({ inheritAttrs: false });
 
@@ -126,6 +126,10 @@ const extensions = [
   TextAlign.configure({ types: ["heading", "paragraph"] }),
 ];
 
+// A picture is carried in the markup as its own bytes, so the editor reads and keeps one written as a
+// data address; with the library's own setting it drops such a picture whenever markup is loaded.
+const IMAGE = { allowBase64: true };
+
 const TOOLBAR = editorToolbar(t);
 
 // What a menu of this screen's own does. The editor comes from the slot that drew the menu, so
@@ -164,11 +168,12 @@ function tableItems(editor: Editor): DropdownMenuItem[][] {
 }
 
 // The editor itself, for the paste and the drop: those two are handed to it as it is built and so
-// cannot be given the one a slot renders with.
-const board = useTemplateRef<{ editor: ShallowRef<Editor | undefined> }>("board");
+// cannot be given the one a slot renders with. The component exposes it as a ref, which Vue unwraps on
+// the exposed object, so the editor stands there as it is.
+const board = useTemplateRef<{ editor: Editor | undefined }>("board");
 
 function editing(): Editor | null {
-  return board.value?.editor.value ?? null;
+  return board.value?.editor ?? null;
 }
 
 const linkOpen = ref(false);
