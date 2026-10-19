@@ -21,7 +21,8 @@ flowchart TD
   missing or wrong token is answered 401 `unauthorized`. The console presents the token on every request it
   hands on.
 - **Bodies are JSON, both ways, with field names in camelCase,** but for an upload's body, which is a
-  multipart form, and the byte answers (「Byte answers」). A body that is not JSON is read as no body.
+  multipart form, and the byte answers (「Byte answers」). A body that is not JSON is read as no body. A
+  body, JSON or multipart, carries at most 64 MiB.
 - **Times are Unix milliseconds.**
 - **`{account}` in a path** is an account's key: its address's local part, matched without regard to case.
 - **With no accounts file,** every route under `/api/mail/` but the avatar's answers 200 with
@@ -231,17 +232,20 @@ to learn what happened while it was closed. An idle stream carries a comment lin
 ## The service's own words
 
 The words the service writes into a message or a notification are its own pack: one TOML file to a
-language under `wording/`, `ko.toml` shipped, chosen by the setting `wording.language`. A key holding
-`{name}` takes that value.
+language, `wording/<language>.toml` under the settings folder, chosen by the setting `wording.language`.
+The repository ships `wording/ko.toml` and builds it in, so a service whose settings folder holds no file
+for its language writes the shipped words. A key holding `{name}` takes that value.
 
 | Key | Where it is written |
 |---|---|
+| `locale` | the locale a date is written in, such as `ko_KR` |
+| `date` | how a date is written, in `strftime` form | 
 | `arrival.title_one` (`address`), `arrival.title_many` (`n`, `address`), `arrival.body` (`who`, `subject`), `arrival.no_sender`, `arrival.no_subject` | an arrival's notification |
 | `reply.attribution` (`date`, `from`) | the line over a quoted reply |
 | `forward.header`, `forward.from`, `forward.date`, `forward.subject`, `forward.to`, `forward.cc`, each taking the field of its name | the head of a forwarded original |
 | `receipt.subject` (`subject`), `receipt.body` (`account`, `subject`) | a read receipt sent |
 
-Dates are written in the language's long form at the setting `wording.time_zone`, and counts with the
+Dates are written by `date` in `locale` at the setting `wording.time_zone`, and counts with the
 language's grouping. The same language orders names and subjects in a list (`docs/mail.md`, 「Reading」).
 
 ## The store

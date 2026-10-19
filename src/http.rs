@@ -7,7 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::extract::{FromRequestParts, Query, RawPathParams, Request, State};
+use axum::extract::{DefaultBodyLimit, FromRequestParts, Query, RawPathParams, Request, State};
 use axum::http::{Method, StatusCode, header};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{MethodFilter, MethodRouter};
@@ -18,6 +18,8 @@ use crate::events::Events;
 use crate::imap::session::Sessions;
 use crate::settings::Settings;
 use crate::store::Store;
+use crate::wording::Wording;
+use crate::writing::send::Sends;
 
 pub use inventory;
 
@@ -162,10 +164,14 @@ pub struct Standing {
   pub sessions: Sessions,
   /// The event stream's broadcast.
   pub events: Events,
+  /// The service's own words.
+  pub wording: Wording,
+  /// The messages held before they go.
+  pub sends: Sends,
 }
 
 impl Standing {
-  pub fn new(settings: Settings, store: Store) -> Self {
+  pub fn new(settings: Settings, store: Store, wording: Wording) -> Self {
     let accounts = AccountsFile::new(settings.accounts.file.clone());
 
     Self {
@@ -174,6 +180,8 @@ impl Standing {
       accounts,
       sessions: Sessions::default(),
       events: Events::default(),
+      wording,
+      sends: Sends::default(),
     }
   }
 }
@@ -185,7 +193,7 @@ pub struct Call {
 }
 
 // The most a JSON body read whole may carry: 64 MiB, room for a draft whose markup carries its pictures.
-const BODY_LIMIT: usize = 64 * 1024 * 1024;
+pub const BODY_LIMIT: usize = 64 * 1024 * 1024;
 
 impl Call {
   pub fn new(request: Request, standing: Arc<Standing>) -> Self {
@@ -310,5 +318,6 @@ pub fn router(standing: Arc<Standing>) -> Result<Router, Vec<String>> {
     .fold(Router::new(), |router, (path, methods)| router.route(path, methods))
     .fallback(not_found);
 
-  Ok(router.with_state(standing))
+  // A multipart upload is read under the same limit as a JSON body.
+  Ok(router.layer(DefaultBodyLimit::max(BODY_LIMIT)).with_state(standing))
 }

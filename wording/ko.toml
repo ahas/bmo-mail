@@ -1,0 +1,28 @@
+# The service's own words in Korean (docs/api.md, 「The service's own words」): what it writes into a message
+# or a notification. A value holding {name} takes that value.
+
+# The locale dates are written in, and how.
+locale = "ko_KR"
+date = "%Y년 %-m월 %-d일 %p %-I:%M"
+
+[arrival]
+title_one = "새 메일 · {address}"
+title_many = "새 메일 {n}통 · {address}"
+body = "{who}: {subject}"
+no_sender = "보낸이 없음"
+no_subject = "(제목 없음)"
+
+[reply]
+attribution = "{date}, {from}님이 작성:"
+
+[forward]
+header = "---------- 전달된 메일 ---------"
+from = "보낸사람: {from}"
+date = "날짜: {date}"
+subject = "제목: {subject}"
+to = "받는사람: {to}"
+cc = "참조: {cc}"
+
+[receipt]
+subject = "읽음 확인: {subject}"
+body = "{account} 님이 이 메일을 열어 보았습니다: {subject}"

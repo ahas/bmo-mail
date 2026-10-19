@@ -18,14 +18,18 @@ test = false
 [dependencies]
 # IMAP: the work connection the routes go through and the watcher's IDLE connection.
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
-axum = "0.8.9"
+axum = { version = "0.8.9", features = ["multipart"] }
 # Base64 bodies, read as far as their whole groups go.
 base64 = "0.23.1"
-# Dates: an IMAP internal date, a header's date, a search's day.
-chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+# Dates: an IMAP internal date, a header's date, a search's day, and a date written in the service's
+# language.
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "unstable-locales"] }
+chrono-tz = "0.10.4"
 clap = { version = "4.6.7", features = ["derive"] }
 # The settings: the built-in defaults, the deployment's files and the environment, layered in that order.
 config = { version = "0.15", default-features = false, features = ["toml"] }
+# The tree an HTML body is read into, walked for its plain text.
+ego-tree = "0.11.0"
 # A body's charset read as text, an unknown one as UTF-8.
 encoding_rs = "0.8.42"
 futures = "0.3.31"
@@ -34,8 +38,14 @@ icu_collator = "2.3.1"
 icu_locale = "2.3.0"
 # Each route registers itself beside its own answer.
 inventory = "0.3.24"
+# A message's pictures of its own turned into inline parts, the markup rewritten where they stand.
+lol_html = "3.0.1"
+# Messages written: a draft, a message sent, its copy, a read receipt.
+mail-builder = "1.0.0"
 # Headers read and decoded: addresses, subjects, message IDs, encoded words and parameters.
 mail-parser = "0.11.9"
+# Submission: a message handed to the mail server as the account, and the size it takes.
+mail-send = { version = "0.6.2", default-features = false, features = ["ring", "tls12"] }
 # A filename written into a header in its UTF-8 form.
 percent-encoding = "2.3.2"
 # Quoted-printable bodies.
@@ -55,6 +65,8 @@ serde_json = { version = "1.0.151", features = ["preserve_order"] }
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "macros", "migrate"] }
 thiserror = "2.0.17"
 tokio = { version = "1.53.2", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+# The service's own words, one TOML file to a language.
+toml = "1.1.8"
 # TLS to the mail servers, checked against the web's root certificates.
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["logging", "ring", "tls12"] }
 # The event stream, read from the service's broadcast.

@@ -23,6 +23,9 @@ pub const ENVIRONMENT_PREFIX: &str = "BMO_MAIL";
 /// Everything the service and its command are started with.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Settings {
+  /// The settings folder they were read from, which a relative path is read from.
+  #[serde(skip)]
+  pub folder: PathBuf,
   pub server: Server,
   pub store: Store,
   pub accounts: Accounts,
@@ -91,6 +94,7 @@ impl Settings {
       .build()?
       .try_deserialize()?;
 
+    settings.folder = dir.to_path_buf();
     settings.store.path = dir.join(&settings.store.path);
     settings.staging.dir = dir.join(&settings.staging.dir);
     settings.accounts.file = settings

@@ -157,6 +157,65 @@ fn uids_of(members: &[UidSetMember]) -> Vec<u32> {
     .collect()
 }
 
+/// Appends a message to a folder and says where it landed where the server said (`APPENDUID`). The IMAP
+/// library writes `APPEND` and passes its answer over, so the command is written here as the library writes
+/// it: the folder, the flags, the internal date where one is given, and the message as a literal sent once
+/// the server asks for it.
+pub async fn append_landing(
+  session: &mut ImapSession,
+  folder: &str,
+  flags: &str,
+  internal_date: Option<&str>,
+  content: &[u8],
+) -> Result<Option<Landed>, MailFault> {
+  use tokio::io::AsyncWriteExt;
+
+  let date = internal_date.map(|date| format!(" {}", quoted(date))).unwrap_or_default();
+  let command = format!("APPEND {} ({flags}){date} {{{}}}", quoted(&wire_name(folder)), content.len());
+  let id = session.run_command(&command).await.map_err(MailFault::server)?;
+  let asked = session.read_response().await.map_err(MailFault::server)?;
+
+  if !matches!(asked.as_ref().map(|response| response.parsed()), Some(Response::Continue { .. })) {
+    return Err(MailFault::server("the mail server refused the message"));
+  }
+
+  let stream: &mut Box<dyn crate::imap::session::MailStream> = session.as_mut();
+
+  stream.write_all(content).await.map_err(MailFault::server)?;
+  stream.write_all(b"\r\n").await.map_err(MailFault::server)?;
+  stream.flush().await.map_err(MailFault::server)?;
+
+  loop {
+    let Some(response) = session.read_response().await.map_err(MailFault::server)? else {
+      return Err(MailFault::server("the mail server closed the connection"));
+    };
+
+    if let Response::Done {
+      tag,
+      status,
+      outcome,
+    } = response.parsed()
+      && *tag == id
+    {
+      let landed = match &outcome.code {
+        Some(ResponseCode::AppendUid(validity, uids)) => Some(Landed {
+          validity: validity.to_string(),
+          uids: uids_of(uids),
+        }),
+        _ => None,
+      };
+
+      return match status {
+        Status::Ok => Ok(landed),
+        _ => Err(MailFault::server(format!(
+          "APPEND: {}",
+          outcome.information.as_deref().unwrap_or("refused")
+        ))),
+      };
+    }
+  }
+}
+
 /// Runs a command whose answer is read here, and gives where it put messages where the server said
 /// (`COPYUID`, tagged or not). Everything else it answered is passed over. A `NO` or a `BAD` is a fault.
 pub async fn run_landing(session: &mut ImapSession, command: &str) -> Result<Option<Landed>, MailFault> {

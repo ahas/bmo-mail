@@ -2,6 +2,7 @@
 //! submission behind one API, with an event stream saying when an inbox changed and what arrived
 //! (`docs/mail.md`, `docs/api.md`).
 
+pub mod account_settings;
 pub mod accounts;
 pub mod events;
 pub mod health;
@@ -12,6 +13,8 @@ pub mod routes;
 pub mod settings;
 pub mod store;
 pub mod wire;
+pub mod wording;
+pub mod writing;
 
 use std::io;
 use std::sync::Arc;
@@ -21,6 +24,7 @@ use tokio::net::TcpListener;
 use crate::http::Standing;
 use crate::settings::Settings;
 use crate::store::Store;
+use crate::wording::Wording;
 
 /// The nouns `bmo` dispatches to this command: none, since the service carries no word of `bmo`.
 pub const NOUNS: [&str; 0] = [];
@@ -30,7 +34,8 @@ pub const NOUNS: [&str; 0] = [];
 pub async fn serve(settings: Settings) -> Result<(), String> {
   let store = Store::open(&settings.store.path).await.map_err(|why| why.to_string())?;
   let listen = settings.server.listen;
-  let standing = Arc::new(Standing::new(settings, store));
+  let wording = Wording::load(&settings).map_err(|why| why.to_string())?;
+  let standing = Arc::new(Standing::new(settings, store, wording));
   let router = http::router(Arc::clone(&standing)).map_err(|faults| faults.join("; "))?;
   let listener = TcpListener::bind(listen)
     .await
