@@ -7,8 +7,8 @@ use std::fmt::Debug;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
+use async_imap::types::Mailbox;
 use async_imap::{Client, Session};
-use futures::future::BoxFuture;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
@@ -17,6 +17,7 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 
 use crate::accounts::{MailAccount, MailEndpoint};
+use crate::imap::wire_name;
 use crate::routes::requests::MailFault;
 
 /// What a connection runs over: TLS, or a plain stream where the accounts file says `-`.
@@ -105,33 +106,60 @@ async fn greeted(stream: Box<dyn MailStream>) -> Result<Client<Box<dyn MailStrea
 }
 
 /// The open connection and the folder it has selected.
-pub struct Open {
-  pub session: ImapSession,
-  selected: Option<String>,
+struct Open {
+  session: ImapSession,
+  mailbox: Option<Mailbox>,
 }
 
-impl Open {
-  /// Selects `path` unless it is selected already.
-  pub async fn select(&mut self, path: &str) -> Result<(), MailFault> {
-    if self.selected.as_deref() != Some(path) {
-      self.selected = None;
-      self.session.select(path).await.map_err(MailFault::server)?;
-      self.selected = Some(path.to_owned());
-    }
-
-    Ok(())
-  }
-}
-
-/// A folder held for work that outlives the call: a part streamed to the browser holds the folder until the
-/// stream ends.
-pub struct Held {
+/// The work connection held for one piece of work, the folder it selected with it. A piece of work ends
+/// by settling what it did, so a connection a server fault was met on is opened again by the next.
+pub struct Connection {
   guard: OwnedMutexGuard<Option<Open>>,
 }
 
-impl Held {
+impl Connection {
+  fn open(&mut self) -> &mut Open {
+    self.guard.as_mut().expect("a held connection is open")
+  }
+
+  /// The IMAP session.
   pub fn session(&mut self) -> &mut ImapSession {
-    &mut self.guard.as_mut().expect("a held folder has its connection open").session
+    &mut self.open().session
+  }
+
+  /// Selects `path`, read from the server now: its message count and UID validity as they stand.
+  pub async fn select(&mut self, path: &str) -> Result<(), MailFault> {
+    let open = self.open();
+
+    open.mailbox = None;
+    open.mailbox = Some(open.session.select(wire_name(path)).await.map_err(MailFault::server)?);
+
+    Ok(())
+  }
+
+  /// How many messages the selected folder holds.
+  pub fn exists(&mut self) -> u32 {
+    self.open().mailbox.as_ref().map_or(0, |mailbox| mailbox.exists)
+  }
+
+  /// The selected folder's UID validity, as text; empty where the server named none.
+  pub fn uid_validity(&mut self) -> String {
+    self
+      .open()
+      .mailbox
+      .as_ref()
+      .and_then(|mailbox| mailbox.uid_validity)
+      .map(|v| v.to_string())
+      .unwrap_or_default()
+  }
+
+  /// What the work came to, the connection let go of where the fault was the server's.
+  pub fn settle<T>(mut self, done: Result<T, MailFault>) -> Result<T, MailFault> {
+    if matches!(done, Err(MailFault::Server(_))) {
+      *self.guard = None;
+    }
+
+    done
   }
 }
 
@@ -160,8 +188,9 @@ impl MailSession {
     }
   }
 
-  /// The connection held for this caller alone, opened now if it is not.
-  async fn connection(&self) -> Result<OwnedMutexGuard<Option<Open>>, MailFault> {
+  /// The connection held for this caller alone, opened now if it is not, with no folder chosen for the
+  /// work: listing folders, asking a folder's state.
+  pub async fn connection(&self) -> Result<Connection, MailFault> {
     let mut guard = Arc::clone(&self.open).lock_owned().await;
 
     if guard.is_none() {
@@ -169,66 +198,23 @@ impl MailSession {
 
       *guard = Some(Open {
         session,
-        selected: None,
+        mailbox: None,
       });
     }
 
-    Ok(guard)
+    Ok(Connection { guard })
   }
 
-  /// Runs the work with the folder selected, holding it for that work alone. A folder that was already
-  /// selected is brought up to date first: the server takes mail that arrived since into a connection's
-  /// view only at a command, so without that the first search after new mail would miss it while the
-  /// message count, reported alongside, already counts it. A connection the work failed on is opened again
-  /// by the next.
-  pub async fn in_folder<T>(
-    &self,
-    path: &str,
-    work: impl for<'s> FnOnce(&'s mut ImapSession) -> BoxFuture<'s, Result<T, MailFault>>,
-  ) -> Result<T, MailFault> {
-    let mut guard = self.connection().await?;
-    let open = guard.as_mut().expect("the connection was just opened");
-    let done = async {
-      open.select(path).await?;
-      open.session.noop().await.map_err(MailFault::server)?;
+  /// The connection held for this caller alone with the folder selected. Selecting it reads it up to date:
+  /// the server takes mail that arrived since into a connection's view only at a command, so without that
+  /// the first search after new mail would miss it.
+  pub async fn folder(&self, path: &str) -> Result<Connection, MailFault> {
+    let mut connection = self.connection().await?;
 
-      work(&mut open.session).await
+    match connection.select(path).await {
+      Ok(()) => Ok(connection),
+      Err(why) => connection.settle(Err(why)),
     }
-    .await;
-
-    if matches!(done, Err(MailFault::Server(_))) {
-      *guard = None;
-    }
-
-    done
-  }
-
-  /// Runs the work on the connection with no folder chosen for it: listing folders, asking a folder's
-  /// state.
-  pub async fn with_connection<T>(
-    &self,
-    work: impl for<'s> FnOnce(&'s mut Open) -> BoxFuture<'s, Result<T, MailFault>>,
-  ) -> Result<T, MailFault> {
-    let mut guard = self.connection().await?;
-    let done = work(guard.as_mut().expect("the connection was just opened")).await;
-
-    if matches!(done, Err(MailFault::Server(_))) {
-      *guard = None;
-    }
-
-    done
-  }
-
-  /// Selects the folder and hands it to the caller, held until the caller lets it go.
-  pub async fn hold_folder(&self, path: &str) -> Result<Held, MailFault> {
-    let mut guard = self.connection().await?;
-    let selected = guard.as_mut().expect("the connection was just opened").select(path).await;
-
-    if selected.is_err() {
-      *guard = None;
-    }
-
-    selected.map(|()| Held { guard })
   }
 
   /// Logs the connection out, or drops it where it will not.

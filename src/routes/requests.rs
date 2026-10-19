@@ -101,6 +101,8 @@ impl From<MailFault> for Refused {
 
 /// What a route's work on an account stands on.
 pub struct MailContext {
+  /// What the service stands on.
+  pub standing: Arc<Standing>,
   pub config: Arc<MailConfig>,
   pub account: MailAccount,
   pub session: Arc<MailSession>,
@@ -127,7 +129,7 @@ pub fn configured(fields: Value) -> Response {
 /// The route's work on the account its path names, or the no-accounts answer. A fault of the request is a
 /// 400 under its code; a fault of the mail server is a 502.
 pub async fn with_mail_account<Work, Done>(
-  standing: &Standing,
+  standing: &Arc<Standing>,
   key: Option<&str>,
   work: Work,
 ) -> Result<Response, Refused>
@@ -144,6 +146,7 @@ where
   let session = standing.sessions.session(&config.imap, &account);
 
   work(MailContext {
+    standing: Arc::clone(standing),
     config,
     account,
     session,
