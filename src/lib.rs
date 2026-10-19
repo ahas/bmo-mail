@@ -14,6 +14,7 @@ pub mod routes;
 pub mod rules;
 pub mod settings;
 pub mod store;
+pub mod watcher;
 pub mod wire;
 pub mod wording;
 pub mod writing;
@@ -31,8 +32,8 @@ use crate::wording::Wording;
 /// The nouns `bmo` dispatches to this command: none, since the service carries no word of `bmo`.
 pub const NOUNS: [&str; 0] = [];
 
-/// Opens the store, then answers the routes on the settings' address until the process is told to stop,
-/// and logs every account's connection out.
+/// Opens the store, starts the watchers, then answers the routes on the settings' address until the process
+/// is told to stop, and lets the watchers and every account's connection go.
 pub async fn serve(settings: Settings) -> Result<(), String> {
   let store = Store::open(&settings.store.path).await.map_err(|why| why.to_string())?;
   let listen = settings.server.listen;
@@ -42,11 +43,15 @@ pub async fn serve(settings: Settings) -> Result<(), String> {
   let listener = TcpListener::bind(listen)
     .await
     .map_err(|why| format!("{listen} could not be listened on: {why}"))?;
+  let (stop, stopping) = tokio::sync::watch::channel(false);
+  let watching = tokio::spawn(watcher::watch(Arc::clone(&standing), stopping));
   let served = axum::serve(listener, router)
     .with_graceful_shutdown(stopped())
     .await
     .map_err(|why: io::Error| why.to_string());
 
+  let _ = stop.send(true);
+  let _ = watching.await;
   standing.sessions.close_all().await;
 
   served

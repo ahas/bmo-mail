@@ -7,7 +7,9 @@ use std::fmt::Debug;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
-use async_imap::types::Mailbox;
+use async_imap::extensions::idle::IdleResponse;
+use async_imap::imap_proto::{MailboxDatum, Response};
+use async_imap::types::{Mailbox, UnsolicitedResponse};
 use async_imap::{Client, Session};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
@@ -168,6 +170,109 @@ impl Connection {
     }
 
     done
+  }
+
+  /// A connection of its own, held by its one user alone: the watcher's.
+  pub async fn alone(session: ImapSession) -> Self {
+    let open = Open {
+      session,
+      mailbox: None,
+      selected: None,
+    };
+    let guard = Arc::new(AsyncMutex::new(Some(open))).lock_owned().await;
+
+    Self { guard }
+  }
+
+  /// The next UID the selected folder will give, as the server said when it was selected.
+  pub fn uid_next(&mut self) -> u32 {
+    self.open().mailbox.as_ref().and_then(|mailbox| mailbox.uid_next).unwrap_or(0)
+  }
+
+  /// Stands in `IDLE` on the selected folder until the server says something or the wait ends, and says
+  /// what woke it. The connection stays selected as it was.
+  pub async fn idle(&mut self, wait: Duration) -> Result<Woke, MailFault> {
+    let Some(open) = self.guard.take() else {
+      return Err(MailFault::server("the connection is closed"));
+    };
+    let Open {
+      session,
+      mailbox,
+      selected,
+    } = open;
+    let mut handle = session.idle();
+
+    handle.init().await.map_err(MailFault::server)?;
+
+    let outcome = {
+      let (waiting, _interrupt) = handle.wait_with_timeout(wait);
+
+      waiting.await.map_err(MailFault::server)?
+    };
+    let woke = match outcome {
+      IdleResponse::NewData(response) => Woke::of(response.parsed()),
+      IdleResponse::Timeout | IdleResponse::ManualInterrupt => Woke::Quiet,
+    };
+    let session = handle.done().await.map_err(MailFault::server)?;
+
+    *self.guard = Some(Open {
+      session,
+      mailbox,
+      selected,
+    });
+
+    Ok(woke)
+  }
+
+  /// Asks the server for the selected folder's news without standing in `IDLE`, for a server that has no
+  /// `IDLE`, and says what it brought.
+  pub async fn poll(&mut self) -> Result<Woke, MailFault> {
+    let session = self.session();
+
+    session.noop().await.map_err(MailFault::server)?;
+
+    let mut woke = Woke::Quiet;
+
+    while let Ok(said) = session.unsolicited_responses.try_recv() {
+      woke = woke.and(match said {
+        UnsolicitedResponse::Exists(_) | UnsolicitedResponse::Recent(_) => Woke::Grown,
+        UnsolicitedResponse::Expunge(_) => Woke::Changed,
+        UnsolicitedResponse::Other(response) => Woke::of(response.parsed()),
+        _ => Woke::Quiet,
+      });
+    }
+
+    Ok(woke)
+  }
+}
+
+/// What the server said of the folder a connection watches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Woke {
+  /// Nothing: the wait ran out.
+  Quiet,
+  /// A flag changed, or a message went.
+  Changed,
+  /// The folder grew.
+  Grown,
+}
+
+impl Woke {
+  fn of(response: &Response<'_>) -> Self {
+    match response {
+      Response::MailboxData(MailboxDatum::Exists(_) | MailboxDatum::Recent(_)) => Self::Grown,
+      Response::Expunge(_) | Response::Vanished { .. } | Response::Fetch(..) => Self::Changed,
+      _ => Self::Quiet,
+    }
+  }
+
+  /// The more telling of two: the folder growing says the most.
+  fn and(self, other: Self) -> Self {
+    match (self, other) {
+      (Self::Grown, _) | (_, Self::Grown) => Self::Grown,
+      (Self::Changed, _) | (_, Self::Changed) => Self::Changed,
+      _ => Self::Quiet,
+    }
   }
 }
 
