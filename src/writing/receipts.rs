@@ -6,7 +6,6 @@ use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
 use mail_builder::headers::content_type::ContentType;
 use mail_builder::mime::{BodyPart, MimePart};
-use rand::RngCore;
 
 use crate::accounts::MailEndpoint;
 use crate::imap::messages::{change_flags, read_message};
@@ -14,6 +13,7 @@ use crate::imap::session::MailSession;
 use crate::routes::requests::MailFault;
 use crate::wire::{MailMessage, MailRef};
 use crate::wording::{Wording, fill};
+use crate::writing::compose::new_message_id;
 use crate::writing::send::submit;
 
 /// What the report names the service as.
@@ -46,13 +46,6 @@ pub fn build_receipt(
   report.push("Disposition: manual-action/MDN-sent-manually; displayed".to_owned());
   report.push(String::new());
 
-  let mut random = [0u8; 12];
-
-  rand::rng().fill_bytes(&mut random);
-
-  let domain = account.split_once('@').map_or("localhost", |(_, domain)| domain);
-  let message_id =
-    format!("{}@{domain}", random.iter().map(|byte| format!("{byte:02x}")).collect::<String>());
   let body = MimePart::new(
     ContentType::new("multipart/report").attribute("report-type", "disposition-notification"),
     vec![
@@ -65,7 +58,7 @@ pub fn build_receipt(
     .to(Address::from(receipt_to.clone()))
     .subject(fill(&wording.receipt.subject, &[("subject", subject)]))
     .date(date)
-    .message_id(message_id);
+    .message_id(new_message_id(account));
 
   if let Some(id) = &original.listed.message_id {
     message = message.in_reply_to(bare(id)).references(bare(id));

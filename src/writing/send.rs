@@ -21,7 +21,7 @@ use crate::imap::{append_landing, store_flags, uid_search};
 use crate::routes::requests::MailFault;
 use crate::wire::{Draft, DraftKind, FolderRole, MailRef, SendState};
 use crate::writing::addresses::record_addresses;
-use crate::writing::compose::{Purpose, build_message};
+use crate::writing::compose::{Purpose, build_message, new_message_id};
 use crate::writing::drafts::{discard_draft, open_draft, resolve_attachments, save_draft};
 
 /// How long a message is held before it goes, while undo send can still take it back.
@@ -217,8 +217,7 @@ async fn send_draft(
 
   let staging = &standing.settings.staging.dir;
   let attachments = resolve_attachments(session, staging, &draft.attachments).await?;
-  let domain = draft.from.split_once('@').map_or("localhost", |(_, domain)| domain);
-  let message_id = format!("<{}@{domain}>", random_hex(12));
+  let message_id = new_message_id(&draft.from);
   let now = chrono::Utc::now();
   let raw = build_message(&draft, &attachments, Purpose::Send, Some(&message_id), now.timestamp())
     .map_err(MailFault::server)?;

@@ -42,8 +42,9 @@ icu_locale = "2.3.0"
 inventory = "0.3.24"
 # A message's pictures of its own turned into inline parts, the markup rewritten where they stand.
 lol_html = "3.0.1"
-# Messages written: a draft, a message sent, its copy, a read receipt.
-mail-builder = "1.0.0"
+# Messages written: a draft, a message sent, its copy, a read receipt. Without its default host-name
+# feature: every message is given its own ID at the sender's domain.
+mail-builder = { version = "1.0.0", default-features = false }
 # Headers read and decoded: addresses, subjects, message IDs, encoded words and parameters.
 mail-parser = "0.11.9"
 # Submission: a message handed to the mail server as the account, and the size it takes.

@@ -14,6 +14,7 @@ use mail_builder::headers::content_type::ContentType;
 use mail_builder::headers::message_id::MessageId;
 use mail_builder::headers::text::Text;
 use mail_builder::mime::{BodyPart, MimePart};
+use rand::RngCore;
 use regex::Regex;
 use scraper::{Html, Node};
 
@@ -385,7 +386,8 @@ fn data_image(address: &str) -> Option<(String, Vec<u8>)> {
 /// The markup with each picture of its own replaced by the part carrying it, and those parts. A message's
 /// own pictures go out as inline parts rather than as addresses in the markup: a mail client shows a part
 /// it was handed, and a great many refuse a picture spelled out inside the markup. The content ID is made
-/// from where the picture stands, so building the same draft twice builds the same message.
+/// from where the picture stands and the message's ID, so building the same draft twice under one ID builds
+/// the same message.
 pub fn inline_images(html: &str, id: &str) -> (String, Vec<InlineImage>) {
   let images: RefCell<Vec<InlineImage>> = RefCell::new(Vec::new());
   let rewritten = rewrite_str(
@@ -469,7 +471,21 @@ fn bare(id: &str) -> String {
   id.trim().trim_start_matches('<').trim_end_matches('>').to_owned()
 }
 
-/// The whole message, as the bytes a server takes. `date` is Unix seconds.
+/// A new message ID without its angle brackets: random hex at the domain of `address`, `localhost` where
+/// it has none. Every message this service writes is named this way, so no ID carries the machine's name.
+pub fn new_message_id(address: &str) -> String {
+  let mut random = [0u8; 12];
+
+  rand::rng().fill_bytes(&mut random);
+
+  let domain = address.split_once('@').map_or("localhost", |(_, domain)| domain);
+  let hex: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
+
+  format!("{hex}@{domain}")
+}
+
+/// The whole message, as the bytes a server takes. `date` is Unix seconds; where `message_id` is none, a new
+/// one is made at the sender's domain.
 pub fn build_message(
   draft: &Draft,
   attachments: &[ResolvedAttachment],
@@ -477,8 +493,8 @@ pub fn build_message(
   message_id: Option<&str>,
   date: i64,
 ) -> std::io::Result<Vec<u8>> {
+  let message_id = message_id.map_or_else(|| new_message_id(&draft.from), bare);
   let id_seed: String = message_id
-    .unwrap_or(&draft.from)
     .chars()
     .filter(|c| !matches!(c, '<' | '>' | '@') && !c.is_whitespace())
     .collect();
@@ -532,9 +548,7 @@ pub fn build_message(
     message = message.bcc(addresses_of(&draft.bcc));
   }
 
-  if let Some(id) = message_id {
-    message = message.message_id(bare(id));
-  }
+  message = message.message_id(message_id);
 
   if let Some(id) = &draft.in_reply_to {
     message = message.in_reply_to(bare(id));

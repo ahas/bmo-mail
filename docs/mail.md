@@ -347,6 +347,9 @@ flowchart TD
   content id, which is how a signature's picture arrives with the mail. A saved draft is written the
   same way, and reopening it carries each picture its markup names by content id as its own bytes
   again, so a draft sent after being reopened still sends its pictures.
+- **Every message written is named at the sender's domain:** a draft, a message sent with its copy
+  in the sent folder, and a read receipt each carry a message ID of random hex at the domain of the
+  address it is from, so none carries the name of the machine the service runs on.
 - **Reply and reply-all** set `In-Reply-To` and `References`, prefix the subject once with
   `Re:`, quote the message under the new text with an attribution line in the service's own words,
   and mark the original `\Answered` once sent. A reply to a message the account itself sent goes to
