@@ -16,6 +16,29 @@ path = "src/main.rs"
 test = false
 
 [dependencies]
+# IMAP: the work connection the routes go through and the watcher's IDLE connection.
+async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
+axum = "0.8.9"
+clap = { version = "4.6.7", features = ["derive"] }
+# The settings: the built-in defaults, the deployment's files and the environment, layered in that order.
+config = { version = "0.15", default-features = false, features = ["toml"] }
+futures = "0.3.31"
+# Each route registers itself beside its own answer.
+inventory = "0.3.24"
+# The health command asking the service, over plain HTTP on the loopback address.
+reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+# An answer keeps its fields in the order they were written.
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+# The store, one SQLite file.
+sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "macros", "migrate"] }
+thiserror = "2.0.17"
+tokio = { version = "1.53.2", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+# TLS to the mail servers, checked against the web's root certificates.
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["logging", "ring", "tls12"] }
+# The event stream, read from the service's broadcast.
+tokio-stream = { version = "0.1.19", features = ["sync"] }
+webpki-roots = "1.0.9"
 
 # Build output kept small: line tables alone for a backtrace, split out, and no incremental cache.
 [profile.dev]
