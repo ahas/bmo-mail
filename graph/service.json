@@ -1,0 +1,31 @@
+[
+  {
+    "id": "service/plumbing",
+    "title": "Service plumbing",
+    "what": "The service settings in layers, the HTTP routes behind the bearer token with each route registered beside its answer, the SQLite store, the event stream, health, the accounts file and the binary commands, in src/http.rs, settings.rs, store.rs, events.rs, accounts.rs and main.rs.",
+    "files": [
+      "src/http.rs",
+      "src/settings.rs",
+      "src/store.rs",
+      "src/events.rs",
+      "src/accounts.rs",
+      "src/health.rs",
+      "src/lib.rs",
+      "src/main.rs",
+      "src/wire.rs",
+      "src/routes/mod.rs",
+      "src/routes/requests.rs",
+      "src/routes/accounts.rs",
+      "migrations/0001_mail.sql",
+      "docs/api.md",
+      "settings.toml",
+      "settings.local.toml.example",
+      "deploy/bmo-mail.service",
+      "testbed.toml"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [],
+    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+  }
+]

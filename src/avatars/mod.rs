@@ -199,7 +199,7 @@ pub fn icon_links(html: &str, base: &Url) -> Vec<Url> {
     found.push((url, size));
   }
 
-  found.sort_by(|a, b| b.1.cmp(&a.1));
+  found.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
   found.into_iter().map(|(url, _)| url).collect()
 }
 

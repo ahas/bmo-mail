@@ -1,0 +1,129 @@
+[
+  {
+    "id": "mail/labels",
+    "title": "Mail labels",
+    "what": "An account's labels, kept in the store and carried on messages as IMAP keywords of the service's own form, in src/labels.rs and src/routes/labels.rs.",
+    "files": [
+      "src/labels.rs",
+      "src/routes/labels.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "service/plumbing"
+    ],
+    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+  },
+  {
+    "id": "mail/reading",
+    "title": "Reading and changing mail",
+    "what": "Mail read over IMAP: folders and their roles, lists and threads, message parts and bodies, the search box, flags, moves and deletion, and the inbox summary, in src/imap/ and the list and change routes.",
+    "files": [
+      "src/imap/mod.rs",
+      "src/imap/session.rs",
+      "src/imap/folders.rs",
+      "src/imap/structure.rs",
+      "src/imap/charset.rs",
+      "src/imap/conversation.rs",
+      "src/imap/messages.rs",
+      "src/imap/search.rs",
+      "src/imap/views.rs",
+      "src/imap/moved_in.rs",
+      "src/routes/lists.rs",
+      "src/routes/changes.rs",
+      "src/routes/downloads.rs",
+      "docs/mail.md"
+    ],
+    "symbols": [],
+    "aliases": [
+      "모두 읽음"
+    ],
+    "needs": [
+      "service/plumbing",
+      "mail/labels"
+    ],
+    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+  },
+  {
+    "id": "mail/filters",
+    "title": "Filter rules and spam senders",
+    "what": "An account's filter rules, checked, ordered, planned over a message's headers and carried out by flag and move, and its always-spam senders, in src/rules.rs and src/routes/filters.rs.",
+    "files": [
+      "src/rules.rs",
+      "src/routes/filters.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "service/plumbing",
+      "mail/reading",
+      "mail/labels"
+    ],
+    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+  },
+  {
+    "id": "mail/writing",
+    "title": "Writing and sending mail",
+    "what": "The composer opened new, as a reply or a forward, drafts saved and reopened, uploads staged, sending held for undo send then submitted, read receipts, known addresses, the account's settings and the service's own words, in src/writing/.",
+    "files": [
+      "src/writing/mod.rs",
+      "src/writing/compose.rs",
+      "src/writing/drafts.rs",
+      "src/writing/staging.rs",
+      "src/writing/send.rs",
+      "src/writing/receipts.rs",
+      "src/writing/addresses.rs",
+      "src/account_settings.rs",
+      "src/wording.rs",
+      "wording/ko.toml",
+      "src/routes/writing.rs"
+    ],
+    "symbols": [],
+    "aliases": [
+      "메일 서명"
+    ],
+    "needs": [
+      "service/plumbing",
+      "mail/reading"
+    ],
+    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+  },
+  {
+    "id": "mail/avatars",
+    "title": "Sender logos",
+    "what": "A sender domain's logo, found in its BIMI record or its site's icons, fetched only from the open web, checked and kept in the store, in src/avatars/ and src/routes/avatar.rs.",
+    "files": [
+      "src/avatars/mod.rs",
+      "src/avatars/domains.rs",
+      "src/routes/avatar.rs"
+    ],
+    "symbols": [],
+    "aliases": [
+      "발신자 프로필사진",
+      "메일 파비콘"
+    ],
+    "needs": [
+      "service/plumbing"
+    ],
+    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+  },
+  {
+    "id": "mail/watcher",
+    "title": "Inbox watcher",
+    "what": "One IMAP connection per account standing in IDLE on the inbox, running the rules over new mail and saying on the event stream what changed and what arrived with its push; the accounts file followed, in src/watcher/.",
+    "files": [
+      "src/watcher/mod.rs",
+      "src/watcher/arrivals.rs",
+      "src/watcher/notice.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "service/plumbing",
+      "mail/reading",
+      "mail/filters",
+      "mail/writing"
+    ],
+    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+  }
+]

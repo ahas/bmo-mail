@@ -242,7 +242,7 @@ pub fn conversations(messages: Vec<MailListMessage>) -> Vec<MailConversation> {
       let group = groups.remove(&key).unwrap_or_default();
       let mut by_date: Vec<&MailListMessage> = group.iter().collect();
 
-      by_date.sort_by(|a, b| b.date.cmp(&a.date));
+      by_date.sort_by_key(|message| std::cmp::Reverse(message.date));
 
       let newest = by_date[0];
       let oldest = by_date[by_date.len() - 1];
@@ -605,7 +605,7 @@ pub async fn read_thread(
     found.extend(connection.settle(done)?);
   }
 
-  found.sort_by(|a, b| a.listed.date.cmp(&b.listed.date));
+  found.sort_by_key(|message| message.listed.date);
 
   let mut seen: HashSet<String> = HashSet::new();
 

@@ -22,10 +22,26 @@ minimal services stand on the new repositories; until then the only check is the
 | `client/` | The console plugin bundle: the mail screen, a project of its own |
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does |
+| `graph/` | The code graph: one node per feature, with the files it is made of |
 
 At the root stand the Cargo manifest, `VERSION`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the local settings a
 deployment gives.
+
+## The console plugin bundle
+
+`client/` holds the console's mail screen as a Nuxt layer on top of bmo-ui, packed as `bmo-mail-client`, with
+a packed copy of bmo-ui under `client/vendor/` for its own install and typecheck and bmo-markup's TypeScript
+package read from the base library. A host console extends it as it extends bmo-ui, and owes it:
+
+- bmo-ui itself, at the version the bundle's peer names;
+- its i18n module, which merges the bundle's own Korean pack into the host's locale;
+- the title-bar pieces `DeployMark`, `TodoOpenButton` and `UsageMeters`, and `useMailEvents`, declared in
+  `client/host/`, and a layout that calls the bundle's `useMailNotices` once;
+- the routes under `/api/mail/` handed on to this service, and its event stream relayed (`docs/api.md`,
+  「What the console does」).
+
+The bundle's check is `bun install --frozen-lockfile && bun run typecheck` inside `client/`.
 
 ## Documents
 
