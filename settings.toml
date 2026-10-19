@@ -1,0 +1,29 @@
+# The mail service's settings (docs/api.md, 「Settings」). A deployment's settings.local.toml overrides any
+# key here, and BMO_MAIL_<TABLE>__<KEY> in the environment overrides both. A relative path is read from the
+# settings folder.
+
+[server]
+# Where the service answers, as host:port: a loopback address, so only this machine reaches it.
+listen = "127.0.0.1:3330"
+# The bearer token every caller presents. A deployment names its own.
+token = ""
+
+[store]
+# The SQLite file the labels, rules, settings, marks, known addresses and sender logos stand in.
+path = "mail.db"
+
+[accounts]
+# The accounts file (docs/mail.md, 「Accounts and credentials」) has no default: an instance run from source
+# reaches no mailbox until its local settings name one, and a deployment names the data root's
+# env/mail-accounts.
+file = ""
+
+[staging]
+# The folder uploaded attachments wait in until the message carrying them is saved or sent.
+dir = "mail-staging"
+
+[wording]
+# The language of the service's own words, under wording/, and of a list's order.
+language = "ko"
+# The time zone the service's own words write dates in.
+time_zone = "Asia/Seoul"

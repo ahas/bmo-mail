@@ -1,0 +1,28 @@
+# The mail service: the HTTP server, its event stream, the inbox watchers and its command in one binary. The
+# only manifest at the root; the console plugin bundle keeps its own under `client/`.
+[package]
+name = "bmo-mail"
+description = "Mailboxes read, written and watched over IMAP and submission, behind one API."
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+
+[[bin]]
+name = "bmo-mail"
+path = "src/main.rs"
+test = false
+
+[dependencies]
+
+# Build output kept small: line tables alone for a backtrace, split out, and no incremental cache.
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+incremental = false
+
+[profile.release]
+debug = false
+strip = "debuginfo"

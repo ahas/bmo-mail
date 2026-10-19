@@ -1,0 +1,7 @@
+/target
+/settings.local.toml
+/mail.db*
+/mail-staging/
+node_modules/
+client/.nuxt/
+client/.output/

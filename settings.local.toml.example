@@ -1,0 +1,17 @@
+# Copied to settings.local.toml by a deployment, with its own values. Any key left out keeps the value
+# settings.toml gives it; BMO_MAIL_<TABLE>__<KEY> in the environment overrides both.
+
+[server]
+listen = "127.0.0.1:3330"
+token = "mail-token"
+
+[store]
+path = "/srv/bmo-mail/mail.db"
+
+[accounts]
+# The accounts file of the mail server this instance reads. A development instance names one of its own,
+# never a deployment's.
+file = "/srv/bmo-mail/env/mail-accounts"
+
+[staging]
+dir = "/srv/bmo-mail/mail-staging"
