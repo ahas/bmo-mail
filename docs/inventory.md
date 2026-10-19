@@ -19,7 +19,7 @@ what the old behaviour was held to.
 - **By what they read:** every import of those files that leaves the set, and every language-pack key
   they read (`grep` over the 89 files that are not tests). That adds the parts of other files below.
 - **So the set is 114 files.** 90 are carried or ported, 24 are not carried, each for the reason its table
-  gives. Fifteen parts of other files are carried or listed beside them.
+  gives. Seventeen parts of other files are carried or listed beside them.
 - **Earlier lists that disagree:** the old code graph's mail node names 121 files, counting the console's
   shared files the screen reads; those are listed here as parts of other files, not as files of this unit.
 
@@ -110,7 +110,7 @@ and `side-parts`, and its components.
 |---|---|---|
 | `docs/mail.md` | 528 | `docs/mail.md`, stated for this repository: no account, host, machine or address named; the screen's words named in English; the stand-in mail server deferred |
 
-## Parts of other files: 15
+## Parts of other files: 17
 
 | Old file | Part | Here |
 |---|---|---|
@@ -121,7 +121,9 @@ and `side-parts`, and its components.
 | `client/shared/config.ts` | `MAIL_PUSH` | its id, `mail`, is the arrival's `kind`; the kind's declaration and words are bmo-web's (`docs/api.md`, 「Missing in siblings」) |
 | `client/shared/paths.ts` | `mailThreadPath` | the arrival's `path`, under the console's base path |
 | `client/shared/links.ts` | `linkParts`, which the screen's frame reads | the bundle, on bmo-markup's `web-address` |
-| `client/app/domain/settings.ts` | `useMailColumns`, the list's column widths kept in the browser | the bundle's own domain module |
+| `client/app/domain/settings.ts` | `useMailColumns`, the list's column widths kept in the browser | the bundle's own domain module, `mail-columns` |
+| `client/app/domain/avatars.ts` | `identityMark` and the tones and initial it draws with, the letter an address wears without a logo | the bundle's own domain module, `mail-avatars` |
+| `client/app/domain/urls.ts` | `appUrl`, a path under the console's base path, which a part's, an inline picture's and a logo's addresses are written with | the bundle's own domain module, `mail-urls` |
 | `client/app/domain/events.ts` | `useMailEvents` | owed by the host (`docs/api.md`, 「The console plugin bundle」) |
 | `client/app/domain/screens.ts` | the `/mail` navigation entry and its unread mark | the host's; it reads the mark from the bundle's `useMailNotices` |
 | `client/app/layouts/default.vue` | the call of `useMailNotices` | the host's |
@@ -207,6 +209,7 @@ console and stays bmo-web's; the stand-in lines of `docs/worker-bench.md` stay w
   `htmlparser2` and `domhandler` an HTML parser, and `node:dns` a DNS resolver; each crate is named in the
   manifest. The list of registry tails `domains.ts` kept is the public suffix list, read through a crate.
 - **What the screen carries:** `dompurify` and the TipTap editor packages `@tiptap/vue-3`,
-  `@tiptap/extension-text-style`, `@tiptap/extension-text-align` and `@tiptap/extension-table`, at the
-  versions the old console pinned.
+  `@tiptap/extension-text-style`, `@tiptap/extension-text-align` and `@tiptap/extension-table`, the
+  sanitiser at the version the old console pinned and the editor packages at the one the bundle's Nuxt UI
+  builds its own editor on, so the two read one editor type.
 - **Policy files:** none. Nothing in the set reads `policy/`.

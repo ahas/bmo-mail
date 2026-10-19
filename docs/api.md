@@ -315,13 +315,17 @@ with every address below it (`docs/mail.md`, 「The screen」).
   file, depends on bmo-ui at the version the bundle's peer names, and names `bmo-mail-client` in its Nuxt
   configuration's `extends`, which brings bmo-ui's layer with it.
 - **What it depends on beside bmo-ui:** bmo-markup's `web-address`, for the links a plain-text body shows,
-  and the TipTap editor packages its editor is built on.
+  and the TipTap editor packages its editor is built on. For the bundle's own install and typecheck a packed
+  copy of bmo-ui stands in `client/vendor/`, and bmo-markup's TypeScript package is read from the base
+  library's own folder.
 - **What its host owes it,** declared in `client/host/` for the bundle's own typecheck alone:
   - `useMailEvents(onChange)`, made importable by name as Nuxt makes a project's own composables: calls
     `onChange` with the account key of each `mail` event relayed into the tab, and with null each time the
     tab's stream opens;
   - its layout calling the bundle's `useMailNotices(t)` once, which raises the arrival notices and answers
     `unread`, the mark the host's `/mail` navigation entry carries while any inbox holds unread mail;
+  - the components `DeployMark`, `TodoOpenButton` and `UsageMeters` of the console's title bar, registered by
+    name and handed no props;
   - its i18n module, which merges the bundle's own pack into the host's locale of the same code.
 - **Wording:** every word the screen shows is the bundle's language pack, `client/i18n/locales/ko.yaml`,
   registered by code (`ko`), language tag (`ko-KR`) and file, as the host registers its own locales. It
