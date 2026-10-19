@@ -25,6 +25,10 @@ enum Word {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+  // Every TLS connection the service opens, to the mail servers and to the open web, runs on one crypto
+  // provider, chosen here before any is opened.
+  let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
+
   // Usage the command does not take ends 1; help and the version end 0.
   let command = match Command::try_parse() {
     Ok(command) => command,

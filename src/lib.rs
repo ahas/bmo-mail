@@ -4,12 +4,14 @@
 
 pub mod account_settings;
 pub mod accounts;
+pub mod avatars;
 pub mod events;
 pub mod health;
 pub mod http;
 pub mod imap;
 pub mod labels;
 pub mod routes;
+pub mod rules;
 pub mod settings;
 pub mod store;
 pub mod wire;

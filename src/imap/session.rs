@@ -109,6 +109,7 @@ async fn greeted(stream: Box<dyn MailStream>) -> Result<Client<Box<dyn MailStrea
 struct Open {
   session: ImapSession,
   mailbox: Option<Mailbox>,
+  selected: Option<String>,
 }
 
 /// The work connection held for one piece of work, the folder it selected with it. A piece of work ends
@@ -132,9 +133,16 @@ impl Connection {
     let open = self.open();
 
     open.mailbox = None;
+    open.selected = None;
     open.mailbox = Some(open.session.select(wire_name(path)).await.map_err(MailFault::server)?);
+    open.selected = Some(path.to_owned());
 
     Ok(())
+  }
+
+  /// The folder the connection has selected, by its path.
+  pub fn selected(&mut self) -> Option<String> {
+    self.open().selected.clone()
   }
 
   /// How many messages the selected folder holds.
@@ -199,6 +207,7 @@ impl MailSession {
       *guard = Some(Open {
         session,
         mailbox: None,
+        selected: None,
       });
     }
 

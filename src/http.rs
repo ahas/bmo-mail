@@ -14,6 +14,7 @@ use axum::routing::{MethodFilter, MethodRouter};
 use serde_json::{Map, Value, json};
 
 use crate::accounts::AccountsFile;
+use crate::avatars::Avatars;
 use crate::events::Events;
 use crate::imap::session::Sessions;
 use crate::settings::Settings;
@@ -168,6 +169,8 @@ pub struct Standing {
   pub wording: Wording,
   /// The messages held before they go.
   pub sends: Sends,
+  /// The lookups of sender logos.
+  pub avatars: Avatars,
 }
 
 impl Standing {
@@ -182,6 +185,7 @@ impl Standing {
       events: Events::default(),
       wording,
       sends: Sends::default(),
+      avatars: Avatars::default(),
     }
   }
 }

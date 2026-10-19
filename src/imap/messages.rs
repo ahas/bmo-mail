@@ -735,7 +735,7 @@ pub async fn change_flags(
 
 /// Moves messages of the selected folder into another, and says where they landed where the server said. A
 /// server without `MOVE` has it done by copy, flag and expunge.
-async fn move_uids(
+pub async fn move_uids(
   connection: &mut Connection,
   uids: &[u32],
   destination: &str,

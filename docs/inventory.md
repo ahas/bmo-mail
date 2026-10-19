@@ -205,7 +205,7 @@ console and stays bmo-web's; the stand-in lines of `docs/worker-bench.md` stay w
 - **What the old server's libraries become:** `imapflow` an IMAP crate, `nodemailer` and its composer and
   connection a submission crate and a message builder, `libmime` and `postal-mime` a MIME parser,
   `htmlparser2` and `domhandler` an HTML parser, and `node:dns` a DNS resolver; each crate is named in the
-  manifest.
+  manifest. The list of registry tails `domains.ts` kept is the public suffix list, read through a crate.
 - **What the screen carries:** `dompurify` and the TipTap editor packages `@tiptap/vue-3`,
   `@tiptap/extension-text-style`, `@tiptap/extension-text-align` and `@tiptap/extension-table`, at the
   versions the old console pinned.
