@@ -36,7 +36,7 @@
           <p v-if="rules.length === 0" class="text-sm text-muted">{{ $t("mail.status.no_rules") }}</p>
           <ul class="flex flex-col gap-2">
             <li v-for="(rule, index) in rules" :key="rule.id" class="flex items-center gap-2 rounded-md border border-default px-3 py-2">
-              <USwitch :model-value="rule.enabled" :aria-label="rule.enabled ? $t('mail.action.rule_off') : $t('mail.action.rule_on')" @update:model-value="(on: boolean) => toggleRule(rule, on)" />
+              <USwitch :model-value="rule.on" :aria-label="rule.on ? $t('mail.action.rule_off') : $t('mail.action.rule_on')" @update:model-value="(on: boolean) => toggleRule(rule, on)" />
               <span class="min-w-0 flex-1 text-sm break-words">{{ ruleText(rule) }}</span>
               <UTooltip :text="$t('common.action.move_up')">
                 <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-arrow-upward" :aria-label="$t('common.action.move_up')" :disabled="index === 0" @click="moveRule(index, -1)" />
@@ -56,7 +56,7 @@
             <div class="flex flex-wrap items-center gap-2">
               <USelect v-model="form.action" :items="ACTION_ITEMS" class="w-40" :aria-label="$t('mail.aria.rule_action')" />
               <USelect v-if="form.action === 'label'" v-model="form.label" :items="props.labels.map((one) => ({ label: one.name, value: one.id }))" :placeholder="$t('mail.label.labels')" class="w-40" :aria-label="$t('mail.label.labels')" />
-              <USelect v-if="form.action === 'move'" v-model="form.folder" :items="props.folders.map((one) => ({ label: one.name, value: one.path }))" :placeholder="$t('mail.label.folders')" class="w-40" :aria-label="$t('mail.label.folders')" />
+              <USelect v-if="form.action === 'move'" v-model="form.folder" :items="props.folders.map((one) => ({ label: one.shortName, value: one.name }))" :placeholder="$t('mail.label.folders')" class="w-40" :aria-label="$t('mail.label.folders')" />
             </div>
             <div class="flex flex-wrap justify-end gap-2">
               <UButton color="neutral" variant="outline" :label="$t('mail.action.spam_header_rule')" :loading="busy === 'presets'" @click="addPresets" />
@@ -73,7 +73,7 @@
             <li v-for="label in props.labels" :key="label.id" class="flex items-center gap-2">
               <UPopover>
                 <UTooltip :text="$t('mail.aria.label_color')">
-                  <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-label" :style="{ color: label.color }" :aria-label="$t('mail.aria.label_color')" />
+                  <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-label" :style="{ color: label.colour }" :aria-label="$t('mail.aria.label_color')" />
                 </UTooltip>
                 <template #content>
                   <div class="flex gap-1 p-2">
@@ -122,12 +122,15 @@
 import { mailFailure } from "../domain/mail-refusals";
 import { LABEL_COLORS } from "../domain/mail";
 import { AsyncMailEditor } from "../domain/mail-editor-load";
+import { roleFolder } from "../domain/mail-api";
+
+import { SPAM_HEADER_PRESETS } from "../../shared/mail";
 
 import type { MailApi } from "../domain/mail-api";
-import type { MailFolderState, MailLabel, MailRule, MailSettings, RuleAction, RuleDraft, RuleField } from "../../shared/mail";
+import type { MailFolder, MailLabel, MailRule, MailSettings, MailSettingsPatch, RuleAction, RuleField } from "../../shared/mail";
 
 const { t } = useI18n();
-const props = defineProps<{ api: MailApi; labels: MailLabel[]; folders: MailFolderState[] }>();
+const props = defineProps<{ api: MailApi; labels: MailLabel[]; folders: MailFolder[] }>();
 
 // Labels changed here change the mail nav and the lists, and the settings change what an open
 // message shows; the page reads each again when it hears so.
@@ -149,9 +152,8 @@ const ACTION_ITEMS = [
   { label: t("mail.label.do_trash"), value: "trash" },
 ];
 
-const settings = ref<(MailSettings & { spamSenders: string[] }) | null>(null);
+const settings = ref<MailSettings | null>(null);
 const rules = ref<MailRule[]>([]);
-const presets = ref<RuleDraft[]>([]);
 const signature = ref("");
 const showImages = ref(false);
 const receiptDefault = ref(false);
@@ -184,9 +186,8 @@ async function load(): Promise<void> {
       settings.value = read;
       signature.value = read.signature;
       showImages.value = read.showImages;
-      receiptDefault.value = read.receiptDefault;
-      rules.value = ruleList.rules;
-      presets.value = ruleList.presets;
+      receiptDefault.value = read.readReceipts;
+      rules.value = ruleList;
     },
     t("mail.error.settings_read_failed"),
   );
@@ -196,7 +197,7 @@ onMounted(load);
 watch(() => props.api, load);
 
 // The form's settings that differ from what is saved, sent together by its one save.
-const changed = computed<Partial<MailSettings>>(() => {
+const changed = computed<MailSettingsPatch>(() => {
   const held = settings.value;
 
   if (held === null) return {};
@@ -204,7 +205,7 @@ const changed = computed<Partial<MailSettings>>(() => {
   return {
     ...(signature.value === held.signature ? {} : { signature: signature.value }),
     ...(showImages.value === held.showImages ? {} : { showImages: showImages.value }),
-    ...(receiptDefault.value === held.receiptDefault ? {} : { receiptDefault: receiptDefault.value }),
+    ...(receiptDefault.value === held.readReceipts ? {} : { readReceipts: receiptDefault.value }),
   };
 });
 const dirty = computed(() => Object.keys(changed.value).length > 0);
@@ -218,13 +219,13 @@ function saveSettings(): Promise<void> {
   return run(
     "settings",
     async () => {
-      const saved = { ...settings.value!, ...(await props.api.saveSettings(changed.value)) };
+      const saved = await props.api.saveSettings(changed.value);
 
       // What was saved is what the form holds from now on, so it holds no change after a save.
       settings.value = saved;
       signature.value = saved.signature;
       showImages.value = saved.showImages;
-      receiptDefault.value = saved.receiptDefault;
+      receiptDefault.value = saved.readReceipts;
       emit("settings");
     },
     t("common.error.save_failed"),
@@ -236,13 +237,13 @@ const FIELD_NAMES: Record<RuleField, string> = { from: t("mail.label.field_from"
 function actionText(action: RuleAction): string {
   switch (action.kind) {
     case "label":
-      return t("mail.label.do_label_named", { name: props.labels.find((one) => one.id === action.label)?.name ?? t("mail.label.missing_label") });
+      return t("mail.label.do_label_named", { name: props.labels.find((one) => one.id === action.labelId)?.name ?? t("mail.label.missing_label") });
     case "star":
       return t("mail.label.do_star");
     case "read":
       return t("mail.label.do_read");
     case "move":
-      return t("mail.label.do_move_named", { folder: props.folders.find((one) => one.path === action.folder)?.name ?? action.folder });
+      return t("mail.label.do_move_named", { folder: props.folders.find((one) => one.name === action.folderName)?.shortName ?? action.folderName });
     case "spam":
       return t("mail.label.do_spam");
     case "trash":
@@ -252,29 +253,27 @@ function actionText(action: RuleAction): string {
 
 // A rule as one line: when it applies, then what it does.
 function ruleText(rule: MailRule): string {
-  const when = rule.conditions.map((one) => t("mail.label.rule_condition", { field: one.field === "header" ? one.header : FIELD_NAMES[one.field], text: one.contains })).join(` ${rule.match === "all" ? t("mail.label.match_all") : t("mail.label.match_any")} `);
+  const when = rule.match.conditions
+    .map((one) => t("mail.label.rule_condition", { field: one.field === "header" ? (one.header ?? "") : FIELD_NAMES[one.field], text: one.contains }))
+    .join(` ${rule.match.kind === "all" ? t("mail.label.match_all") : t("mail.label.match_any")} `);
 
   return `${when} → ${rule.actions.map(actionText).join(", ")}`;
 }
 
-function draftOf(rule: MailRule): RuleDraft {
-  return { enabled: rule.enabled, match: rule.match, conditions: rule.conditions, actions: rule.actions };
-}
-
 function reload(): Promise<void> {
   return props.api.rules().then((read) => {
-    rules.value = read.rules;
+    rules.value = read;
   });
 }
 
 function addRule(): Promise<void> {
   const action: RuleAction =
-    form.action === "label" ? { kind: "label", label: form.label } : form.action === "move" ? { kind: "move", folder: form.folder } : ({ kind: form.action } as RuleAction);
+    form.action === "label" ? { kind: "label", labelId: form.label } : form.action === "move" ? { kind: "move", folderName: form.folder } : ({ kind: form.action } as RuleAction);
 
   return run(
     "rule",
     async () => {
-      await props.api.createRule({ enabled: true, match: "all", conditions: [{ field: form.field, header: form.field === "header" ? form.header : undefined, contains: form.contains }], actions: [action] });
+      await props.api.createRule({ match: { kind: "all", conditions: [{ field: form.field, header: form.field === "header" ? form.header : null, contains: form.contains }] }, actions: [action], on: true });
       form.contains = "";
       await reload();
     },
@@ -286,7 +285,7 @@ function addPresets(): Promise<void> {
   return run(
     "presets",
     async () => {
-      for (const preset of presets.value) {
+      for (const preset of SPAM_HEADER_PRESETS) {
         await props.api.createRule(preset);
       }
 
@@ -298,19 +297,17 @@ function addPresets(): Promise<void> {
 
 function toggleRule(rule: MailRule, on: boolean): Promise<void> {
   return run("toggle", async () => {
-    await props.api.updateRule(rule.id, { ...draftOf(rule), enabled: on });
+    await props.api.updateRule(rule.id, { on });
     await reload();
   }, t("mail.error.rule_change_failed"));
 }
 
+// A rule moved one place up or down: its position among the others, the rest closing up around it.
 function moveRule(index: number, by: number): Promise<void> {
-  const ids = rules.value.map((rule) => rule.id);
-  const [moved] = ids.splice(index, 1);
-
-  ids.splice(index + by, 0, moved!);
+  const rule = rules.value[index]!;
 
   return run("order", async () => {
-    await props.api.orderRules(ids);
+    await props.api.updateRule(rule.id, { position: index + 1 + by });
     await reload();
   }, t("mail.error.rule_order_failed"));
 }
@@ -326,9 +323,9 @@ function runRules(): Promise<void> {
   return run(
     "run",
     async () => {
-      const result = await props.api.runRules("INBOX");
+      const result = await props.api.runRules(roleFolder(props.folders, "inbox") ?? "INBOX");
 
-      ran.value = t("mail.message.rules_ran", { n: result.moved.toLocaleString("ko-KR") });
+      ran.value = t("mail.message.rules_ran", { n: result.movedCount.toLocaleString("ko-KR") });
       emit("labels");
     },
     t("mail.error.rule_apply_failed"),
@@ -356,9 +353,9 @@ function rename(label: MailLabel, name: string): Promise<void> {
   }, t("mail.error.label_rename_failed"));
 }
 
-function recolor(label: MailLabel, color: string): Promise<void> {
+function recolor(label: MailLabel, colour: string): Promise<void> {
   return run(`label:${label.id}`, async () => {
-    await props.api.updateLabel(label.id, { color });
+    await props.api.updateLabel(label.id, { colour });
     emit("labels");
   }, t("mail.error.label_color_failed"));
 }
@@ -370,12 +367,20 @@ function removeLabel(label: MailLabel): Promise<void> {
   }, t("mail.error.label_delete_failed"));
 }
 
+// The always-spam senders stand in the settings as the service reads them, so each change reads them again.
+async function reloadSpam(): Promise<void> {
+  const read = await props.api.settings();
+
+  settings.value = { ...settings.value!, spamSenders: read.spamSenders };
+}
+
 function addSpam(): Promise<void> {
   return run(
     "spam",
     async () => {
-      settings.value = { ...settings.value!, spamSenders: (await props.api.addSpamSenders([newSpam.value.trim()])).spamSenders };
+      await props.api.addSpamSenders([newSpam.value.trim()]);
       newSpam.value = "";
+      await reloadSpam();
     },
     t("mail.error.address_add_failed"),
   );
@@ -385,7 +390,8 @@ function removeSpam(address: string): Promise<void> {
   return run(
     "spam",
     async () => {
-      settings.value = { ...settings.value!, spamSenders: (await props.api.removeSpamSender(address)).spamSenders };
+      await props.api.removeSpamSender(address);
+      await reloadSpam();
     },
     t("mail.error.address_remove_failed"),
   );

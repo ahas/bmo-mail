@@ -12,7 +12,7 @@
     >
       <span class="w-40 shrink-0 truncate text-sm font-semibold text-highlighted">{{ sender }}</span>
       <span class="min-w-0 flex-1 truncate text-sm text-muted">{{ props.message.snippet || subjectText($t, props.message.subject) }}</span>
-      <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(props.message.date) }}</span>
+      <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(props.message.at) }}</span>
     </button>
 
     <div v-else class="flex flex-col gap-3 px-4 py-3">
@@ -26,8 +26,8 @@
             </p>
             <p class="truncate text-sm text-muted">{{ $t("mail.label.to_line", { recipients }) }}</p>
           </div>
-          <UTooltip :text="mailDateLong(props.message.date)">
-            <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(props.message.date) }}</span>
+          <UTooltip :text="mailDateLong(props.message.at)">
+            <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(props.message.at) }}</span>
           </UTooltip>
         </button>
         <UDropdownMenu :items="writeMenu" :content="{ align: 'end' }">
@@ -46,15 +46,15 @@
 
       <MailBody :message="props.message" :account="props.account" :show-images="props.showImages" />
 
-      <ul v-if="props.message.attachments.length > 0" class="flex flex-wrap gap-2" :aria-label="$t('mail.label.attachment')">
-        <li v-for="part in props.message.attachments" :key="part.part">
+      <ul v-if="attachments.length > 0" class="flex flex-wrap gap-2" :aria-label="$t('mail.label.attachment')">
+        <li v-for="part in attachments" :key="part.partId">
           <a
-            :href="partUrl(props.account, props.message, part.part)"
-            :download="part.filename ?? ''"
+            :href="partUrl(props.account, props.message, part.partId)"
+            :download="part.fileName ?? ''"
             class="flex max-w-64 items-center gap-2 rounded-md border border-default px-3 py-2 text-sm transition-colors hover:bg-elevated active:bg-accented"
           >
             <UIcon name="i-material-symbols-attach-file" class="size-4 shrink-0 text-muted" />
-            <span class="min-w-0 flex-1 truncate">{{ part.filename ?? $t("mail.label.attachment") }}</span>
+            <span class="min-w-0 flex-1 truncate">{{ part.fileName ?? $t("mail.label.attachment") }}</span>
             <span class="shrink-0 tabular-nums text-muted">{{ sizeText(partSize(part)) }}</span>
           </a>
         </li>
@@ -67,7 +67,7 @@
 import { mailDate, mailDateLong, personName, sizeText, subjectText } from "../domain/mail";
 import { partUrl } from "../domain/mail-api";
 
-import { partSize } from "../../shared/mail";
+import { attachmentsOf, partSize, receiptAnswered } from "../../shared/mail";
 
 import type { MailMessage } from "../../shared/mail";
 import type { DropdownMenuItem } from "@nuxt/ui";
@@ -89,16 +89,17 @@ const writeMenu = computed<DropdownMenuItem[]>(() => [
 ]);
 
 const sender = computed(() => {
-  const first = props.message.from[0];
+  const first = props.message.from;
 
-  return first === undefined ? t("mail.label.no_sender_mark") : personName(t, first, props.address);
+  return first == null ? t("mail.label.no_sender_mark") : personName(t, first, props.address);
 });
-const senderAddress = computed(() => props.message.from[0]?.address ?? "");
+const senderAddress = computed(() => props.message.from?.address ?? "");
+const attachments = computed(() => attachmentsOf(props.message));
 const recipients = computed(() => [...props.message.to, ...props.message.cc].map((person) => personName(t, person, props.address)).join(", ") || t("mail.label.none_mark"));
 
 // The bar stands for a message that asks and was not answered, and never for the account's own.
 const asksReceipt = computed(
-  () => props.message.receiptTo !== null && !props.message.receiptAnswered && !props.message.from.some((person) => person.address === props.address),
+  () => props.message.receiptTo != null && !receiptAnswered(props.message) && props.message.from?.address !== props.address,
 );
 
 const answering = ref<"send" | "decline" | null>(null);

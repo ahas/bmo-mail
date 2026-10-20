@@ -1,23 +1,19 @@
 //! Reading and changing the messages of one mailbox (`docs/mail.md`, 「Reading」 and 「Where each piece of
-//! state lives」). Nothing here keeps a copy of a message: every list and every thread is read from the
+//! state lives」). Nothing here keeps a copy of a message: every page and every thread is read from the
 //! server when it is asked for.
 
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use async_imap::imap_proto::SectionPath;
 use async_imap::types::Fetch;
-use futures::TryStreamExt;
-use icu_collator::options::{CollatorOptions, Strength};
-use icu_collator::preferences::CollationNumericOrdering;
-use icu_collator::{Collator, CollatorBorrowed, CollatorPreferences};
+use chrono::{Days, NaiveDate};
 use mail_parser::{Address, HeaderName, MessageParser};
 
 use crate::imap::charset::{decode_transfer, part_text};
 use crate::imap::conversation::{conversation_key, id_key};
-use crate::imap::folders::{ensure_role_folder, folders_of, list_folders};
-use crate::imap::moved_in::{begin_move_in, moved_in};
-use crate::imap::search::Search;
+use crate::imap::folders::{folders_of, list_folders};
+use crate::imap::moved_in::begin_move_in;
+use crate::imap::search::{Search, all_of};
 use crate::imap::session::{Connection, MailSession};
 use crate::imap::structure::{message_parts, snippet_part, snippet_text};
 use crate::imap::{
@@ -25,14 +21,10 @@ use crate::imap::{
   uid_set, wire_name,
 };
 use crate::labels::label_id_of;
-use crate::routes::requests::{Asked, MailFault};
-use crate::wire::{
-  FolderRole, MailAddress, MailConversation, MailFolder, MailFolderState, MailListMessage, MailMessage,
-  MailPage, MailPart, MailRef, MailSort, MailSortBy, MailSummaryMessage,
+use crate::mail::{
+  FolderRole, MailAddress, MailFolder, MailFolderState, MailListMessage, MailMessage, MailPart, MailRef,
 };
-
-/// How many messages a page of a list holds.
-pub const PAGE_SIZE: usize = 50;
+use crate::routes::requests::{Asked, MailFault};
 
 /// The part of a body a snippet is cut from, before its encoding is undone.
 const SNIPPET_BYTES: usize = 800;
@@ -47,6 +39,13 @@ const SETTABLE: [&str; 7] =
 
 /// The headers a row and a message are read from.
 const HEADER_FIELDS: &str = "BODY.PEEK[HEADER.FIELDS (DATE SUBJECT FROM TO CC BCC REPLY-TO MESSAGE-ID IN-REPLY-TO REFERENCES DISPOSITION-NOTIFICATION-TO)]";
+
+/// The first window of days a page searches for its messages; each window after it is twice as long.
+const FIRST_WINDOW_DAYS: u64 = 7;
+
+/// How far a message's own time zone may stand from UTC. A search's day is read in the message's own zone, so
+/// a window of days is trusted only this far inside its first day.
+const ZONE_REACH_MS: i64 = 14 * 60 * 60 * 1000;
 
 /// What a fetch of rows asks for.
 fn row_items() -> String {
@@ -129,8 +128,8 @@ pub fn heads(raw: Option<&[u8]>) -> Heads {
   }
 }
 
-/// A row of a list, its headers and its parts, from what a fetch answered for one message.
-fn read_row(folder: &str, fetch: &Fetch) -> Option<(MailListMessage, Heads, crate::wire::MailParts)> {
+/// A message without its bodies, from what a fetch answered for it.
+fn read_row(folder: &str, fetch: &Fetch) -> Option<MailMessage> {
   let uid = fetch.uid?;
   let flags: Vec<String> = fetch.flags().map(|flag| flag_name(&flag)).collect();
   let heads = heads(fetch.header());
@@ -144,7 +143,7 @@ fn read_row(folder: &str, fetch: &Fetch) -> Option<(MailListMessage, Heads, crat
     .or(heads.date)
     .unwrap_or(0);
   let has = |name: &str| flags.iter().any(|flag| flag == name);
-  let row = MailListMessage {
+  let listed = MailListMessage {
     folder: folder.to_owned(),
     uid,
     key,
@@ -158,12 +157,27 @@ fn read_row(folder: &str, fetch: &Fetch) -> Option<(MailListMessage, Heads, crat
     answered: has("\\Answered"),
     draft: has("\\Draft"),
     receipt_answered: has("$MDNSent"),
+    flags: flags.iter().filter(|flag| label_id_of(flag).is_none()).cloned().collect(),
     labels: flags.iter().filter_map(|flag| label_id_of(flag).map(str::to_owned)).collect(),
     has_attachments: !parts.attachments.is_empty(),
     snippet: String::new(),
   };
 
-  Some((row, heads, parts))
+  Some(MailMessage {
+    listed,
+    cc: heads.cc,
+    bcc: heads.bcc,
+    reply_to: heads.reply_to,
+    in_reply_to: heads.in_reply_to.first().map(|id| id_key(id)),
+    references: heads.references.iter().map(|id| id_key(id)).collect(),
+    receipt_to: heads.receipt_to,
+    text: None,
+    html: None,
+    attachments: parts.attachments,
+    inline: parts.inline,
+    text_part: parts.text,
+    html_part: parts.html,
+  })
 }
 
 /// The section a part number names in a fetch's answer.
@@ -171,27 +185,27 @@ fn section(part: &str) -> SectionPath {
   SectionPath::Part(part.split('.').filter_map(|number| number.parse().ok()).collect(), None)
 }
 
-/// The list rows of the given messages of the selected folder, in the order given, their snippets read in
+/// The given messages of the selected folder without their bodies, in the order given, their snippets read in
 /// one fetch per part number rather than one per message.
-async fn list_rows(
+async fn rows(
   connection: &mut Connection,
   folder: &str,
   uids: &[u32],
-) -> Result<Vec<MailListMessage>, MailFault> {
+) -> Result<Vec<MailMessage>, MailFault> {
   let fetched = uid_fetch(connection.session(), uids, &row_items()).await?;
-  let mut rows: HashMap<u32, MailListMessage> = HashMap::new();
+  let mut rows: HashMap<u32, MailMessage> = HashMap::new();
   let mut by_part: BTreeMap<String, Vec<(u32, MailPart)>> = BTreeMap::new();
 
   for fetch in &fetched {
-    let Some((row, _, _)) = read_row(folder, fetch) else {
+    let Some(row) = read_row(folder, fetch) else {
       continue;
     };
 
     if let Some(part) = snippet_part(fetch.bodystructure()) {
-      by_part.entry(part.part.clone()).or_default().push((row.uid, part));
+      by_part.entry(part.part.clone()).or_default().push((row.listed.uid, part));
     }
 
-    rows.insert(row.uid, row);
+    rows.insert(row.listed.uid, row);
   }
 
   for (key, wanted) in by_part {
@@ -209,7 +223,7 @@ async fn list_rows(
       {
         let text = part_text(bytes, part.encoding.as_deref(), part.charset.as_deref());
 
-        row.snippet = snippet_text(&text, part.kind == "text/html");
+        row.listed.snippet = snippet_text(&text, part.kind == "text/html");
       }
     }
   }
@@ -217,239 +231,175 @@ async fn list_rows(
   Ok(uids.iter().filter_map(|uid| rows.remove(uid)).collect())
 }
 
-/// The messages of a page gathered into the conversations they make up, in the order they were given: the
-/// page is already ordered by the column the list stands on, and a conversation takes the place of its
-/// first message in it. What the row says about the conversation — its date, its senders, its snippet — is
-/// read from the newest message of the group whatever that order is.
-pub fn conversations(messages: Vec<MailListMessage>) -> Vec<MailConversation> {
-  let mut keys: Vec<String> = Vec::new();
-  let mut groups: HashMap<String, Vec<MailListMessage>> = HashMap::new();
-
-  for message in messages {
-    if !groups.contains_key(&message.key) {
-      keys.push(message.key.clone());
-    }
-
-    groups.entry(message.key.clone()).or_default().push(message);
-  }
-
-  keys
-    .into_iter()
-    .map(|key| {
-      let group = groups.remove(&key).unwrap_or_default();
-      let mut by_date: Vec<&MailListMessage> = group.iter().collect();
-
-      by_date.sort_by_key(|message| std::cmp::Reverse(message.date));
-
-      let newest = by_date[0];
-      let oldest = by_date[by_date.len() - 1];
-      let mut from: Vec<MailAddress> = Vec::new();
-
-      for message in &by_date {
-        for sender in &message.from {
-          if !from.iter().any(|one| one.address == sender.address) {
-            from.push(sender.clone());
-          }
-        }
-      }
-
-      let mut labels: Vec<String> = Vec::new();
-
-      for label in group.iter().flat_map(|message| message.labels.iter()) {
-        if !labels.contains(label) {
-          labels.push(label.clone());
-        }
-      }
-
-      MailConversation {
-        key,
-        subject: if oldest.subject.is_empty() { newest.subject.clone() } else { oldest.subject.clone() },
-        date: newest.date,
-        from,
-        count: group.len(),
-        unread: group.iter().any(|message| !message.seen),
-        flagged: group.iter().any(|message| message.flagged),
-        labels,
-        has_attachments: group.iter().any(|message| message.has_attachments),
-        snippet: newest.snippet.clone(),
-        messages: group
-          .iter()
-          .map(|message| MailRef {
-            folder: message.folder.clone(),
-            uid: message.uid,
-          })
-          .collect(),
-      }
-    })
-    .collect()
+/// Where a page starts: before a time, after one, or at the newest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cursor {
+  Newest,
+  Before(i64),
+  After(i64),
 }
 
-/// One folder's page read by each message's place in the folder rather than by a search: the only reading
-/// of a list that does not touch every message the folder holds, and the one every list standing as it
-/// stands by default is read by. It answers the date column alone, from whichever end that column runs.
-pub async fn folder_page(
-  session: &MailSession,
-  folder: &str,
-  offset: usize,
-  ascending: bool,
-) -> Result<MailPage, MailFault> {
-  let mut connection = session.folder(folder).await?;
-  let done = async {
-    let total = connection.exists() as usize;
-
-    if offset >= total {
-      return Ok(MailPage {
-        total,
-        offset,
-        conversations: Vec::new(),
-      });
-    }
-
-    let (low, high) = if ascending {
-      (offset + 1, total.min(offset + PAGE_SIZE))
-    } else {
-      ((total - offset).saturating_sub(PAGE_SIZE - 1).max(1), total - offset)
-    };
-    let found: Vec<Fetch> = connection
-      .session()
-      .fetch(format!("{low}:{high}"), "(UID)")
-      .await
-      .map_err(MailFault::server)?
-      .try_collect()
-      .await
-      .map_err(MailFault::server)?;
-    let mut uids: Vec<u32> = found.iter().filter_map(|fetch| fetch.uid).filter(|uid| *uid > 0).collect();
-
-    uids.sort_by(|a, b| if ascending { a.cmp(b) } else { b.cmp(a) });
-
-    let rows = list_rows(&mut connection, folder, &uids).await?;
-
-    Ok(MailPage {
-      total,
-      offset,
-      conversations: conversations(rows),
-    })
-  }
-  .await;
-
-  connection.settle(done)
-}
-
-/// Names and subjects compared the way the screen's language reads them, which for Korean is not the order
-/// of their code points: letters alike whatever their case and accents, and numbers by their value.
-pub struct NameOrder(CollatorBorrowed<'static>);
-
-impl NameOrder {
-  pub fn new(language: &str) -> Self {
-    let mut preferences = match icu_locale::Locale::try_from_str(language) {
-      Ok(locale) => CollatorPreferences::from(&locale),
-      Err(_) => CollatorPreferences::default(),
-    };
-    let mut options = CollatorOptions::default();
-
-    preferences.numeric_ordering = Some(CollationNumericOrdering::True);
-    options.strength = Some(Strength::Primary);
-
-    let collator = Collator::try_new(preferences, options)
-      .or_else(|_| Collator::try_new(CollatorPreferences::default(), options))
-      .expect("the root collation is compiled in");
-
-    Self(collator)
-  }
-
-  fn compare(&self, a: &str, b: &str) -> Ordering {
-    self.0.compare(a, b)
-  }
-}
-
-/// What one message of a view is ordered by, before its row is read. A date is on every hit; a sender and a
-/// subject are read from the headers, and only where the list stands on them.
+/// One message a page's search found, before its row is read.
+#[derive(Clone, Debug)]
 struct Hit {
   folder: String,
   uid: u32,
-  date: i64,
-  from: String,
-  subject: String,
+  at: i64,
 }
 
-/// The sender a row names, as far as the headers name it: the first sender's own name, or the part of their
-/// address before `@`.
-fn sender_of(heads: &Heads) -> String {
-  heads
-    .from
-    .first()
-    .map(|first| {
-      if first.name.is_empty() {
-        first.address.split('@').next().unwrap_or("").to_owned()
-      } else {
-        first.name.clone()
+fn day_of(millis: i64) -> NaiveDate {
+  chrono::DateTime::from_timestamp_millis(millis).unwrap_or_default().date_naive()
+}
+
+fn midnight(day: NaiveDate) -> i64 {
+  day.and_hms_opt(0, 0, 0).map_or(0, |at| at.and_utc().timestamp_millis())
+}
+
+/// The messages of the selected folder the search finds among `uids`, each with the time it reached the
+/// folder, those already seen passed over.
+async fn hits_of(
+  connection: &mut Connection,
+  folder: &str,
+  uids: Vec<u32>,
+  seen: &mut HashSet<u32>,
+) -> Result<Vec<Hit>, MailFault> {
+  let fresh: Vec<u32> = uids.into_iter().filter(|uid| seen.insert(*uid)).collect();
+
+  if fresh.is_empty() {
+    return Ok(Vec::new());
+  }
+
+  let fetched = uid_fetch(connection.session(), &fresh, "(UID INTERNALDATE)").await?;
+
+  Ok(
+    fetched
+      .iter()
+      .filter_map(|fetch| {
+        Some(Hit {
+          folder: folder.to_owned(),
+          uid: fetch.uid?,
+          at: fetch.internal_date().map_or(0, |date| date.timestamp_millis()),
+        })
+      })
+      .collect(),
+  )
+}
+
+/// The messages of one folder the search finds older than `before` (or the newest, with none), read a window
+/// of days at a time back from it until `wanted` of them stand where the window can be trusted, or the folder
+/// holds nothing older. The second answer says whether the folder was read to its oldest message.
+async fn older_hits(
+  connection: &mut Connection,
+  folder: &str,
+  search: &Search,
+  before: Option<i64>,
+  wanted: usize,
+) -> Result<(Vec<Hit>, bool), MailFault> {
+  // A search's day is the message's own, so the top of the window stands a day past the cursor's day.
+  let top = before.map_or_else(|| chrono::Utc::now().date_naive(), day_of) + Days::new(2);
+  let mut span = FIRST_WINDOW_DAYS;
+  let mut seen = HashSet::new();
+  let mut hits: Vec<Hit> = Vec::new();
+
+  loop {
+    let since = top.checked_sub_days(Days::new(span)).unwrap_or(NaiveDate::MIN);
+    let found = uid_search(
+      connection.session(),
+      &all_of(vec![search.clone(), Search::Since(since), Search::Before(top)]).command(),
+    )
+    .await?;
+
+    for hit in hits_of(connection, folder, found, &mut seen).await? {
+      if before.is_none_or(|before| hit.at < before) {
+        hits.push(hit);
       }
-    })
-    .unwrap_or_default()
-}
+    }
 
-/// Ascending, always: the oldest date, the first name, the first subject. The other way round is this same
-/// order read backwards, so one comparison answers both.
-fn compare_hits(a: &Hit, b: &Hit, by: MailSortBy, order: &NameOrder) -> Ordering {
-  match by {
-    MailSortBy::From => order.compare(&a.from, &b.from).then(a.date.cmp(&b.date)),
-    MailSortBy::Subject => order.compare(&a.subject, &b.subject).then(a.date.cmp(&b.date)),
-    MailSortBy::Date => a.date.cmp(&b.date).then(a.uid.cmp(&b.uid)),
+    let trusted_from = midnight(since) + ZONE_REACH_MS;
+
+    if hits.iter().filter(|hit| hit.at >= trusted_from).count() >= wanted {
+      return Ok((hits, false));
+    }
+
+    let older =
+      uid_search(connection.session(), &all_of(vec![search.clone(), Search::Before(since)]).command())
+        .await?;
+
+    if older.is_empty() {
+      return Ok((hits, true));
+    }
+
+    span = span.saturating_mul(2);
   }
 }
 
-/// A page of a view across folders, or of one folder ordered by something other than its own arrival
-/// order: the search is run in each folder and every hit is read far enough to be put in order, which for
-/// a name or a subject is the headers of every message the view holds.
-pub async fn search_page(
+/// The messages of one folder the search finds newer than `after`.
+async fn newer_hits(
+  connection: &mut Connection,
+  folder: &str,
+  search: &Search,
+  after: i64,
+) -> Result<Vec<Hit>, MailFault> {
+  let since = day_of(after).checked_sub_days(Days::new(1)).unwrap_or(NaiveDate::MIN);
+  let found =
+    uid_search(connection.session(), &all_of(vec![search.clone(), Search::Since(since)]).command()).await?;
+  let hits = hits_of(connection, folder, found, &mut HashSet::new()).await?;
+
+  Ok(hits.into_iter().filter(|hit| hit.at > after).collect())
+}
+
+/// One page of the messages the search finds across the folders, newest first, and whether more stand past
+/// it. A page never ends inside a run of messages of one time, so the next page's cursor is exact.
+pub async fn messages_page(
   session: &MailSession,
   folders: &[MailFolder],
   search: &Search,
-  offset: usize,
-  sort: MailSort,
-  order: &NameOrder,
-) -> Result<MailPage, MailFault> {
+  cursor: Cursor,
+  limit: usize,
+) -> Result<(Vec<MailMessage>, bool), MailFault> {
   let mut hits: Vec<Hit> = Vec::new();
-  let named = sort.by != MailSortBy::Date;
-  let items = if named {
-    "(UID INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])"
-  } else {
-    "(UID INTERNALDATE)"
-  };
+  let mut every_folder_read = true;
 
   for folder in folders {
     let mut connection = session.folder(&folder.path).await?;
     let done = async {
-      let uids = uid_search(connection.session(), &search.command()).await?;
-
-      uid_fetch(connection.session(), &uids, items).await
+      match cursor {
+        Cursor::After(after) => Ok((newer_hits(&mut connection, &folder.path, search, after).await?, true)),
+        Cursor::Before(before) => {
+          older_hits(&mut connection, &folder.path, search, Some(before), limit + 1).await
+        }
+        Cursor::Newest => older_hits(&mut connection, &folder.path, search, None, limit + 1).await,
+      }
     }
     .await;
+    let (found, read_whole) = connection.settle(done)?;
 
-    for fetch in connection.settle(done)? {
-      let Some(uid) = fetch.uid else {
-        continue;
-      };
-      let heads = if named { heads(fetch.header()) } else { Heads::default() };
-
-      hits.push(Hit {
-        folder: folder.path.clone(),
-        uid,
-        date: fetch.internal_date().map_or(0, |date| date.timestamp_millis()),
-        from: sender_of(&heads),
-        subject: heads.subject.trim().to_owned(),
-      });
-    }
+    every_folder_read &= read_whole;
+    hits.extend(found);
   }
 
-  hits.sort_by(|a, b| {
-    let ascending = compare_hits(a, b, sort.by, order);
+  let newest_first =
+    |a: &Hit, b: &Hit| b.at.cmp(&a.at).then_with(|| a.folder.cmp(&b.folder)).then(b.uid.cmp(&a.uid));
+  let page: Vec<Hit> = match cursor {
+    Cursor::After(_) => {
+      hits.sort_by(|a, b| newest_first(b, a));
 
-    if sort.ascending { ascending } else { ascending.reverse() }
-  });
+      let mut page = through_run(&hits, limit);
 
-  let total = hits.len();
-  let page: Vec<&Hit> = hits.iter().skip(offset).take(PAGE_SIZE).collect();
+      every_folder_read = page.len() == hits.len();
+      page.sort_by(newest_first);
+      page
+    }
+    _ => {
+      hits.sort_by(newest_first);
+
+      let page = through_run(&hits, limit);
+
+      every_folder_read &= page.len() == hits.len();
+      page
+    }
+  };
+  let mut read: HashMap<(String, u32), MailMessage> = HashMap::new();
   let mut folders_in_page: Vec<&str> = Vec::new();
 
   for hit in &page {
@@ -458,25 +408,30 @@ pub async fn search_page(
     }
   }
 
-  let mut read: HashMap<(String, u32), MailListMessage> = HashMap::new();
-
   for folder in folders_in_page {
     let uids: Vec<u32> = page.iter().filter(|hit| hit.folder == folder).map(|hit| hit.uid).collect();
     let mut connection = session.folder(folder).await?;
-    let done = list_rows(&mut connection, folder, &uids).await;
+    let done = rows(&mut connection, folder, &uids).await;
 
     for row in connection.settle(done)? {
-      read.insert((row.folder.clone(), row.uid), row);
+      read.insert((row.listed.folder.clone(), row.listed.uid), row);
     }
   }
 
   let ordered = page.iter().filter_map(|hit| read.remove(&(hit.folder.clone(), hit.uid))).collect();
 
-  Ok(MailPage {
-    total,
-    offset,
-    conversations: conversations(ordered),
-  })
+  Ok((ordered, !every_folder_read))
+}
+
+/// The first `limit` hits, and every one after them of the same time as the last of them.
+fn through_run(hits: &[Hit], limit: usize) -> Vec<Hit> {
+  let mut end = limit.min(hits.len());
+
+  while end > 0 && end < hits.len() && hits[end].at == hits[end - 1].at {
+    end += 1;
+  }
+
+  hits[..end].to_vec()
 }
 
 /// One body part's text, read up to the most a view reads.
@@ -507,28 +462,22 @@ async fn read_in_folder(
   uid: u32,
 ) -> Result<Option<MailMessage>, MailFault> {
   let fetched = uid_fetch(connection.session(), &[uid], &row_items()).await?;
-  let Some((listed, heads, parts)) = fetched.first().and_then(|fetch| read_row(folder, fetch)) else {
+  let Some(mut message) = fetched.first().and_then(|fetch| read_row(folder, fetch)) else {
     return Ok(None);
   };
-  let text = read_body(connection, uid, parts.text.as_ref()).await?;
-  let html = read_body(connection, uid, parts.html.as_ref()).await?;
 
-  Ok(Some(MailMessage {
-    listed,
-    cc: heads.cc,
-    bcc: heads.bcc,
-    reply_to: heads.reply_to,
-    in_reply_to: heads.in_reply_to.first().map(|id| id_key(id)),
-    references: heads.references.iter().map(|id| id_key(id)).collect(),
-    receipt_to: heads.receipt_to,
-    text,
-    html,
-    attachments: parts.attachments,
-    inline: parts.inline,
-  }))
+  message.text = read_body(connection, uid, message.text_part.as_ref()).await?;
+  message.html = read_body(connection, uid, message.html_part.as_ref()).await?;
+  message.listed.snippet = match (&message.text, &message.html) {
+    (Some(text), _) => snippet_text(text, false),
+    (None, Some(html)) => snippet_text(html, true),
+    (None, None) => String::new(),
+  };
+
+  Ok(Some(message))
 }
 
-/// One message with its bodies. Reading it does not mark it read; the screen says so on its own.
+/// One message with its bodies. Reading it does not mark it read.
 pub async fn read_message(session: &MailSession, at: &MailRef) -> Result<Option<MailMessage>, MailFault> {
   let mut connection = session.folder(&at.folder).await?;
   let done = read_in_folder(&mut connection, &at.folder, at.uid).await;
@@ -536,12 +485,20 @@ pub async fn read_message(session: &MailSession, at: &MailRef) -> Result<Option<
   connection.settle(done)
 }
 
+/// One message without its bodies, as a page and an event carry it.
+pub async fn read_row_of(session: &MailSession, at: &MailRef) -> Result<Option<MailMessage>, MailFault> {
+  let mut connection = session.folder(&at.folder).await?;
+  let done = rows(&mut connection, &at.folder, &[at.uid]).await;
+
+  Ok(connection.settle(done)?.into_iter().next())
+}
+
 /// Every message of a conversation: those the conversation's key names, read from the inbox, the sent
 /// folders and the folder it was opened from, oldest first, a message found in two folders once.
 pub async fn read_thread(
   session: &MailSession,
   key: &str,
-  opened_in: &str,
+  opened_in: Option<&str>,
 ) -> Result<Vec<MailMessage>, MailFault> {
   if let Some((folder, uid)) = key.rsplit_once('\u{0}')
     && let Ok(uid) = uid.parse::<u32>()
@@ -565,7 +522,7 @@ pub async fn read_thread(
     .iter()
     .filter(|folder| folder.role == Some(FolderRole::Sent))
     .map(|folder| folder.path.clone())
-    .chain(std::iter::once(opened_in.to_owned()))
+    .chain(opened_in.map(str::to_owned))
   {
     if !paths.contains(&path) {
       paths.push(path);
@@ -637,35 +594,41 @@ pub struct OpenedPart {
   pub filename: Option<String>,
 }
 
-/// A part of a message as it comes from the server, whole.
-pub async fn open_part(session: &MailSession, at: &MailRef, part: &str) -> Result<OpenedPart, MailFault> {
+/// A part of a message as it comes from the server, whole; none where the message or the part is not there.
+pub async fn open_part(
+  session: &MailSession,
+  at: &MailRef,
+  part: &str,
+) -> Result<Option<OpenedPart>, MailFault> {
   if !part_number(part) {
-    return Err(MailFault::server("the part is not in the message"));
+    return Ok(None);
   }
 
   let mut connection = session.folder(&at.folder).await?;
   let done = async {
     let fetched =
       uid_fetch(connection.session(), &[at.uid], &format!("(UID BODYSTRUCTURE BODY.PEEK[{part}])")).await?;
-    let fetch = fetched.first().ok_or_else(|| MailFault::server("the message is not on the server"))?;
+    let Some(fetch) = fetched.first() else {
+      return Ok(None);
+    };
     let meta = leaves(fetch).into_iter().find(|one| one.part == part);
-    let bytes = fetch
-      .section(&section(part))
-      .ok_or_else(|| MailFault::server("the part is not in the message"))?;
+    let Some(bytes) = fetch.section(&section(part)) else {
+      return Ok(None);
+    };
 
-    Ok(OpenedPart {
+    Ok(Some(OpenedPart {
       bytes: decode_transfer(bytes, meta.as_ref().and_then(|meta| meta.encoding.as_deref())),
       kind: meta.as_ref().map(|meta| meta.kind.clone()),
       filename: meta.and_then(|meta| meta.filename),
-    })
+    }))
   }
   .await;
 
   connection.settle(done)
 }
 
-/// The part an HTML body names by `cid:`.
-pub async fn find_inline_part(
+/// The part of a message a content id names.
+pub async fn find_part_by_cid(
   session: &MailSession,
   at: &MailRef,
   cid: &str,
@@ -676,28 +639,10 @@ pub async fn find_inline_part(
   let fetched = connection.settle(done)?;
 
   Ok(fetched.first().and_then(|fetch| {
-    let parts = message_parts(fetch.bodystructure());
-
-    parts
-      .inline
+    leaves(fetch)
       .into_iter()
-      .chain(parts.attachments)
-      .find(|part| part.cid.as_deref() == Some(wanted))
+      .find(|part| part.cid.as_deref().is_some_and(|cid| cid.eq_ignore_ascii_case(wanted)))
   }))
-}
-
-/// The messages grouped by their folder, in the order the folders first come.
-fn by_folder(refs: &[MailRef]) -> Vec<(String, Vec<u32>)> {
-  let mut grouped: Vec<(String, Vec<u32>)> = Vec::new();
-
-  for at in refs {
-    match grouped.iter_mut().find(|(folder, _)| *folder == at.folder) {
-      Some((_, uids)) => uids.push(at.uid),
-      None => grouped.push((at.folder.clone(), vec![at.uid])),
-    }
-  }
-
-  grouped
 }
 
 /// Whether a request may set or clear the flag.
@@ -705,29 +650,60 @@ pub fn settable_flag(flag: &str) -> bool {
   SETTABLE.contains(&flag) || label_id_of(flag).is_some()
 }
 
-/// Sets and clears flags on the given messages, in whichever folders they are.
+/// Sets and clears flags on one message.
 pub async fn change_flags(
   session: &MailSession,
-  refs: &[MailRef],
+  at: &MailRef,
   add: &[String],
   remove: &[String],
 ) -> Result<(), MailFault> {
-  if let Some(flag) = add.iter().chain(remove).find(|flag| !settable_flag(flag)) {
-    return Err(Asked::new("bad_flag", "a flag is not one that may be set").with("flag", flag).into());
+  let mut connection = session.folder(&at.folder).await?;
+  let done = async {
+    store_flags(connection.session(), &[at.uid], "+", add).await?;
+    store_flags(connection.session(), &[at.uid], "-", remove).await
   }
+  .await;
 
-  for (folder, uids) in by_folder(refs) {
-    let mut connection = session.folder(&folder).await?;
-    let done = async {
-      store_flags(connection.session(), &uids, "+", add).await?;
-      store_flags(connection.session(), &uids, "-", remove).await
+  connection.settle(done)
+}
+
+/// Gives a message the whole of the settable flags and label keywords `wanted` names: what it carries beyond
+/// them is taken off, what it lacks is set, and a flag no request may set is left as it is. A flag outside
+/// the settable ones is refused unless the message carries it already. Answers whether the message is there.
+pub async fn set_flags(session: &MailSession, at: &MailRef, wanted: &[String]) -> Result<bool, MailFault> {
+  let mut connection = session.folder(&at.folder).await?;
+  let done = async {
+    let found = uid_fetch(connection.session(), &[at.uid], "(UID FLAGS)").await?;
+    let Some(fetch) = found.first() else {
+      return Ok(false);
+    };
+    let held: Vec<String> = fetch.flags().map(|flag| flag_name(&flag)).collect();
+
+    if let Some(flag) = wanted.iter().find(|flag| !settable_flag(flag) && !held.contains(flag)) {
+      return Err(
+        Asked::rule("flag-not-settable", format!("{flag} is not a flag a request may set")).into(),
+      );
     }
-    .await;
 
-    connection.settle(done)?;
+    let add: Vec<String> = wanted
+      .iter()
+      .filter(|flag| settable_flag(flag) && !held.contains(flag))
+      .cloned()
+      .collect();
+    let remove: Vec<String> = held
+      .iter()
+      .filter(|flag| settable_flag(flag) && !wanted.contains(flag))
+      .cloned()
+      .collect();
+
+    store_flags(connection.session(), &[at.uid], "+", &add).await?;
+    store_flags(connection.session(), &[at.uid], "-", &remove).await?;
+
+    Ok(true)
   }
+  .await;
 
-  Ok(())
+  connection.settle(done)
 }
 
 /// Moves messages of the selected folder into another, and says where they landed where the server said. A
@@ -752,84 +728,87 @@ pub async fn move_uids(
   Ok(landed)
 }
 
-/// Moves the given messages into one folder. A move into the inbox is noted with where the messages
-/// landed, so the watcher does not take them for new mail.
-pub async fn move_messages(
+/// Moves one message into another folder, and answers where it now stands: where the server said it landed,
+/// else where its `Message-ID` finds it there, else nowhere known. A move into the inbox is noted with where
+/// the message landed, so the watcher does not take it for new mail.
+pub async fn move_message(
   session: &MailSession,
-  refs: &[MailRef],
+  at: &MailRef,
+  message_id: Option<&str>,
   destination: &str,
-) -> Result<(), MailFault> {
-  for (folder, uids) in by_folder(refs) {
-    if folder == destination {
-      continue;
-    }
+) -> Result<Option<MailRef>, MailFault> {
+  let mut noted = (destination == "INBOX").then(|| begin_move_in(&session.account.address));
+  let mut connection = session.folder(&at.folder).await?;
+  let done = move_uids(&mut connection, &[at.uid], destination).await;
+  let landed = connection.settle(done)?;
+  let uid = landed.as_ref().and_then(|landed| landed.uids.first().copied());
 
-    let mut noted = (destination == "INBOX").then(|| begin_move_in(&session.account.address));
-    let mut connection = session.folder(&folder).await?;
-    let done = move_uids(&mut connection, &uids, destination).await;
-    let landed = connection.settle(done)?;
-
-    if let Some(noted) = noted.as_mut() {
-      noted.landed(landed);
-    }
+  if let Some(noted) = noted.as_mut() {
+    noted.landed(landed);
   }
 
-  Ok(())
-}
+  if let Some(uid) = uid {
+    return Ok(Some(MailRef {
+      folder: destination.to_owned(),
+      uid,
+    }));
+  }
 
-/// Moves the given messages into the folder of the role, made where it does not exist yet.
-pub async fn move_to_role(
-  session: &MailSession,
-  refs: &[MailRef],
-  role: FolderRole,
-) -> Result<String, MailFault> {
-  let destination = ensure_role_folder(session, role).await?;
+  let Some(message_id) = message_id else {
+    return Ok(None);
+  };
+  let mut connection = session.folder(destination).await?;
+  let search = Search::Header("message-id".to_owned(), message_id.to_owned());
+  let done = uid_search(connection.session(), &search.command()).await;
+  let found = connection.settle(done)?;
 
-  move_messages(session, refs, &destination).await?;
-
-  Ok(destination)
-}
-
-/// Spam reported: the learning keyword set, the messages moved into the junk folder.
-pub async fn report_spam(session: &MailSession, refs: &[MailRef]) -> Result<(), MailFault> {
-  change_flags(session, refs, &["$Junk".to_owned()], &["$NotJunk".to_owned()]).await?;
-  move_to_role(session, refs, FolderRole::Junk).await.map(drop)
-}
-
-/// Not spam: the other keyword set, the messages moved back into the inbox.
-pub async fn report_not_spam(session: &MailSession, refs: &[MailRef]) -> Result<(), MailFault> {
-  change_flags(session, refs, &["$NotJunk".to_owned()], &["$Junk".to_owned()]).await?;
-  move_to_role(session, refs, FolderRole::Inbox).await.map(drop)
+  Ok(found.into_iter().max().map(|uid| MailRef {
+    folder: destination.to_owned(),
+    uid,
+  }))
 }
 
 /// Deletion for good, which only the junk and the trash folders allow.
-pub async fn delete_forever(session: &MailSession, refs: &[MailRef]) -> Result<(), MailFault> {
+pub async fn delete_forever(session: &MailSession, at: &MailRef) -> Result<(), MailFault> {
   let folders = folders_of(session).await?;
+  let role = folders.iter().find(|one| one.path == at.folder).and_then(|one| one.role);
 
-  for (folder, uids) in by_folder(refs) {
-    let role = folders.iter().find(|one| one.path == folder).and_then(|one| one.role);
-
-    if role != Some(FolderRole::Junk) && role != Some(FolderRole::Trash) {
-      return Err(MailFault::asked("delete_outside_trash", "a message to delete is not in spam or trash"));
-    }
-
-    let mut connection = session.folder(&folder).await?;
-    let done = async {
-      let uidplus =
-        connection.session().capabilities().await.map_err(MailFault::server)?.has_str("UIDPLUS");
-
-      store_flags(connection.session(), &uids, "+", &["\\Deleted".to_owned()]).await?;
-      expunge(connection.session(), &uids, uidplus).await
-    }
-    .await;
-
-    connection.settle(done)?;
+  if role != Some(FolderRole::Junk) && role != Some(FolderRole::Trash) {
+    return Err(Asked::rule("outside-trash", "a message to delete is not in spam or trash").into());
   }
 
-  Ok(())
+  let mut connection = session.folder(&at.folder).await?;
+  let done = async {
+    let found = uid_fetch(connection.session(), &[at.uid], "(UID)").await?;
+
+    if found.is_empty() {
+      return Err(Asked::not_found("no message has that id").into());
+    }
+
+    let uidplus = connection.session().capabilities().await.map_err(MailFault::server)?.has_str("UIDPLUS");
+
+    store_flags(connection.session(), &[at.uid], "+", &["\\Deleted".to_owned()]).await?;
+    expunge(connection.session(), &[at.uid], uidplus).await
+  }
+  .await;
+
+  connection.settle(done)
 }
 
-/// Every folder of the mailbox with its unread and total counts, for the mail nav's marks.
+/// Marks every message of a folder read, or every one unread.
+pub async fn mark_folder(session: &MailSession, path: &str, read: bool) -> Result<(), MailFault> {
+  let mut connection = session.folder(path).await?;
+  let done = async {
+    let uids = uid_search(connection.session(), if read { "UNSEEN" } else { "SEEN" }).await?;
+
+    store_flags(connection.session(), &uids, if read { "+" } else { "-" }, &["\\Seen".to_owned()]).await
+  }
+  .await;
+
+  connection.settle(done)
+}
+
+/// Every folder of the mailbox with its unread and total counts.
 pub async fn folder_states(session: &MailSession) -> Result<Vec<MailFolderState>, MailFault> {
   let mut connection = session.connection().await?;
   let done = async {
@@ -857,84 +836,50 @@ pub async fn folder_states(session: &MailSession) -> Result<Vec<MailFolderState>
   connection.settle(done)
 }
 
-/// How many unread messages a summary names at most: the notice counts every new one but names only the
-/// newest.
-const SUMMARY_RECENT: usize = 10;
+/// One folder with its counts, and its place among the folders; none where the mailbox holds no folder of
+/// that name.
+pub async fn folder_state(
+  session: &MailSession,
+  path: &str,
+) -> Result<Option<(usize, MailFolderState)>, MailFault> {
+  let mut connection = session.connection().await?;
+  let done = async {
+    let folders = list_folders(&mut connection).await?;
+    let Some((index, folder)) = folders.into_iter().enumerate().find(|(_, folder)| folder.path == path)
+    else {
+      return Ok(None);
+    };
+    let status = connection
+      .session()
+      .status(wire_name(&folder.path), "(MESSAGES UNSEEN)")
+      .await
+      .map_err(MailFault::server)?;
 
-/// One account's inbox at a glance.
-pub struct InboxSummary {
-  pub unread: u32,
-  pub newest: Option<MailSummaryMessage>,
-  pub recent_unread: Vec<MailSummaryMessage>,
+    Ok(Some((
+      index,
+      MailFolderState {
+        folder,
+        unseen: status.unseen.unwrap_or(0),
+        total: status.exists,
+      },
+    )))
+  }
+  .await;
+
+  connection.settle(done)
 }
 
-/// One account's inbox at a glance (`docs/mail.md`, 「Reaching the open tabs」): the unread count, the
-/// newest message, and the newest unread ones.
-pub async fn inbox_summary(session: &MailSession) -> Result<InboxSummary, MailFault> {
-  let account = session.account.address.clone();
-  let mut connection = session.folder("INBOX").await?;
+/// The unread messages of the inbox.
+pub async fn inbox_unseen(session: &MailSession) -> Result<u32, MailFault> {
+  let mut connection = session.connection().await?;
   let done = async {
-    let validity = connection.uid_validity();
-    let exists = connection.exists();
-    // The newest message is read before the unread ones, so every unread message at or below it is among
-    // them. A message arriving between the two reads is then newer than `newest` and in the unread list,
-    // never below `newest` and missing from it — which a tab would read as old news.
-    let newest_uid: Option<u32> = if exists == 0 {
-      None
-    } else {
-      let found: Vec<Fetch> = connection
-        .session()
-        .fetch(exists.to_string(), "(UID)")
-        .await
-        .map_err(MailFault::server)?
-        .try_collect()
-        .await
-        .map_err(MailFault::server)?;
+    let status = connection
+      .session()
+      .status(wire_name("INBOX"), "(UNSEEN)")
+      .await
+      .map_err(MailFault::server)?;
 
-      found.iter().find_map(|fetch| fetch.uid)
-    };
-    let mut unread = uid_search(connection.session(), "UNSEEN").await?;
-
-    unread.sort_unstable_by(|a, b| b.cmp(a));
-
-    let mut wanted: Vec<u32> = newest_uid.into_iter().collect();
-
-    for uid in unread.iter().take(SUMMARY_RECENT) {
-      if !wanted.contains(uid) {
-        wanted.push(*uid);
-      }
-    }
-
-    let rows =
-      uid_fetch(connection.session(), &wanted, &format!("(UID FLAGS INTERNALDATE {HEADER_FIELDS})"))
-        .await?;
-    let mut read: HashMap<u32, MailListMessage> = HashMap::new();
-
-    for fetch in &rows {
-      if let Some((row, _, _)) = read_row("INBOX", fetch) {
-        read.insert(row.uid, row);
-      }
-    }
-
-    let summary = |row: &MailListMessage| MailSummaryMessage {
-      uid: row.uid,
-      key: row.key.clone(),
-      from: row.from.clone(),
-      subject: row.subject.clone(),
-      date: row.date,
-      moved_in: moved_in(&account, &validity, row.uid),
-    };
-
-    Ok(InboxSummary {
-      unread: unread.len() as u32,
-      newest: newest_uid.and_then(|uid| read.get(&uid)).map(summary),
-      recent_unread: unread
-        .iter()
-        .take(SUMMARY_RECENT)
-        .filter_map(|uid| read.get(uid))
-        .map(summary)
-        .collect(),
-    })
+    Ok(status.unseen.unwrap_or(0))
   }
   .await;
 

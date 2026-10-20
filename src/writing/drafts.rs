@@ -1,25 +1,28 @@
-//! Drafts (`docs/mail.md`, 「Writing」): a draft is a message in the drafts folder. A save writes the new
-//! copy first and deletes the one it replaces afterwards, so a save that fails midway never loses the older
-//! copy.
+//! Drafts (`docs/mail.md`, 「Writing」): a draft is a message in the drafts folder, named by the `Message-ID`
+//! it keeps across every save. A save writes the new copy first and deletes the one it replaces afterwards,
+//! so a save that fails midway never loses the older copy.
 
 use std::path::Path;
 
 use mail_parser::{Address, HeaderName, MessageParser, MimeHeaders};
 
 use crate::imap::conversation::id_key;
-use crate::imap::folders::ensure_role_folder;
+use crate::imap::folders::{ensure_role_folder, folders_of, role_folders};
 use crate::imap::messages::{open_part, read_message};
+use crate::imap::search::Search;
 use crate::imap::session::MailSession;
-use crate::imap::{append_landing, expunge, flag_name, store_flags, uid_fetch};
+use crate::imap::{append_landing, expunge, flag_name, store_flags, uid_fetch, uid_search};
+use crate::mail::{AttachmentRef, Draft, DraftKind, FolderRole, MailAddress, MailRef};
+use crate::members::{bare_id, mailbox};
 use crate::routes::requests::{Asked, MailFault};
-use crate::wire::{AttachmentRef, Draft, DraftKind, FolderRole, MailAddress, MailRef};
+use crate::wire;
 use crate::writing::compose::{
   DRAFT_KIND_HEADER, DRAFT_ORIGINAL_HEADER, Purpose, ResolvedAttachment, build_message, data_images,
-  escape_html,
+  escape_html, new_message_id,
 };
 use crate::writing::staging::read_staged;
 
-/// Every attachment's bytes: a staged upload from the staging folder, a part from the server.
+/// Every attachment's bytes: a staged file from the staging folder, a part from the server.
 pub async fn resolve_attachments(
   session: &MailSession,
   staging: &Path,
@@ -31,11 +34,7 @@ pub async fn resolve_attachments(
     match at {
       AttachmentRef::Upload { id, filename, .. } => {
         let Some(staged) = read_staged(staging, id) else {
-          return Err(
-            Asked::new("upload_gone", "a staged file is no longer there")
-              .with("name", filename)
-              .into(),
-          );
+          return Err(MailFault::server(format!("the staged file {filename} is no longer there")));
         };
 
         resolved.push(ResolvedAttachment {
@@ -52,15 +51,13 @@ pub async fn resolve_attachments(
         kind,
         ..
       } => {
-        let opened = open_part(
-          session,
-          &MailRef {
-            folder: folder.clone(),
-            uid: *uid,
-          },
-          part,
-        )
-        .await?;
+        let at = MailRef {
+          folder: folder.clone(),
+          uid: *uid,
+        };
+        let Some(opened) = open_part(session, &at, part).await? else {
+          return Err(MailFault::server(format!("the attachment {filename} is no longer on the server")));
+        };
 
         resolved.push(ResolvedAttachment {
           filename: filename.clone(),
@@ -74,22 +71,61 @@ pub async fn resolve_attachments(
   Ok(resolved)
 }
 
-/// Saves the draft and answers where it now is. The draft it replaces, if any, is deleted only after the
-/// new copy stands.
+/// Where the draft a `Message-ID` names stands in the drafts folders, the newest copy where there are two.
+pub async fn find_draft(session: &MailSession, draft_id: &str) -> Result<Option<MailRef>, MailFault> {
+  let wanted = bare_id(draft_id);
+
+  if wanted.is_empty() {
+    return Ok(None);
+  }
+
+  let search = Search::Header("message-id".to_owned(), wanted);
+
+  for folder in role_folders(&folders_of(session).await?, FolderRole::Drafts) {
+    let mut connection = session.folder(&folder.path).await?;
+    let done = uid_search(connection.session(), &search.command()).await;
+    let found = connection.settle(done)?;
+
+    if let Some(uid) = found.into_iter().max() {
+      return Ok(Some(MailRef {
+        folder: folder.path,
+        uid,
+      }));
+    }
+  }
+
+  Ok(None)
+}
+
+/// Saves the draft under the `Message-ID` it keeps, and answers where it now is. The draft it replaces, if
+/// any, is deleted only after the new copy stands.
 pub async fn save_draft(
   session: &MailSession,
   staging: &Path,
   draft: &Draft,
 ) -> Result<MailRef, MailFault> {
+  let message_id = draft.message_id.clone().unwrap_or_else(|| format!("<{}>", new_message_id(&draft.from)));
   let attachments = resolve_attachments(session, staging, &draft.attachments).await?;
-  let raw = build_message(draft, &attachments, Purpose::Draft, None, chrono::Utc::now().timestamp())
-    .map_err(MailFault::server)?;
+  let raw =
+    build_message(draft, &attachments, Purpose::Draft, Some(&message_id), chrono::Utc::now().timestamp())
+      .map_err(MailFault::server)?;
   let folder = ensure_role_folder(session, FolderRole::Drafts).await?;
   let mut connection = session.connection().await?;
   let appended = append_landing(connection.session(), &folder, "\\Draft \\Seen", None, &raw).await;
   let landed = connection.settle(appended)?;
-  let Some(uid) = landed.and_then(|landed| landed.uids.first().copied()) else {
-    return Err(MailFault::asked("no_draft_uid", "the server did not say where it put the saved draft"));
+  let uid = match landed.and_then(|landed| landed.uids.first().copied()) {
+    Some(uid) => uid,
+    None => {
+      let mut connection = session.folder(&folder).await?;
+      let search = Search::Header("message-id".to_owned(), bare_id(&message_id));
+      let done = uid_search(connection.session(), &search.command()).await;
+      let found = connection.settle(done)?;
+      let replaced = draft.saved.as_ref().filter(|saved| saved.folder == folder).map(|saved| saved.uid);
+
+      found.into_iter().filter(|uid| Some(*uid) != replaced).max().ok_or_else(|| {
+        Asked::rule("draft-not-placed", "the server did not say where it put the saved draft")
+      })?
+    }
   };
 
   if let Some(saved) = &draft.saved {
@@ -142,15 +178,15 @@ fn addresses(address: Option<&Address<'_>>) -> Vec<MailAddress> {
     .unwrap_or_default()
 }
 
-/// A saved draft, back in the shape the composer writes in: its headers and bodies parsed from the message
-/// itself, its attachments as parts of it on the server.
-pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Draft, MailFault> {
+/// A saved draft, back in the shape it is written in: its headers and bodies parsed from the message itself,
+/// its attachments as parts of it on the server. None where it is not there.
+pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Option<Draft>, MailFault> {
   let mut connection = session.folder(&at.folder).await?;
   let done = uid_fetch(connection.session(), &[at.uid], "(UID BODY.PEEK[])").await;
   let source = connection.settle(done)?.first().and_then(|fetch| fetch.body().map(<[u8]>::to_vec));
   let message = read_message(session, at).await?;
   let (Some(source), Some(message)) = (source, message) else {
-    return Err(MailFault::asked("draft_not_found", "the draft is not on the server"));
+    return Ok(None);
   };
   let parser = MessageParser::new()
     .with_mime_headers()
@@ -162,7 +198,7 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Draft, Ma
     .header_text(HeaderName::Other(DRAFT_ORIGINAL_HEADER.into()))
     .header_raw(HeaderName::DispositionNotificationTo);
   let Some(parsed) = parser.parse(&source) else {
-    return Err(MailFault::asked("draft_not_found", "the draft is not on the server"));
+    return Ok(None);
   };
   let text_header = |name: &str| {
     parsed
@@ -194,7 +230,7 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Draft, Ma
       .unwrap_or_default()
   };
 
-  Ok(Draft {
+  Ok(Some(Draft {
     from: parsed
       .from()
       .and_then(|from| from.first())
@@ -223,6 +259,77 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Draft, Ma
     original: text_header(DRAFT_ORIGINAL_HEADER).map(|id| id_key(&id)),
     in_reply_to: ids(parsed.in_reply_to()).into_iter().next(),
     references: ids(parsed.references()),
+    message_id: parsed.message_id().map(|id| format!("<{}>", bare_id(id))),
     saved: Some(at.clone()),
-  })
+    changed_at: message.listed.date,
+  }))
+}
+
+/// The draft a `Message-ID` names, opened, or a 404.
+pub async fn draft_named(session: &MailSession, draft_id: &str) -> Result<Draft, MailFault> {
+  let Some(at) = find_draft(session, draft_id).await? else {
+    return Err(Asked::not_found("no draft has that id").into());
+  };
+
+  open_draft(session, &at)
+    .await?
+    .ok_or_else(|| Asked::not_found("no draft has that id").into())
+}
+
+/// Saves a draft and opens it again where it now stands, so its attachments name the parts of the copy that
+/// stands.
+pub async fn save_and_open(
+  session: &MailSession,
+  staging: &Path,
+  draft: &Draft,
+) -> Result<Draft, MailFault> {
+  let at = save_draft(session, staging, draft).await?;
+
+  open_draft(session, &at)
+    .await?
+    .ok_or_else(|| MailFault::server("the saved draft could not be read back"))
+}
+
+/// A draft as a member, under the account it is written from.
+pub fn member(account: &str, draft: &Draft) -> wire::Draft {
+  let people = |list: &[MailAddress]| list.iter().map(mailbox).collect();
+
+  wire::Draft {
+    id: draft.message_id.as_deref().map(bare_id).unwrap_or_default(),
+    account_name: account.to_owned(),
+    kind: draft.kind,
+    from: wire::Mailbox {
+      name: None,
+      address: draft.from.clone(),
+    },
+    to: people(&draft.to),
+    cc: people(&draft.cc),
+    bcc: people(&draft.bcc),
+    subject: draft.subject.clone(),
+    body: draft.html.clone(),
+    attachments: draft
+      .attachments
+      .iter()
+      .filter_map(|attachment| match attachment {
+        AttachmentRef::Part {
+          part,
+          filename,
+          kind,
+          size,
+          ..
+        } => Some(wire::DraftAttachment {
+          part_id: part.clone(),
+          name: filename.clone(),
+          media_type: kind.clone(),
+          size: *size,
+        }),
+        AttachmentRef::Upload { .. } => None,
+      })
+      .collect(),
+    receipt_requested: draft.receipt,
+    in_reply_to: draft.in_reply_to.as_deref().map(bare_id),
+    references: draft.references.iter().map(|id| bare_id(id)).collect(),
+    original_id: draft.original.as_deref().map(bare_id),
+    changed_at: draft.changed_at,
+  }
 }

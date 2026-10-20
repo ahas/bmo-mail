@@ -2,7 +2,7 @@
   {
     "id": "console/mail-screen",
     "title": "Mail screen bundle",
-    "what": "The console's mail screen carried as a Nuxt layer on bmo-ui: the nav, the list, the thread, the settings, the arrival notices and its own Korean pack, in client/.",
+    "what": "The mail screen as a console bundle on bmo-ui, declared in console-bundle.json: the nav, the list, the thread and the settings over the relayed API and event stream, typed by the generated openapi.ts, with its Korean pack, in client/.",
     "files": [
       "client/app/pages/mail/[...path].vue",
       "client/app/components/MailNav.vue",
@@ -20,7 +20,6 @@
       "client/app/domain/mail-body.ts",
       "client/app/domain/mail-fit.ts",
       "client/app/domain/mail-frame.ts",
-      "client/app/domain/mail-notice.ts",
       "client/app/domain/mail-summary.ts",
       "client/app/domain/mail-columns.ts",
       "client/app/domain/mail-avatars.ts",
@@ -28,10 +27,12 @@
       "client/app/domain/mail-urls.ts",
       "client/app/domain/mail-refusals.ts",
       "client/shared/mail.ts",
-      "client/i18n/locales/ko.yaml",
-      "client/host/host.d.ts",
       "client/nuxt.config.ts",
-      "client/package.json"
+      "client/package.json",
+      "client/app/domain/mail-stream.ts",
+      "client/shared/openapi.ts",
+      "client/console-bundle.json",
+      "client/i18n/locales/ko.json"
     ],
     "symbols": [],
     "aliases": [
@@ -48,7 +49,7 @@
     "needs": [
       "service/plumbing"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   },
   {
     "id": "console/mail-editor",
@@ -73,6 +74,6 @@
       "console/mail-screen",
       "mail/writing"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   }
 ]

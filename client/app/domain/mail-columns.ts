@@ -7,7 +7,7 @@ import type { Ref } from "vue";
 // How wide the mail list's sender and date columns were dragged (docs/mail.md, 「Where each piece of state
 // lives」), kept in the browser they were dragged in, so the list is found at the widths it was left at.
 
-const MAIL_COLUMNS_KEY = "bmo-web.mail-columns";
+const MAIL_COLUMNS_KEY = "bmo-mail.columns";
 
 // A column nobody dragged has no width here at all, and takes the width its own contents ask for instead.
 export interface MailColumnWidths {

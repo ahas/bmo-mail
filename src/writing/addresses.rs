@@ -3,11 +3,9 @@
 
 use sqlx::SqlitePool;
 
+use crate::mail::MailAddress;
 use crate::routes::requests::MailFault;
-use crate::wire::MailAddress;
-
-/// How many completions an address field is offered.
-const SUGGESTED: i64 = 8;
+use crate::wire::Address;
 
 /// Records each address as used now: its name kept where one is given, its use counted. The account's own
 /// address is never recorded.
@@ -46,12 +44,15 @@ pub async fn record_addresses(
   Ok(())
 }
 
-/// The known addresses whose address or name holds the typed text, the most used and most recent first.
+/// The known addresses whose address or name holds the typed text, the most used and most recent first,
+/// after the place `after` names, at most `limit` and one more to tell whether more stand past them.
 pub async fn suggest_addresses(
   pool: &SqlitePool,
   account: &str,
   typed: &str,
-) -> Result<Vec<MailAddress>, MailFault> {
+  after: i64,
+  limit: u32,
+) -> Result<Vec<Address>, MailFault> {
   let escaped: String = typed
     .trim()
     .to_lowercase()
@@ -59,17 +60,30 @@ pub async fn suggest_addresses(
     .flat_map(|c| if matches!(c, '%' | '_' | '\\') { vec!['\\', c] } else { vec![c] })
     .collect();
   let like = format!("%{escaped}%");
-  let rows: Vec<(String, String)> = sqlx::query_as(
-    "SELECT name, address FROM addresses
+  let rows: Vec<(String, String, i64, i64)> = sqlx::query_as(
+    "SELECT name, address, uses, last_used FROM addresses
      WHERE account = ? AND (address LIKE ? ESCAPE '\\' OR lower(name) LIKE ? ESCAPE '\\')
-     ORDER BY uses DESC, last_used DESC LIMIT ?",
+     ORDER BY uses DESC, last_used DESC, address LIMIT ? OFFSET ?",
   )
   .bind(account)
   .bind(&like)
   .bind(&like)
-  .bind(SUGGESTED)
+  .bind(i64::from(limit) + 1)
+  .bind(after.max(0))
   .fetch_all(pool)
   .await?;
 
-  Ok(rows.into_iter().map(|(name, address)| MailAddress { name, address }).collect())
+  Ok(
+    rows
+      .into_iter()
+      .enumerate()
+      .map(|(index, (name, address, uses, last_used))| Address {
+        address,
+        name: Some(name).filter(|name| !name.is_empty()),
+        used_count: uses,
+        last_used_at: last_used,
+        position: after.max(0) + index as i64 + 1,
+      })
+      .collect(),
+  )
 }

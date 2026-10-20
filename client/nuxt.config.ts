@@ -3,39 +3,27 @@ import { fileURLToPath } from "node:url";
 
 import type { Nuxt } from "@nuxt/schema";
 
-// The mail screen as a layer a console extends (docs/api.md, "The console plugin bundle"). It extends the
-// bmo-ui layer and adds the screen's page, components, domain modules and language pack; the host brings
-// its i18n module, the console's title-bar components, the relay of the mail service's event stream and
-// the hook that raises arrival notices, and hands the screen's routes on to the service.
+// The mail screen as a console bundle (docs/api.md, "The console plugin bundle"): a layer on the bmo-ui
+// layer adding the screen's page, components, domain modules and language pack. A console attaches it by
+// its declaration, `console-bundle.json`, and relays the mail service to it under its relay base.
 const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineNuxtConfig({
   extends: ["bmo-ui"],
   modules: [
-    // Where the bundle is the project being prepared it stands as the host does, one unprefixed locale by
-    // default, ahead of the i18n module that reads it; a host extending the bundle keeps its own choice.
+    // Where the bundle is the project being prepared it stands as a console does, one unprefixed locale by
+    // default, ahead of the i18n module that reads it; a console extending the bundle keeps its own choice.
     (_options: unknown, nuxt: Nuxt) => {
       if (nuxt.options.rootDir === here) {
         nuxt.options.i18n = { ...nuxt.options.i18n, strategy: "no_prefix", defaultLocale: "ko" };
       }
     },
-    "@nuxtjs/i18n",
-    // What the host owes is declared under host/ for the bundle's own typecheck alone: where the bundle is
-    // the project being prepared, those declarations are read with the screen; a host extending the bundle
-    // reads none of them and keeps its own components' and functions' types.
-    (_options: unknown, nuxt: Nuxt) => {
-      if (nuxt.options.rootDir === here) {
-        nuxt.hook("prepare:types", ({ tsConfig }) => {
-          tsConfig.include = [...(tsConfig.include ?? []), "../host/**/*.d.ts"];
-        });
-      }
-    }
+    "@nuxtjs/i18n"
   ],
-  // The screen's own words, one file to a language under i18n/locales/, registered as the host registers its
-  // own locales; the host's i18n module reads them as part of its locale of the same code, its own pack
-  // standing where both hold a key.
+  // The screen's own words, one JSON file to a locale under i18n/locales/, the folder the declaration names;
+  // a console's i18n module reads them as part of its locale of the same code.
   i18n: {
-    locales: [{ code: "ko", language: "ko-KR", file: "ko.yaml" }]
+    locales: [{ code: "ko", language: "ko-KR", file: "ko.json" }]
   },
   compatibilityDate: "2025-09-01",
   devtools: { enabled: false }

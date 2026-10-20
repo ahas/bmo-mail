@@ -27,13 +27,13 @@
           v-if="props.unread && props.folded"
           name="i-material-symbols-circle"
           class="absolute -end-1 -top-1 size-2 rounded-full text-primary outline-2 outline-default"
-          :aria-label="$t('screens.aria.mail_unread')"
+          :aria-label="$t('mail.aria.unread')"
         />
       </span>
 
       <span v-if="!props.folded" class="min-w-0 flex-1 truncate" :class="{ 'font-semibold': props.unread }">{{ props.name }}</span>
 
-      <UIcon v-if="props.unread && !props.folded" name="i-material-symbols-circle" class="size-2 shrink-0 text-primary" :aria-label="$t('screens.aria.mail_unread')" />
+      <UIcon v-if="props.unread && !props.folded" name="i-material-symbols-circle" class="size-2 shrink-0 text-primary" :aria-label="$t('mail.aria.unread')" />
     </NuxtLink>
   </UTooltip>
 </template>

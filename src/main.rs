@@ -3,6 +3,7 @@
 use std::process::ExitCode;
 
 use bmo_mail::NOUNS;
+use bmo_mail::client::MailClient;
 use bmo_mail::settings::Settings;
 use clap::{Parser, Subcommand};
 
@@ -19,7 +20,16 @@ enum Word {
   Serve,
   /// Whether the service the settings name answers ready; ends 0 where it does.
   Health,
-  /// The nouns this command carries, one a line, as `bmo` asks a unit command: none.
+  /// The harness plugin's MCP server on standard input and output, calling the service through its client.
+  Mcp {
+    /// The service's address; `http://` and the settings' `server.listen` where none is given.
+    #[arg(long, env = "BMO_MAIL_ADDRESS")]
+    address: Option<String>,
+    /// The service's bearer token; the settings' `server.token` where none is given.
+    #[arg(long, env = "BMO_MAIL_TOKEN")]
+    token: Option<String>,
+  },
+  /// The nouns this command carries for a host to dispatch, one a line: none.
   Nouns,
 }
 
@@ -53,6 +63,12 @@ async fn main() -> ExitCode {
   let done = match command.word {
     Word::Serve => bmo_mail::serve(settings).await,
     Word::Health => bmo_mail::health::ask(&settings).await,
+    Word::Mcp { address, token } => {
+      let address = address.unwrap_or_else(|| format!("http://{}", settings.server.listen));
+      let token = token.unwrap_or_else(|| settings.server.token.clone());
+
+      bmo_mail::mcp::serve(MailClient::new(address, token)).await
+    }
     Word::Nouns => Ok(()),
   };
 

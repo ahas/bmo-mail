@@ -1,373 +1,391 @@
 # The mail service's boundary
 
-Every route this service answers, its event stream, its command, its store, its settings, the words it
-writes, the console plugin bundle it ships and what the console in front of it does. This document is the
-contract other units match: bmo-web, whose console hands the mail screen's requests on to these routes,
-relays the event stream and extends the bundle; and the switch-over, which points the console at this
-service. What mail does is `docs/mail.md`; this document says how it is asked. A change to anything here
-changes this document in the same commit and follows the version rule (「Versions」).
+Fixed at 0.1.0-rev.1.
+
+Every route this service answers, its event stream, its command, its client, its harness plugin, its store, its
+settings, the words it writes and the console plugin bundle it ships. The service is an upstream: a coding
+harness takes it as its first entry point through its MCP server, and a console takes its screen through the
+bundle. It follows the common wire format and the API design of bmo-chat's `docs/conventions.md`, and states
+here only what is its own. What mail does is `docs/mail.md`; this document says how it is asked.
 
 ```mermaid
 flowchart TD
-  Screen[mail screen in the browser] -->|/api/mail| Console[console]
-  Console -->|/api/mail with the token| Service[bmo-mail]
-  Service -->|GET /events| Console
-  Console -->|mail word, push| Screen
+  Harness[a coding harness] -->|stdio| Mcp[bmo-mail mcp]
+  Mcp -->|the client, with the token| Service[bmo-mail]
+  Screen[mail screen in a console] -->|the console's relay| Service
+  Service -->|GET /events| Readers[event readers]
 ```
 
-## Conventions
+## The contract
 
-- **Every route but `GET /health` needs `Authorization: Bearer <token>`,** the token of the settings; a
-  missing or wrong token is answered 401 `unauthorized`. The console presents the token on every request it
-  hands on.
-- **Bodies are JSON, both ways, with field names in camelCase,** but for an upload's body, which is a
-  multipart form, and the byte answers (「Byte answers」). A body that is not JSON is read as no body. A
-  body, JSON or multipart, carries at most 64 MiB.
-- **Times are Unix milliseconds.**
-- **`{account}` in a path** is an account's key: its address's local part, matched without regard to case.
-- **With no accounts file,** every route under `/api/mail/` but the avatar's answers 200 with
-  `configured: false` and nothing else, and the summary with `configured: false` and no accounts; the
-  watchers stand idle. Every other answer carries `configured: true` beside its own fields.
-- **A refusal** is a non-2xx answer whose body carries an English sentence under `error` and a snake_case
-  code under `code` (「Refusals」), and the refusal's named values beside them. The sentence is for a log; a
-  screen shows the code in its own language's words.
+- **`docs/openapi.json` is the contract,** the OpenAPI 3.1 document the service writes from its own types:
+  every route with its parameters, its body, its answers and the codes it can answer, the bodies' schemas,
+  the events under `x-events`, the harness plugin under `x-harness` and its tools under `x-tools`. Each route
+  states its own part of it beside its answer. `cargo run --example openapi` prints the document as the
+  repository keeps it.
+- **Every route, `GET /health` among them, needs `Authorization: Bearer <token>`,** the token of the settings;
+  a missing or wrong token is answered 401 `unauthorized`. An empty token lets no caller in.
+- **Bodies are JSON with camelCase keys, both ways,** but for the byte answers (「Byte answers」). A body
+  carries at most 64 MiB. A body or a query that is not the shape the route takes is refused 400
+  `bad-request`, the sentence naming what is wrong.
+- **Times are integers of epoch milliseconds,** spans end in `Ms` and counts in `Count`.
+- **A list is a page,** `{"items": [...], "more": boolean}`.
+- **No path carries a prefix.** A console that serves the routes to a browser mounts them under a prefix of
+  its own and passes the path on unchanged.
 
-## Who checks what
+## Keys
 
-| Check | Where it stands |
+| Key | What it is |
 |---|---|
-| the console's sign-in, on every route | the console (「What the console does」) |
-| the bearer token | this service |
-| reachable from this machine alone | this service's settings: `server.listen` is a loopback address |
+| `{accountName}` | An account's name: its address's local part, matched without regard to case. |
+| `{folderName}` | A folder's full name on the server, its hierarchy delimiter and all, percent-encoded in the path. |
+| `{messageId}` | A message's id: opaque, naming its folder and its UID there. It stands as long as the message stays in that folder; a move gives the message a new one. |
+| `{threadId}` | A conversation's id: opaque, the same for every message of the conversation whatever its folder. |
+| `{partId}` | A part of a message: its number in the message (`1.2`), or its content id without angle brackets. |
+| `{draftId}` | A draft's id: the `Message-ID` it is saved under, without angle brackets. It stands across every save. |
+| `{sendId}` | A send's id: opaque, given when the send is made. |
+| `{labelId}` | A label's id, given when the label is made. |
+| `{ruleId}` | A rule's id, a signed 64-bit integer. |
+| `{address}` | A mail address. |
+
+A key that names nothing is answered 404 `not-found`, an account's name naming no account among them.
 
 ## Health
 
-`GET /health` answers `pid`, `version` and `ready`: the store is open and migrated.
+`GET /health` answers `ready` (the store is open and migrated), `reason` (null while ready) and `version`.
 
 ## Accounts and the summary
 
 | Method and path | Sends | Answers |
 |---|---|---|
-| `GET /api/mail/accounts` | | `accounts`: each account's `address` and `key`, in the accounts file's order, nothing else of the file; `maxLabels`, the most labels an account may hold (22) |
-| `GET /api/mail/summary` | | `accounts`: per account, `address`, `account` (its key), `unread` (the inbox's unread count), `newest` (the inbox's newest message, or null), `recentUnread` (the unread messages at the top of the inbox, newest first) and `failed` (its server did not answer, the counts then zero and empty) |
+| `GET /accounts` | query `after?`, `limit?` | a page of accounts, in the accounts file's order |
+| `GET /summary` | | `accounts`, every account, and `unreadCount`, the unread messages of every reachable inbox together |
 
-A summary's message is `uid`, `key` (its conversation), `from`, `subject`, `date` and `movedIn` (the
-service moved it into the inbox, so it is not new mail).
+- **An account** is `name`, `address`, `position` (its place in the accounts file, from 1), `unreadCount` (its
+  inbox's unread messages) and `reachable` (its server answered; where it did not, the count is 0). Nothing
+  else of the accounts file is answered.
+- **The small lists** — accounts, folders, labels, rules and addresses — are paged by `position`: `after`
+  names the position of the last item read, `limit` caps the page, and with neither the whole list comes in
+  one page.
+- **With no accounts file** there is no account: the accounts page is empty, the summary counts nothing and
+  every route under an account answers 404.
 
-## Lists and messages
-
-| Method and path | Sends | Answers |
-|---|---|---|
-| `GET /api/mail/{account}/folders` | | `folders`: every folder with its `path`, `name`, `role` (`inbox`, `sent`, `drafts`, `junk`, `trash` or null), `unseen` and `total`; `labels`: the account's labels in their order |
-| `GET /api/mail/{account}/list` | query `view?`, `q?`, `offset?`, `sort?` (`date`, `from`, `subject`), `dir?` (`asc` puts the least first; anything else the most), `unread?` (`1`) | a page: `total` (the messages the view holds), `offset`, and `conversations` |
-| `GET /api/mail/{account}/thread` | query `key`, `folder?` (`INBOX` where none) | `messages`: every message of the conversation, oldest first, with its bodies; reading it marks nothing read |
-| `GET /api/mail/{account}/message` | query `folder`, `uid` | `message`: one message with its bodies |
-| `GET /api/mail/{account}/part` | query `folder`, `uid`, `part` | the part's bytes as a download (「Byte answers」) |
-| `GET /api/mail/{account}/cid` | query `folder`, `uid`, `cid` | the inline image a body names by `cid:` (「Byte answers」); a part that is no image is refused `inline_image_not_found` |
-| `POST /api/mail/{account}/read-all` | `view?`, `q?`, read as a list's | `marked`: how many unread messages of the whole view were marked read |
-
-- **A view** is a folder role (`inbox`, `sent`, `drafts`, `junk`, `trash`; `inbox` where none is given),
-  `starred`, `label:<id>`, `folder:<path>`, or `search` with the query in `q` (`docs/mail.md`, 「Search」).
-- **Anything else in a list's query** reads as the default: a list stands rather than refusing to be read.
-- **A page holds fifty messages** (`docs/mail.md`, 「Reading」).
-
-## Changing messages
+## Folders
 
 | Method and path | Sends | Answers |
 |---|---|---|
-| `POST /api/mail/{account}/flags` | `refs`, `add` and `remove`, each a list of flags | nothing beyond `configured` |
-| `POST /api/mail/{account}/move` | `refs`, `to` (`trash`, `spam`, `not-spam` or `folder`), `folder` where `to` is `folder` | nothing beyond `configured`; `spam` sets `$Junk`, `not-spam` moves to the inbox and sets `$NotJunk` |
-| `POST /api/mail/{account}/delete` | `refs`, every one in spam or trash | nothing beyond `configured` |
+| `GET /accounts/{accountName}/folders` | query `after?`, `limit?` | a page of the account's folders |
+| `PATCH /accounts/{accountName}/folders/{folderName}` | `read`: true marks every message of the folder read, false every one unread | the folder |
 
-- **`refs`** is a list of at least one message, each `folder` and `uid`.
-- **A flag** is `\Seen`, `\Flagged`, `\Answered`, `$Forwarded`, `$Junk`, `$NotJunk`, `$MDNSent`, or a label's
-  keyword.
+**A folder** is `accountName`, `name` (its full name, the key), `shortName` (the last step of the name, as a
+folder with no role is shown), `role` (`inbox`, `sent`, `drafts`, `junk`, `trash`, or null), `position`,
+`unreadCount` and `totalCount`.
+
+## Messages and threads
+
+| Method and path | Sends | Answers |
+|---|---|---|
+| `GET /accounts/{accountName}/messages` | query `folderName?`, `q?`, `labelId?`, `before?`, `after?`, `limit?` | a page of messages, newest first |
+| `GET /accounts/{accountName}/messages/{messageId}` | | the message with its bodies |
+| `PATCH /accounts/{accountName}/messages/{messageId}` | `flags`, `labelIds`, `folderName?` | the message as it now stands |
+| `DELETE /accounts/{accountName}/messages/{messageId}` | | 204; only a message in spam or trash is deleted |
+| `GET /accounts/{accountName}/messages/{messageId}/parts/{partId}/content` | | the part's bytes (「Byte answers」) |
+| `GET /accounts/{accountName}/threads/{threadId}` | query `folderName?` | the thread with every message's bodies |
+
+- **What a page reads:** `folderName` alone reads that folder; `labelId` the label's messages across the
+  usual folders, or in `folderName` where it is given; `q` the search box's words (`docs/mail.md`,
+  「Search」), across the usual folders or the one its `in:` names, or in `folderName` where it is given.
+  With none of the three a page reads the inbox. A label the account does not hold is answered 404.
+- **The cursor is a message's `at`.** `before` reads the messages older than it, `after` those newer, newest
+  first either way; `after` answers the oldest of them, so a reader that polls with the newest `at` it holds
+  misses none. A page never ends inside a run of messages of the same `at`, so the next cursor is exact.
+  `limit` is 1 to 100, 50 where none is given.
+- **A page leaves the bodies out:** each message of a page has `text` and `html` null, and a message read
+  alone or in its thread carries them. `parts` says whether a message has a body of each kind either way.
+- **A change of a message** names the whole of what it should carry: `flags`, the flags it should hold among
+  those a request may set, and `labelIds`, every label it should carry. What it carries beyond that is taken
+  off, what it lacks is set, and a flag no request may set is left as it is. `folderName`, where it names
+  another folder, then moves the message there, and the answer is the message under its new id. A server
+  that does not say where a moved message landed has it found by its `Message-ID`; where nothing finds it,
+  the answer is 204.
+- **The flags a request may set** are `\Seen`, `\Flagged`, `\Answered`, `$Forwarded`, `$Junk`, `$NotJunk` and
+  `$MDNSent`. A flag outside them is refused 422 `flag-not-settable` unless the message already carries it.
+- **A thread** gathers every message of the conversation from the inbox, the sent folders and `folderName`
+  where it is given, oldest first, a message found in two folders once. Reading it marks nothing read.
+
+### What a message is
+
+- **A message** is `id`, `accountName`, `threadId`, `folderName`, `internetMessageId` (its `Message-ID`
+  without angle brackets, or null), `inReplyTo` and `references` (message IDs the same way), `subject`, `from`
+  (a mailbox, or null), `to`, `cc`, `bcc` and `replyTo` (lists of mailboxes), `at` (when it reached its
+  folder, else its date), `flags` (every flag it carries but the labels' keywords), `labelIds`, `receiptTo`
+  (where a read receipt is asked to go, or null), `snippet`, `text` and `html` (the decoded bodies, or null)
+  and `parts`.
+- **A mailbox** is `name` (or null) and `address`.
+- **A part** is `partId`, `kind` (`text` or `html` for a body, `attachment`, or `inline` for a picture an HTML
+  body shows by its content id), `mediaType`, `charset`, `encoding` and `fileName` (each null where the part
+  names none), `size` (the encoded size the server reports) and `contentId` (without angle brackets, or null).
 
 ## Labels
 
 | Method and path | Sends | Answers |
 |---|---|---|
-| `POST /api/mail/{account}/labels` | `name`, `color` | `label`: the new label, placed after the others |
-| `PATCH /api/mail/{account}/labels/{id}` | `name?`, `color?` | nothing beyond `configured` |
-| `DELETE /api/mail/{account}/labels/{id}` | | nothing beyond `configured`; its keyword is taken off every message that carried it |
+| `GET /accounts/{accountName}/labels` | query `after?`, `limit?` | a page of the account's labels in their order |
+| `POST /accounts/{accountName}/labels` | `name`, `colour` | 201, the new label, placed after the others |
+| `PATCH /accounts/{accountName}/labels/{labelId}` | `name?`, `colour?`, `position?` | the label |
+| `DELETE /accounts/{accountName}/labels/{labelId}` | | 204; its keyword is taken off every message that carried it |
 
-A label is `id`, `name` (1 to 60 characters, one per name in an account), `color` (`#` and six hex digits,
-kept in lower case) and `position`.
+A label is `id`, `name` (1 to 60 characters, one per name in an account; a name taken is refused 409
+`conflict`), `colour` (`#` and six hex digits, kept in lower case) and `position`. An account holds at most 22
+labels; one more is refused 422 `too-many-labels`.
 
 ## Writing
 
 | Method and path | Sends | Answers |
 |---|---|---|
-| `GET /api/mail/{account}/addresses` | query `q` | `addresses`: completion from the addresses the account has used and heard from |
-| `POST /api/mail/{account}/draft/start` | `kind` (`new` where none, `reply`, `reply-all`, `forward`), and `folder` and `uid` of the original but for `new` | `draft`: what the composer opens with, the account's signature in it |
-| `GET /api/mail/{account}/draft` | query `folder`, `uid` | `draft`: the saved draft, parsed back with its attachments |
-| `POST /api/mail/{account}/draft` | a draft | `saved`: where the draft now stands, the copy it replaces deleted after |
-| `DELETE /api/mail/{account}/draft` | `folder`, `uid` | nothing beyond `configured` |
-| `POST /api/mail/{account}/upload` | a multipart form: `file`, one field to a file, and `attached`, the JSON list of the sizes of the attachments the message already carries | `files`: each staged file's `id`, `filename`, `type` and `size` |
-| `POST /api/mail/{account}/send` | a draft | `id` (the hold's), `draft` (where the saved draft stands) and `holdMs` (10000) |
-| `GET /api/mail/{account}/send/{id}` | | `state`: `holding`, `sent`, `cancelled`, or `failed` with an English `reason`; null once it has long ended |
-| `DELETE /api/mail/{account}/send/{id}` | | `draft`: the draft to reopen, or null where the message has already gone |
-| `POST /api/mail/{account}/receipt` | `folder`, `uid`, `send` (true sends the receipt, anything else declines it) | nothing beyond `configured` |
+| `GET /accounts/{accountName}/addresses` | query `q?`, `after?`, `limit?` | a page of the addresses written to or heard from, most used first |
+| `POST /accounts/{accountName}/drafts` | `replyTo?`, `replyAll?`, `forward?` | 201, the draft, saved in the drafts folder |
+| `GET /accounts/{accountName}/drafts/{draftId}` | | the draft |
+| `PATCH /accounts/{accountName}/drafts/{draftId}` | any of `to`, `cc`, `bcc`, `subject`, `body`, `attachments`, `receiptRequested` | the draft, saved again |
+| `DELETE /accounts/{accountName}/drafts/{draftId}` | | 204 |
+| `POST /accounts/{accountName}/drafts/{draftId}/attachments` | `name`, `mediaType`, `content` (the bytes in base64) | 201, the draft with the file attached, saved again |
+| `POST /accounts/{accountName}/sends` | `draftId`, `sendAt?` | 201, the send |
+| `GET /accounts/{accountName}/sends/{sendId}` | | the send |
+| `DELETE /accounts/{accountName}/sends/{sendId}` | | 204: the send is taken back and its draft stays |
+| `POST /accounts/{accountName}/receipts` | `messageId` | 201, `messageId` and `sent` |
 
-- **A draft** is `from` (the account's address, or left out), `to`, `cc` and `bcc` (each a list of `name`
-  and `address`), `subject`, `html`, `attachments`, `receipt` (a read receipt asked), `kind` (`new`,
-  `reply`, `forward`), `original`, `inReplyTo` (each a message ID in angle brackets, or null),
-  `references` (message IDs) and `saved` (the draft it replaces, `folder` and `uid`, or null).
-- **An attachment** of a draft is an upload, `kind` `upload` with the staged `id`, or a part of a message on
-  the server, `kind` `part` with `folder`, `uid` and `part`; each with `filename`, `type` and `size`.
-- **An upload is refused whole** where the message would no longer fit the size the submission server takes.
+- **An address** is `address`, `name` (or null), `usedCount`, `lastUsedAt` and `position`; `q` matches it
+  against the address and the name.
+- **A draft is made by its start:** `replyTo` names the message it answers, with `replyAll` true to answer
+  every recipient, and `forward` the message it carries; with neither it is a new message. It is saved in the
+  drafts folder at once, the account's signature in it.
+- **A draft** is `id`, `accountName`, `kind` (`new`, `reply` or `forward`), `from` (the account's mailbox),
+  `to`, `cc` and `bcc` (lists of mailboxes), `subject`, `body` (the HTML it is written in), `attachments`,
+  `receiptRequested` (a read receipt is asked), `inReplyTo`, `references`, `originalId` (the message ID of the
+  message it answers or carries, or null) and `changedAt`.
+- **A draft's attachment** is `partId` (its part in the saved draft), `name`, `mediaType` and `size`. A change
+  of `attachments` names the ones to keep by `partId`; a file is added by the attachments route. A file that
+  would take the message past the size the submission server takes is refused 413 `too-large`.
+- **A change of a draft** saves it anew under the same id: the new copy is written first and the one it
+  replaces deleted after, so a save that fails midway never loses the older copy.
+- **A send** is `id`, `accountName`, `draftId`, `state` (`waiting`, `sent`, `cancelled` or `failed`), `sendAt`
+  and `failure` (the English sentence of why it failed, or null). `sendAt` null sends after the account's undo
+  span, `undoSendMs`; a time already past sends at once; a time past the undo span from now is refused 422
+  `send-too-late`. A draft with no recipient is refused 422 `no-recipients`.
+- **A send waits in the service.** Taking it back while it waits keeps the draft; after it went, a taking
+  back is refused 409 `conflict`. Once sent, the message goes over submission, its copy goes into the sent
+  folder read, the draft is deleted and the recipients become known addresses. A send is kept for a minute
+  after it ended, then answered 404; a service that stops while a send waits leaves its draft in drafts.
+- **A read receipt** is sent for a message that asks for one, in the service's own words, and the message
+  carries `$MDNSent` after; one that asks for none is refused 422 `no-receipt-asked`. Declining a receipt is
+  setting `$MDNSent` on the message.
 
 ## Filters, spam senders and settings
 
 | Method and path | Sends | Answers |
 |---|---|---|
-| `GET /api/mail/{account}/rules` | | `rules`: the account's rules in their order; `presets`: the ready rules for `X-Spam-Flag: YES` and `X-Bogosity: Spam` |
-| `POST /api/mail/{account}/rules` | a rule draft | `rule`: the new rule, placed after the others |
-| `PUT /api/mail/{account}/rules/{id}` | a rule draft | nothing beyond `configured` |
-| `DELETE /api/mail/{account}/rules/{id}` | | nothing beyond `configured` |
-| `POST /api/mail/{account}/rules/order` | `ids`, the rules in the order wanted | nothing beyond `configured` |
-| `POST /api/mail/{account}/rules/run` | `folder?` (`INBOX` where none) | `kept` and `moved`: the messages the rules left and moved |
-| `POST /api/mail/{account}/spam-senders` | `add`, a list of addresses | `spamSenders`: every always-spam sender |
-| `DELETE /api/mail/{account}/spam-senders` | `address` | `spamSenders` |
-| `GET /api/mail/{account}/settings` | | `signature`, `receiptDefault`, `showImages` and `spamSenders` |
-| `POST /api/mail/{account}/settings` | any of `signature` (at most 200,000 characters of markup), `receiptDefault`, `showImages` | the three as they now stand |
+| `GET /accounts/{accountName}/rules` | query `after?`, `limit?` | a page of the account's rules in their order |
+| `POST /accounts/{accountName}/rules` | `match`, `actions`, `on?` | 201, the new rule, placed after the others |
+| `PATCH /accounts/{accountName}/rules/{ruleId}` | any of `position`, `match`, `actions`, `on` | the rule; a new `position` moves it there among the others |
+| `DELETE /accounts/{accountName}/rules/{ruleId}` | | 204 |
+| `POST /accounts/{accountName}/rule-runs` | `folderName` | 201, `folderName`, `movedCount` and `labelledCount`: what the rules moved and labelled |
+| `PUT /accounts/{accountName}/spam-senders/{address}` | | `address`: the sender is always sent to spam |
+| `DELETE /accounts/{accountName}/spam-senders/{address}` | | 204 |
+| `GET /accounts/{accountName}/settings` | | the settings |
+| `PATCH /accounts/{accountName}/settings` | any of `signature`, `undoSendMs`, `readReceipts`, `showImages` | the settings |
 
-- **A rule draft** is `enabled`, `match` (`all` or `any`), `conditions` and `actions`; a rule adds `id` and
-  `position`.
-- **A condition** is `field` (`from`, `to`, `subject`, `header`), `header` for a header condition, and
-  `contains`, compared without regard to case.
-- **An action** is `kind` `label` with `label`, `star`, `read`, `move` with `folder`, `spam` or `trash`.
+- **A rule** is `id`, `position`, `match`, `actions` and `on`. `match` is `kind` (`all` or `any`) and
+  `conditions`; a condition is `field` (`from`, `to`, `subject`, `header`), `header` (the header's name, for
+  a header condition, else null) and `contains`, compared without regard to case. An action is `kind`
+  `label` with `labelId`, `star`, `read`, `move` with `folderName`, `spam` or `trash`. A rule with no
+  condition or no action is refused 400 `bad-request`.
+- **The settings** are `signature` (markup, at most 200,000 characters), `undoSendMs` (0 to 30,000, 10,000
+  until set), `readReceipts` (a new draft asks for a read receipt), `showImages` (a message's outside pictures
+  are shown as it opens) and `spamSenders` (every always-spam sender, changed through its own route alone).
 
 ## Sender avatars
 
-| Method and path | Sends | Answers |
-|---|---|---|
-| `GET /api/mail/avatar` | query `domain` | the domain's logo (「Byte answers」), or 204 with no body where none was found |
-
-It reads no account and answers with no accounts file as with one.
-
-## What a message is
-
-- **A list message** is `folder`, `uid`, `key` (its conversation), `messageId`, `subject`, `from` and `to`,
-  `date`, `seen`, `flagged`, `answered`, `draft`, `receiptAnswered`, `labels` (label ids),
-  `hasAttachments` and `snippet`.
-- **A conversation** is `key`, `subject`, `date`, `from` (the senders on this page, newest first, each
-  once), `count`, `unread`, `flagged`, `labels`, `hasAttachments`, `snippet` and `messages`, each
-  `folder` and `uid`.
-- **A message** is a list message with `cc`, `bcc`, `replyTo`, `inReplyTo`, `references`, `receiptTo`
-  (where a read receipt is asked to go, or null), `text` and `html` (the decoded bodies, or null),
-  `attachments` and `inline`.
-- **A part** is `part` (its number in the message), `type`, `charset`, `encoding`, `filename`, `size` (the
-  encoded size the server reports) and `cid` (without angle brackets, or null).
+`GET /avatars/{address}` answers the logo the address's domain publishes (「Byte answers」), or 404 where
+none was found. It reads no account.
 
 ## Byte answers
 
 | Route | Headers |
 |---|---|
-| `part` | `content-type` (the part's type where it is a well-formed type, else `application/octet-stream`), `content-disposition: attachment` naming the file both in ASCII and in UTF-8, `x-content-type-options: nosniff`, `content-security-policy: default-src 'none'; sandbox`, `cache-control: private, max-age=3600` |
-| `cid` | the same, with `content-disposition: inline` |
-| `avatar` | `content-type` (the picture's), `content-security-policy: sandbox; default-src 'none'; style-src 'unsafe-inline'`, `x-content-type-options: nosniff`, `cache-control: private, max-age=86400`; a 204 carries `cache-control: private, max-age=3600` alone |
+| a part's content | `content-type` (the part's type where it is a well-formed type, else `application/octet-stream`), `content-disposition` naming the file both in ASCII and in UTF-8, `inline` for a part asked by its content id and `attachment` for one asked by its number, `x-content-type-options: nosniff`, `content-security-policy: default-src 'none'; sandbox`, `cache-control: private, max-age=3600` |
+| an avatar | `content-type` (the picture's), `content-security-policy: sandbox; default-src 'none'; style-src 'unsafe-inline'`, `x-content-type-options: nosniff`, `cache-control: private, max-age=86400`; a 404 carries `cache-control: private, max-age=3600` |
 
 ## Refusals
 
-| Status | Code | When | Named values |
-|---|---|---|---|
-| 401 | `unauthorized` | the bearer token is missing or wrong | |
-| 404 | `no_such_account` | no account has the key | |
-| 502 | `server_silent` | the mail server did not answer, or failed | |
-| 400 | `bad_uid` | a `uid` is not a positive whole number | |
-| 400 | `missing_folder` | a message names no folder, or a `folder:` view no path | |
-| 400 | `missing_label` | a `label:` view names no label | |
-| 400 | `bad_view` | a view is none of the kinds | |
-| 400 | `nothing_picked` | `refs` is missing or empty | |
-| 400 | `bad_flag` | a flag is not one that may be set | `flag` |
-| 400 | `bad_move_target` | `to` is none of the kinds, or `folder` names none | |
-| 400 | `delete_outside_trash` | a message to delete is not in spam or trash | |
-| 400 | `message_not_found` | the message is not on the server | |
-| 400 | `inline_image_not_found` | no image of the message has the `cid` | |
-| 400 | `bad_label_color` | a colour is not `#` and six hex digits | |
-| 400 | `bad_label_name` | a label's name is empty or longer than 60 characters | |
-| 400 | `label_exists` | the account has a label of that name | |
-| 400 | `label_not_found` | no label of the account has the id | |
-| 400 | `too_many_labels` | the account holds the most labels it may | `n` |
-| 400 | `bad_compose_mode` | `kind` is none of the kinds | |
-| 400 | `sender_not_account` | a draft's `from` is not the account's address | |
-| 400 | `bad_address` | an address is not one | `address` (empty where none was written) |
-| 400 | `bad_attachment` | an attachment is neither kind | |
-| 400 | `missing_attachment` | an attachment names no staged id or no part | |
-| 400 | `upload_gone` | a staged file is no longer there | `name` |
-| 400 | `no_draft_uid` | the server did not say where it put the saved draft | |
-| 400 | `draft_not_found` | the draft is not on the server | |
-| 400 | `no_upload` | an upload carries no file | |
-| 400 | `upload_too_large` | the files would not fit the size the server takes | |
-| 400 | `no_recipients` | a message to send has no recipient | |
-| 400 | `message_too_large` | the encoded message is past the size the server takes | |
-| 400 | `no_receipt_asked` | the message asks for no read receipt | |
-| 400 | `bad_rule_match` | `match` is neither `all` nor `any` | |
-| 400 | `rule_empty` | a rule has no condition or no action | |
-| 400 | `bad_condition` | a condition's field is none of the kinds, or it contains nothing | |
-| 400 | `header_name_needed` | a header condition names no header | |
-| 400 | `bad_rule_action` | an action is none of the kinds | |
-| 400 | `rule_target_needed` | a label action names no label, or a move no folder | |
-| 400 | `rule_not_found` | no rule of the account has the id | |
-| 400 | `signature_too_long` | the signature is past the limit | `n` |
+Every refusal is the common error shape, a status and a body of `code` and `error`, the English sentence for a
+log. A route answers the common codes of the conventions where they apply, and these of its own:
+
+| Status | Code | When |
+|---|---|---|
+| 409 | `conflict` | a label's name is taken, or a send has already gone |
+| 413 | `too-large` | a file would take the draft past the size the submission server takes, or the message to send is past it |
+| 422 | `too-many-labels` | the account holds the most labels it may |
+| 422 | `flag-not-settable` | a flag is not one a request may set |
+| 422 | `unknown-label` | a body names a label the account does not hold |
+| 422 | `unknown-folder` | a body names a folder the mailbox does not hold |
+| 422 | `unknown-message` | a draft's start names a message the account does not hold |
+| 422 | `outside-trash` | a message to delete is not in spam or trash |
+| 422 | `no-recipients` | a draft to send has no recipient |
+| 422 | `send-too-late` | a send's `sendAt` is past the undo span from now |
+| 422 | `no-receipt-asked` | the message asks for no read receipt |
+| 422 | `draft-not-placed` | the server did not say where it put a saved draft, and its `Message-ID` finds it nowhere |
+| 502 | `upstream-failed` | the mail server did not answer, or failed |
 
 ## The event stream
 
-`GET /events` is a stream of server-sent events, one connection for as many consumers as the console
-holds. It carries no ids and replays nothing: a consumer that opens it, or opens it again, reads the summary
-to learn what happened while it was closed. An idle stream carries a comment line every fifteen seconds.
+`GET /events` is the service's one stream, as server-sent events: each event's SSE `event` is its kind, its
+`id` the event's number, and its `data` the event, `{"id", "kind", "at", "data"}`. A reader resumes with
+`Last-Event-ID` or `after`, narrows with `kinds` (a comma-separated list) and with `accountName`, and asks
+the same events as a page with `Accept: application/json`, by `after` and `limit` (1 to 1,000, 100 where none
+is given). The service keeps the events of the last day, at most 10,000; a resume from before them is answered
+410 `gone`, and the reader reads the collections again. An idle stream carries a comment line every fifteen
+seconds.
 
-| Event | Data | When |
+| Kind | Data | When |
 |---|---|---|
-| `mail` | `account`: the key | an account's inbox changed: mail arrived and was handled, or the server reported a flag or an expunge |
-| `arrival` | `account` (the key), `address`, `messages` and `push` | new mail stayed in the inbox, unread and not from the account itself (`docs/mail.md`, 「Connections and the watcher」) |
+| `message.created` | the message, without its bodies | the watcher took a new message into an inbox and the rules left it there |
+| `message.changed` | the message, without its bodies | a route changed its flags, its labels or its folder |
+| `message.deleted` | `accountName` and `id` | a route deleted it, or moved it out from under that id |
+| `folder.changed` | the folder | its counts may have moved: the watcher saw its inbox change, or a route changed messages in it |
+| `send.changed` | the send | a send was made, or its state moved |
 
-- **An arrival's message** is `folder`, `uid`, `key`, `from`, `subject` and `date`.
-- **`push`** is the notification the arrival makes: `kind` (`mail`), `title`, `body`, `path` (the newest
-  message's thread, `/mail/<account>/inbox/<key>`, under the console's base path) and `tag` (`mail:<account>`,
-  so a second one for the account replaces the first), written in the service's own words. It is null where
-  no message came.
+A message the service itself moved into an inbox is not new mail and makes no `message.created`.
 
 ## The service's own words
 
-The words the service writes into a message or a notification are its own pack: one TOML file to a
-language, `wording/<language>.toml` under the settings folder, chosen by the setting `wording.language`.
-The repository ships `wording/ko.toml` and builds it in, so a service whose settings folder holds no file
-for its language writes the shipped words. A key holding `{name}` takes that value.
+The words the service writes into a message are its own pack: one TOML file to a language,
+`wording/<language>.toml` under the settings folder, chosen by the setting `wording.language`. The repository
+ships `wording/ko.toml` and builds it in, so a service whose settings folder holds no file for its language
+writes the shipped words. A key holding `{name}` takes that value.
 
 | Key | Where it is written |
 |---|---|
 | `locale` | the locale a date is written in, such as `ko_KR` |
-| `date` | how a date is written, in `strftime` form | 
-| `arrival.title_one` (`address`), `arrival.title_many` (`n`, `address`), `arrival.body` (`who`, `subject`), `arrival.no_sender`, `arrival.no_subject` | an arrival's notification |
+| `date` | how a date is written, in `strftime` form |
 | `reply.attribution` (`date`, `from`) | the line over a quoted reply |
 | `forward.header`, `forward.from`, `forward.date`, `forward.subject`, `forward.to`, `forward.cc`, each taking the field of its name | the head of a forwarded original |
 | `receipt.subject` (`subject`), `receipt.body` (`account`, `subject`) | a read receipt sent |
 
-Dates are written by `date` in `locale` at the setting `wording.time_zone`, and counts with the
-language's grouping. The same language orders names and subjects in a list (`docs/mail.md`, 「Reading」).
+Dates are written by `date` in `locale` at the setting `wording.time_zone`.
 
 ## The store
 
 A SQLite file, the one `store.path` names, opened and migrated when the service starts. Every row is an
-account's by its address but for a sender logo, which is a domain's.
+account's by its address but for a sender logo, which is a domain's, and an event, which is the service's.
 
 | Table | Columns | What it holds |
 |---|---|---|
 | `labels` | `account`, `id`, `name`, `color`, `position`, `created_at`; key `account`, `id` | the account's labels |
 | `rules` | `id` (its own), `account`, `position`, `enabled`, `match`, `conditions` and `actions` (JSON), `created_at`; indexed by `account`, `position` | the filter rules |
-| `settings` | `account` (key), `signature`, `receipt_default`, `show_images` | the account's settings |
+| `settings` | `account` (key), `signature`, `receipt_default`, `show_images`, `undo_send_ms` | the account's settings |
 | `spam_senders` | `account`, `address`, `created_at`; key both | the always-spam senders |
 | `marks` | `account`, `folder`, `uid_validity`, `last_uid`; key `account`, `folder` | the watcher's high-water mark |
 | `addresses` | `account`, `address`, `name`, `last_used`, `uses`; key `account`, `address` | the known addresses |
 | `avatars` | `domain` (key), `type`, `bytes` (none where nothing was found), `looked_up_at` | the sender logos |
+| `events` | `id` (the event's number), `kind`, `account`, `at`, `data` (JSON) | the event stream's window |
 
 ## The command
 
-`bmo-mail` is one binary, the service and its command alike, read by bmo-cli as a unit command (bmo-cli's
-`docs/boundary.md`, 「Unit commands」).
+`bmo-mail` is one binary, the service and its command alike.
 
 - **`bmo-mail serve`** opens and migrates the store, starts the watchers and answers the routes.
-- **`bmo-mail health`** asks the service the settings name, waiting at most five seconds, and ends 0 where
-  it answers ready.
-- **`bmo-mail nouns`** prints nothing: the service carries no noun of `bmo`.
+- **`bmo-mail health`** asks the service the settings name, waiting at most five seconds, and ends 0 where it
+  answers ready.
+- **`bmo-mail mcp`** starts the harness plugin's MCP server (「The harness plugin」).
+- **`bmo-mail nouns`** prints nothing: the command carries no noun of its own for a host to dispatch.
 
-## What the service reaches beside the units
+## The client
 
-It calls no other unit.
+`bmo_mail::client`, in the repository's crate: one method for each route, sending and reading the bodies the
+OpenAPI document states, and a refusal read back as its status, `code` and `error`. It carries the contract
+and no caller's policy. The console plugin bundle reads the same bodies through the TypeScript types
+generated from `docs/openapi.json` into `client/shared/openapi.ts`.
+
+## The harness plugin
+
+The plugin `ahas-mail`: the MCP server `bmo-mail mcp` starts on standard input and output, and the skill
+`plugin/skills/ahas-mail/SKILL.md`, which tells a harness when and how to use it.
+
+- **Where it reaches the service:** the address `--address` or `BMO_MAIL_ADDRESS` names, else
+  `http://` and the settings' `server.listen`; the token `--token` or `BMO_MAIL_TOKEN` gives, else the
+  settings' `server.token`.
+- **Each tool is a thin call of one route** through the client, its input and output the JSON Schemas under
+  `x-tools`. A tool answers the route's answer as structured content. A refusal is a tool error whose text is
+  JSON: `status`, `code` and `error` as the service answered them, `code` `bad-request` for arguments that
+  are not the tool's shape, and `error` alone where the service could not be reached.
+
+| Tool | Route | Input |
+|---|---|---|
+| `mail_accounts` | `GET /accounts` | `after`, `limit` |
+| `mail_messages` | `GET /accounts/{accountName}/messages` | `accountName`; `folderName`, `q`, `labelId`, `before`, `after`, `limit` |
+| `mail_message` | `GET /accounts/{accountName}/messages/{messageId}` | `accountName`, `messageId` |
+| `mail_update` | `PATCH /accounts/{accountName}/messages/{messageId}` | `accountName`, `messageId`, `flags`, `labelIds`; `folderName` |
+| `mail_thread` | `GET /accounts/{accountName}/threads/{threadId}` | `accountName`, `threadId` |
+| `mail_draft` | `POST /accounts/{accountName}/drafts` | `accountName`; `replyTo`, `replyAll`, `forward` |
+| `mail_draft_update` | `PATCH /accounts/{accountName}/drafts/{draftId}` | `accountName`, `draftId`; the fields to change |
+| `mail_send` | `POST /accounts/{accountName}/sends` | `accountName`, `draftId`; `sendAt` |
+
+## What the service reaches
+
+It calls no other service.
 
 - **The IMAP and submission servers** the accounts file names, over TLS but where the file says `-`.
 - **The accounts file** the setting `accounts.file` names, read again when it changed and checked every
   minute.
 - **DNS and the open web** for sender logos: a domain's BIMI record, and an HTTPS address on the open web,
   never one of this machine's own networks (`docs/mail.md`, 「Sender avatars」).
-- **The staging folder** the setting `staging.dir` names.
+- **The staging folder** the setting `staging.dir` names, where a file posted to a draft waits until the draft
+  carrying it is saved.
 
 ## Settings
 
 The settings are read at start in layers, each overriding the one before: the defaults, which are the
 repository's own `settings.toml` built into the binary; then `settings.toml` and `settings.local.toml` where
-they stand in the settings folder, the one `BMO_MAIL_SETTINGS` names, else the folder above the one holding
-the binary (a deployment's root); then `BMO_MAIL_<TABLE>__<KEY>` in the environment. A relative path is read
-from the settings folder. An empty token lets no caller in.
+they stand in the settings folder, the one `BMO_MAIL_SETTINGS` names, else the folder above the one holding the
+binary (a deployment's root); then `BMO_MAIL_<TABLE>__<KEY>` in the environment. A relative path is read from
+the settings folder.
 
 | Table | Key | What it is | Default |
 |---|---|---|---|
-| `server` | `listen` | where the service answers, as `host:port` | `127.0.0.1:3330` |
+| `server` | `listen` | where the service answers, as `host:port`, a loopback address | `127.0.0.1:3330` |
 | `server` | `token` | the bearer token every caller presents | none |
 | `store` | `path` | the SQLite file of 「The store」 | `mail.db` |
-| `accounts` | `file` | the accounts file (`docs/mail.md`, 「Accounts and credentials」); a deployment names the data root's `env/mail-accounts` | none: no accounts |
-| `staging` | `dir` | the folder uploads wait in | `mail-staging` |
-| `wording` | `language` | the language of 「The service's own words」 and of a list's order | `ko` |
+| `accounts` | `file` | the accounts file (`docs/mail.md`, 「Accounts and credentials」) | none: no accounts |
+| `staging` | `dir` | the folder posted files wait in | `mail-staging` |
+| `wording` | `language` | the language of 「The service's own words」 | `ko` |
 | `wording` | `time_zone` | the time zone dates are written in | `Asia/Seoul` |
 
 ## The console plugin bundle
 
-`bmo-mail-client`, in `client/`: the mail screen as a Nuxt layer the console extends, mounted at `/mail`
-with every address below it (`docs/mail.md`, 「The screen」).
+`bmo-mail-client`, in `client/`: the mail screen as a console bundle on bmo-ui, by bmo-ui's console plugin
+contract (bmo-ui's `docs/console-bundles.md`). Its declaration, `client/console-bundle.json`, names the bundle
+`mail`, its screens under `/mail`, the service `mail`, its language pack, the event stream it reads and the
+notice kind `message.created`.
 
-- **What its host serves it:** the bmo-ui layer, and the routes above under `/api/mail/`, handed on to
-  this service with its token behind the console's sign-in.
+- **What it calls:** the routes above, at the address bmo-ui's relay module answers for the service `mail`,
+  and the event stream the same way. It reads the bodies through the types generated from
+  `docs/openapi.json`.
 - **How a host takes it:** the bundle is packed from `client/` with `bun pm pack` into
-  `bmo-mail-client-<version>.tgz`, carrying its manifest, its Nuxt configuration, `app/`, `shared/` and its
-  language pack under `i18n/`. A host keeps the packed bundle in its own tree and depends on it by that
-  file, depends on bmo-ui at the version the bundle's peer names, and names `bmo-mail-client` in its Nuxt
-  configuration's `extends`, which brings bmo-ui's layer with it.
-- **What it depends on beside bmo-ui:** bmo-markup's `web-address`, for the links a plain-text body shows,
-  and the TipTap editor packages its editor is built on. For the bundle's own install and typecheck a packed
-  copy of bmo-ui stands in `client/vendor/`, and bmo-markup's TypeScript package is read from the base
-  library's own folder.
-- **What its host owes it,** declared in `client/host/` for the bundle's own typecheck alone:
-  - `useMailEvents(onChange)`, made importable by name as Nuxt makes a project's own composables: calls
-    `onChange` with the account key of each `mail` event relayed into the tab, and with null each time the
-    tab's stream opens;
-  - its layout calling the bundle's `useMailNotices(t)` once, which raises the arrival notices and answers
-    `unread`, the mark the host's `/mail` navigation entry carries while any inbox holds unread mail;
-  - the components `DeployMark`, `TodoOpenButton` and `UsageMeters` of the console's title bar, registered by
-    name and handed no props;
-  - its i18n module, which merges the bundle's own pack into the host's locale of the same code;
-  - everything bmo-ui's boundary document says its host owes, since extending the bundle brings bmo-ui's
-    layer with it: among them the pack answering bmo-ui's 76 wording keys, which the screen's shared
-    pieces read (the list's choose-all among them), and the locale and time zone in the host's app
-    configuration.
-- **Wording:** every word the screen shows is the bundle's language pack, `client/i18n/locales/ko.yaml`,
-  registered by code (`ko`), language tag (`ko-KR`) and file, as the host registers its own locales. It
-  holds the 292 keys under `mail`, `screens.label.mail`, `screens.aria.mail_unread` and the 17 `common` keys
-  the screen reads; where the host's pack holds a key too, the host's value stands. The screen shows a
-  refusal by the key `mail.error.<code>`, its named values filled in.
-
-## What the console does
-
-These are bmo-web's to carry; this repository holds none of them.
-
-- **Hand on** every request under `/api/mail/` whole — the method, the query, the body and the headers that
-  say what is asked — to the address `MAIL_ADDRESS` names with the token `MAIL_TOKEN` names, and hand the
-  answer back as it came, a byte answer as its bytes and headers, behind the console's sign-in.
-- **Relay the event stream:** hold `GET /events` open, and write each `mail` event into every tab's event
-  stream as the mail word, whole and between two whole events of its own, carrying no cursor.
-- **Ring the push:** for each `arrival` whose `push` is not null, ring it to every device that receives
-  the `mail` kind, as one console rings, the path taken under the console's base path.
-- **Extend the console plugin bundle** under `client/` in place of the `/mail` placeholder, and owe the
-  host's parts the bundle declares (「The console plugin bundle」).
-
-## Missing in siblings
-
-What another repository's own boundary must gain for this one to stand on it, each for that repository's
-worker:
-
-- **bmo-web:**
-  - `MAIL_ADDRESS` and `MAIL_TOKEN` among its settings, and the handing on of `/api/mail/`, which its
-    boundary states for no route of this unit yet;
-  - the relay of this service's `GET /events` into the tabs' stream, and `useMailEvents` for the bundle;
-  - browser push: its boundary states no push route, no notification kinds and no devices, so nothing here
-    can be rung until it does; the `mail` kind's declaration — on for a new device — and the two words its
-    notification settings show for it are bmo-web's to hold beside the kinds of its own;
-  - the bundle in place of the `/mail` placeholder, and its `docs/language-pack.md` naming the bundle's
-    pack, merged as a layer's locale under the console's.
+  `bmo-mail-client-<version>.tgz`. A host depends on the packed bundle, on bmo-ui at the version the bundle's
+  peer names, and extends the bundle in its Nuxt configuration, which brings bmo-ui's layer with it; it
+  attaches the bundle by its declaration and owes it what bmo-ui's contract says a console owes a bundle.
+- **What it depends on beside bmo-ui:** bmo-markup's `web-address`, for the links a plain-text body shows, and
+  the TipTap editor packages its editor is built on. For the bundle's own install and typecheck a packed copy
+  of bmo-ui stands in `client/vendor/`, and bmo-markup's TypeScript package is read from the base library's own
+  folder.
+- **Wording:** every word the screen shows is the bundle's language pack, `client/i18n/locales/ko.json`, one
+  JSON file to a locale in the folder its declaration names, under the bundle's namespace: the screen's name
+  under `mail.title.screen`, and the words a console raises a notice of a declared kind in under
+  `mail.notice.<kind>`, a `title` and a `body` that takes the message's `{from}` and `{subject}`. The screen
+  shows a refusal by the key `mail.error.<code>`.
 
 ## Versions
 
-The repository's version is the crate's, in semver. The major moves on a change to this document's routes,
-events, fields, codes, words' keys, command or settings that a caller must follow; the minor on an addition to
-any of them; the patch on a change that leaves every statement here true.
+The repository has one version, the crate's, which the health, the OpenAPI document, the MCP server and the
+bundle answer. Until its first release it is `0.1.0` and counts revisions, `0.1.0-rev.<n>`, one revision a
+version bump, as bmo-chat's `docs/conventions.md`, 「Versions」, states.

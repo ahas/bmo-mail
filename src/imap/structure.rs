@@ -8,7 +8,7 @@ use async_imap::imap_proto::{BodyContentCommon, BodyContentSinglePart, BodyStruc
 use mail_parser::{MessageParser, MimeHeaders};
 use scraper::{Html, Node};
 
-use crate::wire::{MailPart, MailParts};
+use crate::mail::{MailPart, MailParts};
 
 /// The parameters of a part's header as the body structure lists them.
 type Parameters<'a> = Option<Vec<(Cow<'a, str>, Cow<'a, str>)>>;

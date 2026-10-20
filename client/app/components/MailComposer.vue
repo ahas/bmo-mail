@@ -2,8 +2,8 @@
   <!-- The composer (docs/mail.md, 「Writing」 and 「The screen」). On a desktop it is a panel docked at
        the bottom right with minimise, maximise and close buttons; maximise makes it a centred large
        modal. On a phone it is a full-height drawer. The draft is saved a few seconds after the writing
-       stops and again when it closes; the Send button hands it to the server's hold, which the page
-       offers to take back. -->
+       stops and again when it closes; the Send button sends it, and it waits out the undo span while the
+       page offers to take it back. -->
   <UDrawer v-if="props.narrow" v-model:open="open" :ui="{ content: 'h-[100dvh]', container: 'flex min-h-0 flex-1 flex-col p-0 gap-0 overflow-hidden', header: 'w-full', body: 'flex min-h-0 flex-1 flex-col' }" handle-only :content="HELD_OPEN">
     <template #header>
       <div class="flex w-full items-center gap-2 border-b border-default px-4 py-3">
@@ -14,7 +14,7 @@
       </div>
     </template>
     <template #body>
-      <MailComposeForm v-model="draft" v-bind="formProps" @send="send" @discard="discard" @from="switchFrom" @failed="failure = $event" />
+      <MailComposeForm v-model="draft" v-bind="formProps" @send="send" @discard="discard" @from="switchFrom" @attach="attach" @failed="failure = $event" />
     </template>
   </UDrawer>
 
@@ -34,7 +34,7 @@
       </div>
     </template>
     <template #body>
-      <MailComposeForm v-model="draft" v-bind="formProps" @send="send" @discard="discard" @from="switchFrom" @failed="failure = $event" />
+      <MailComposeForm v-model="draft" v-bind="formProps" @send="send" @discard="discard" @from="switchFrom" @attach="attach" @failed="failure = $event" />
     </template>
   </UModal>
 
@@ -58,7 +58,7 @@
         <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-close" :aria-label="$t('common.action.close')" @click="close" />
       </UTooltip>
     </div>
-    <MailComposeForm v-show="!minimized" v-model="draft" v-bind="formProps" @send="send" @discard="discard" @from="switchFrom" @failed="failure = $event" />
+    <MailComposeForm v-show="!minimized" v-model="draft" v-bind="formProps" @send="send" @discard="discard" @from="switchFrom" @attach="attach" @failed="failure = $event" />
   </section>
   </Teleport>
 </template>
@@ -68,15 +68,15 @@ import { useBackClose } from "bmo-ui/app/domain/layers";
 import { mailFailure } from "../domain/mail-refusals";
 import { mailApi } from "../domain/mail-api";
 
-import type { Draft, MailRef, PublicMailAccount } from "../../shared/mail";
+import type { Draft, DraftPatch, MailAccount, MailSend } from "../../shared/mail";
 import type { Ref } from "vue";
 
 const { t } = useI18n();
-const props = defineProps<{ accounts: PublicMailAccount[]; narrow: boolean }>();
+const props = defineProps<{ accounts: MailAccount[]; narrow: boolean }>();
 
 const emit = defineEmits<{
-  // The message went to the server's hold; the page offers to take it back.
-  sent: [held: { account: string; id: string; draft: MailRef; holdMs: number }];
+  // The draft is sent and waits out the account's undo span; the page offers to take it back.
+  sent: [account: string, send: MailSend];
   // A draft was saved or thrown away, which moves the Drafts folder.
   saved: [account: string];
 }>();
@@ -95,21 +95,24 @@ const minimized = ref(false);
 const maximized = ref(false);
 const draft = ref<Draft | null>(null) as Ref<Draft>;
 const sending = ref(false);
+const uploading = ref(false);
 const status = ref("");
 const failure = ref("");
 // What the draft held when it was last saved or opened, so an untouched one is never saved.
 let savedText = "";
 let timer: ReturnType<typeof setTimeout> | null = null;
-let saving: Promise<void> | null = null;
+// Every write of the draft — a save, a file attached — waits for the one before it: each answers the draft
+// as it now stands on the server, and two at once would each save over the other.
+let writing: Promise<unknown> = Promise.resolve();
 // The editor rewrites the HTML it is handed into its own form as it mounts. That rewrite is not
 // writing, so for a moment after opening the draft's form is taken as it settles, not saved.
 let settling: ReturnType<typeof setTimeout> | null = null;
 const SETTLE_MS = 800;
 
-const account = computed(() => props.accounts.find((one) => one.address === draft.value?.from)?.key ?? props.accounts[0]?.key ?? "");
+const account = computed(() => props.accounts.find((one) => one.address === draft.value?.from.address)?.name ?? props.accounts[0]?.name ?? "");
 const api = computed(() => mailApi(account.value));
 const title = computed(() => (draft.value?.subject ?? "").trim() || t("mail.title.new_mail"));
-const formProps = computed(() => ({ accounts: props.accounts, api: api.value, sending: sending.value, status: status.value, failure: failure.value }));
+const formProps = computed(() => ({ accounts: props.accounts, api: api.value, sending: sending.value, uploading: uploading.value, status: status.value, failure: failure.value }));
 
 // The docked panel is drawn by this screen rather than by the component library, so it is not
 // among what the back gesture finds on the page by itself and says here that it stands.
@@ -121,8 +124,22 @@ const docked = computed({
 });
 useBackClose(docked);
 
+// What of the draft a save writes.
+function patchOf(value: Draft): DraftPatch {
+  return { to: value.to, cc: value.cc, bcc: value.bcc, subject: value.subject, body: value.body, attachments: value.attachments, receiptRequested: value.receiptRequested };
+}
+
 function snapshot(value: Draft): string {
-  return JSON.stringify({ ...value, saved: null });
+  return JSON.stringify(patchOf(value));
+}
+
+// Runs one write of the draft after the writes before it.
+function write<T>(work: () => Promise<T>): Promise<T> {
+  const done = writing.then(work);
+
+  writing = done.catch(() => undefined);
+
+  return done;
 }
 
 async function save(): Promise<void> {
@@ -130,21 +147,19 @@ async function save(): Promise<void> {
     return;
   }
 
-  if (saving !== null) {
-    await saving;
-
-    return save();
-  }
-
+  const id = draft.value.id;
+  const sent = patchOf(draft.value);
   const text = snapshot(draft.value);
 
-  saving = (async () => {
+  await write(async () => {
     status.value = t("mail.status.saving");
 
     try {
-      const { saved } = await api.value.saveDraft(draft.value);
+      const saved = await api.value.saveDraft(id, sent);
 
-      draft.value = { ...draft.value, saved };
+      // The parts of the copy now standing are what the next save keeps, whatever was written meanwhile.
+      if (draft.value?.id === id) draft.value = { ...draft.value, attachments: saved.attachments, changedAt: saved.changedAt };
+
       savedText = text;
       status.value = t("mail.status.draft_saved");
       failure.value = "";
@@ -153,13 +168,7 @@ async function save(): Promise<void> {
       status.value = "";
       failure.value = mailFailure(t, error, t("mail.error.draft_failed"));
     }
-  })();
-
-  try {
-    await saving;
-  } finally {
-    saving = null;
-  }
+  });
 }
 
 watch(
@@ -181,7 +190,8 @@ watch(
   { deep: true },
 );
 
-// Opens the composer on a draft; one already open is saved first, as one composer stands at a time.
+// Opens the composer on a draft the service already holds; one already open is saved first, as one
+// composer stands at a time.
 async function start(next: Draft): Promise<void> {
   if (open.value) {
     await close();
@@ -220,37 +230,67 @@ function maximize(): void {
   maximized.value = true;
 }
 
+// Each file posted to the draft in turn; the draft the service answers carries it as a part of its own.
+async function attach(files: File[]): Promise<void> {
+  if (timer !== null) clearTimeout(timer);
+
+  await save();
+  uploading.value = true;
+
+  try {
+    for (const file of files) {
+      const id = draft.value.id;
+      const saved = await write(() => api.value.attach(id, file));
+
+      if (draft.value?.id === id) {
+        draft.value = { ...draft.value, attachments: saved.attachments, changedAt: saved.changedAt };
+        savedText = snapshot(draft.value);
+      }
+    }
+  } catch (error) {
+    failure.value = mailFailure(t, error, t("mail.error.attach_failed"));
+  } finally {
+    uploading.value = false;
+  }
+}
+
 async function discard(): Promise<void> {
   if (timer !== null) clearTimeout(timer);
 
-  const held = draft.value?.saved ?? null;
+  const id = draft.value.id;
 
   savedText = snapshot(draft.value);
   open.value = false;
 
-  if (held !== null) {
-    try {
-      await api.value.discardDraft(held);
-      emit("saved", account.value);
-    } catch {
-      // A draft that could not be thrown away stays in the Drafts folder, where it can be thrown away again.
-    }
+  try {
+    await write(() => api.value.discardDraft(id));
+    emit("saved", account.value);
+  } catch {
+    // A draft that could not be thrown away stays in the Drafts folder, where it can be thrown away again.
   }
 }
 
-// Another account to send from: the draft moves to that account's mailbox, the copy saved in the
-// first one thrown away.
+// Another account to send from: a draft lives in one account's mailbox, so a new one is started there with
+// everything written so far, and the first one thrown away. A file attached stays a part of the first
+// draft's message and is not carried over, which the composer says.
 async function switchFrom(address: string): Promise<void> {
-  const held = draft.value.saved;
-  const before = account.value;
+  const before = draft.value;
+  const target = props.accounts.find((one) => one.address === address);
 
-  draft.value = { ...draft.value, from: address, saved: null };
-  savedText = "";
+  if (target === undefined || target.address === before.from.address) return;
 
-  if (held !== null) {
-    await mailApi(before)
-      .discardDraft(held)
-      .catch(() => undefined);
+  if (timer !== null) clearTimeout(timer);
+
+  try {
+    const started = await write(() => mailApi(target.name).startDraft("new"));
+    const moved = await write(() => mailApi(target.name).saveDraft(started.id, { ...patchOf(before), attachments: [] }));
+
+    await write(() => mailApi(account.value).discardDraft(before.id)).catch(() => undefined);
+    draft.value = moved;
+    savedText = snapshot(moved);
+    failure.value = before.attachments.length > 0 ? t("mail.message.attachments_left") : "";
+  } catch (error) {
+    failure.value = mailFailure(t, error, t("mail.error.draft_failed"));
   }
 }
 
@@ -267,14 +307,15 @@ async function send(): Promise<void> {
   failure.value = "";
 
   try {
-    if (saving !== null) await saving;
+    await save();
 
-    const held = await api.value.send(draft.value);
+    const id = draft.value.id;
+    const held = await write(() => api.value.send(id));
 
-    // The server holds the message now; nothing of it is saved again as the composer closes.
+    // The service holds the send now; nothing of it is saved again as the composer closes.
     savedText = snapshot(draft.value);
     open.value = false;
-    emit("sent", { account: account.value, id: held.id, draft: held.draft, holdMs: held.holdMs });
+    emit("sent", account.value, held);
   } catch (error) {
     failure.value = mailFailure(t, error, t("common.error.not_sent"));
   } finally {

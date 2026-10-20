@@ -54,7 +54,7 @@
       <p class="shrink-0 truncate text-sm" :style="{ width: 'var(--mail-from)' }" :class="{ 'font-semibold': props.conversation.unread }">{{ senders }}</p>
 
       <div class="flex min-w-0 flex-1 items-center gap-2">
-        <span v-for="label in rowLabels" :key="label.id" class="shrink-0 rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.color }">{{ label.name }}</span>
+        <span v-for="label in rowLabels" :key="label.id" class="shrink-0 rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.colour }">{{ label.name }}</span>
         <p class="min-w-0 flex-1 truncate text-sm">
           <span :class="props.conversation.unread ? 'font-semibold' : 'text-default'">{{ subjectText($t, props.conversation.subject) }}</span>
           <span v-if="props.conversation.snippet !== ''" class="text-muted"> — {{ props.conversation.snippet }}</span>
@@ -64,8 +64,8 @@
       <UIcon v-if="props.conversation.hasAttachments" name="i-material-symbols-attach-file" class="size-4 shrink-0 text-muted" :aria-label="$t('mail.aria.has_attachment')" />
       <span v-else class="size-4 shrink-0" aria-hidden="true" />
 
-      <UTooltip :text="mailDateLong(props.conversation.date)">
-        <span class="shrink-0 text-end text-sm tabular-nums" :style="{ width: 'var(--mail-date)' }" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(props.conversation.date) }}</span>
+      <UTooltip :text="mailDateLong(props.conversation.at)">
+        <span class="shrink-0 text-end text-sm tabular-nums" :style="{ width: 'var(--mail-date)' }" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(props.conversation.at) }}</span>
       </UTooltip>
     </template>
 
@@ -85,10 +85,10 @@
           <UIcon v-if="props.conversation.unread" name="i-material-symbols-circle" class="size-2 shrink-0 text-primary" :aria-label="$t('mail.label.unread')" />
           <p class="min-w-0 flex-1 truncate text-base" :class="{ 'font-semibold': props.conversation.unread }">{{ senders }}</p>
           <UIcon v-if="props.conversation.hasAttachments" name="i-material-symbols-attach-file" class="size-4 shrink-0 text-muted" :aria-label="$t('mail.aria.has_attachment')" />
-          <span class="shrink-0 text-sm tabular-nums" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(props.conversation.date) }}</span>
+          <span class="shrink-0 text-sm tabular-nums" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(props.conversation.at) }}</span>
         </div>
         <div class="flex min-w-0 items-center gap-2">
-          <span v-for="label in rowLabels" :key="label.id" class="max-w-24 shrink-0 truncate rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.color }">{{ label.name }}</span>
+          <span v-for="label in rowLabels" :key="label.id" class="max-w-24 shrink-0 truncate rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.colour }">{{ label.name }}</span>
           <p class="min-w-0 flex-1 truncate text-sm">
             <span :class="props.conversation.unread ? 'font-semibold' : 'text-default'">{{ subjectText($t, props.conversation.subject) }}</span>
             <span v-if="props.conversation.snippet !== ''" class="text-muted"> — {{ props.conversation.snippet }}</span>
@@ -140,7 +140,7 @@ const { t } = useI18n();
 const senders = computed(() => sendersLine(t, props.conversation, props.account));
 // The avatar stands for whoever the row leads with, which is the newest message's sender.
 const senderAddress = computed(() => props.conversation.from[0]?.address ?? "");
-const rowLabels = computed(() => props.labels.filter((label) => props.conversation.labels.includes(label.id)));
+const rowLabels = computed(() => props.labels.filter((label) => props.conversation.labelIds.includes(label.id)));
 
 // A long press on a phone raises the platform's own menu too; the hold the list reads off the same
 // press is what answers it.

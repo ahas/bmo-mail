@@ -1,6 +1,6 @@
-//! Sending (`docs/mail.md`, 「Writing」): the draft saved, the message held for a few seconds while undo
-//! send can still take it back, then sent over submission, its copy kept in the sent folder and the draft
-//! removed. A service that stops during the hold leaves the draft where it was, never a message half sent.
+//! Sending (`docs/mail.md`, 「Writing」): a send waits in the service for the account's undo span while it can
+//! still be taken back, then the draft goes over submission, its copy is kept in the sent folder and the draft
+//! removed. A service that stops while a send waits leaves the draft where it was, never a message half sent.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -18,15 +18,16 @@ use crate::imap::folders::{ensure_role_folder, folders_of, searched_folders};
 use crate::imap::search::Search;
 use crate::imap::session::MailSession;
 use crate::imap::{append_landing, store_flags, uid_search};
-use crate::routes::requests::MailFault;
-use crate::wire::{Draft, DraftKind, FolderRole, MailRef, SendState};
+use crate::mail::{DraftKind, FolderRole, MailRef};
+use crate::routes::requests::{Asked, MailFault};
+use crate::wire::{Send, SendState};
 use crate::writing::addresses::record_addresses;
 use crate::writing::compose::{Purpose, build_message, new_message_id};
-use crate::writing::drafts::{discard_draft, open_draft, resolve_attachments, save_draft};
+use crate::writing::drafts::{discard_draft, draft_named, resolve_attachments};
 
-/// How long a message is held before it goes, while undo send can still take it back.
-pub const SEND_HOLD: Duration = Duration::from_secs(10);
-/// How long a settled hold is kept for the screen to ask about.
+/// The kind of the event a send's change makes.
+pub const SEND_CHANGED: &str = "send.changed";
+/// How long a settled send is kept for a reader to ask about.
 const SETTLED_KEPT: Duration = Duration::from_secs(60);
 /// How long the submission server's size is trusted before it is asked again.
 const LIMIT_KEPT: Duration = Duration::from_secs(60 * 60);
@@ -36,15 +37,13 @@ const IMPLICIT_TLS_PORT: u16 = 465;
 /// How long a conversation with the submission server may take.
 const SUBMISSION_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// A message held before it goes.
+/// A send kept in the service: where it stands, and its timer while it still waits.
 struct Held {
-  draft: MailRef,
-  state: SendState,
-  /// The hold's timer while it still runs; none once it has fired.
+  send: Send,
   timer: Option<AbortHandle>,
 }
 
-/// The messages held and the sizes the submission servers take.
+/// The sends kept and the sizes the submission servers take.
 #[derive(Default)]
 pub struct Sends {
   held: Mutex<HashMap<String, Held>>,
@@ -158,20 +157,38 @@ impl Sends {
     limit
   }
 
-  /// Where a send stands: held, sent, taken back or failed; none once it has long ended.
-  pub fn state(&self, id: &str) -> Option<SendState> {
-    held(self).get(id).map(|entry| entry.state.clone())
+  /// A send of the account as it stands; none once it has long ended.
+  pub fn send(&self, account: &str, id: &str) -> Option<Send> {
+    held(self)
+      .get(id)
+      .map(|entry| entry.send.clone())
+      .filter(|send| send.account_name == account)
   }
 
-  /// Undo send: ends the hold before the message goes. Answers the draft to reopen, or none when the hold
-  /// has already ended.
-  pub fn cancel(&self, id: &str) -> Option<MailRef> {
+  /// Takes a send back while it waits: the send as it now stands, cancelled; a conflict where it has already
+  /// gone, and none where the account has no such send.
+  pub fn cancel(&self, account: &str, id: &str) -> Option<Result<Send, Asked>> {
     let mut held = held(self);
-    let timer = held.get_mut(id)?.timer.take()?;
+    let entry = held.get_mut(id).filter(|entry| entry.send.account_name == account)?;
+    let Some(timer) = entry.timer.take() else {
+      return Some(Err(Asked::conflict("the send has already gone")));
+    };
 
     timer.abort();
+    entry.send.state = SendState::Cancelled;
 
-    held.remove(id).map(|entry| entry.draft)
+    Some(Ok(entry.send.clone()))
+  }
+
+  /// Moves a send to where it now stands, and answers it.
+  fn settle(&self, id: &str, state: SendState, failure: Option<String>) -> Option<Send> {
+    let mut held = held(self);
+    let entry = held.get_mut(id)?;
+
+    entry.send.state = state;
+    entry.send.failure = failure;
+
+    Some(entry.send.clone())
   }
 }
 
@@ -201,18 +218,20 @@ fn random_hex(bytes: usize) -> String {
   random.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// Sends a saved draft now: what the hold runs when it ends.
+/// Sends the draft a `Message-ID` names now: what a send runs when its wait ends. The draft is read where it
+/// stands at that moment, so a change made while the send waited goes with it.
 async fn send_draft(
   standing: &Standing,
   session: &MailSession,
   smtp: &MailEndpoint,
-  at: &MailRef,
+  draft_id: &str,
 ) -> Result<(), MailFault> {
-  let draft = open_draft(session, at).await?;
+  let draft = draft_named(session, draft_id).await?;
+  let at: MailRef = draft.saved.clone().ok_or_else(|| MailFault::server("the draft stands nowhere"))?;
   let recipients: Vec<_> = draft.to.iter().chain(&draft.cc).chain(&draft.bcc).cloned().collect();
 
   if recipients.is_empty() {
-    return Err(MailFault::asked("no_recipients", "a message to send has no recipient"));
+    return Err(Asked::rule("no-recipients", "a message to send has no recipient").into());
   }
 
   let staging = &standing.settings.staging.dir;
@@ -225,10 +244,7 @@ async fn send_draft(
   if let Some(limit) = standing.sends.submission_limit(smtp).await
     && raw.len() as u64 > limit
   {
-    return Err(MailFault::asked(
-      "message_too_large",
-      "the encoded message is past the size the server takes",
-    ));
+    return Err(Asked::too_large("the encoded message is past the size the server takes").into());
   }
 
   let to: Vec<String> = recipients.iter().map(|one| one.address.clone()).collect();
@@ -243,7 +259,7 @@ async fn send_draft(
   let appended = append_landing(connection.session(), &sent, "\\Seen", Some(&internal_date), &copy).await;
 
   connection.settle(appended)?;
-  discard_draft(session, at).await?;
+  discard_draft(session, &at).await?;
 
   if let Some(original) = &draft.original
     && draft.kind != DraftKind::New
@@ -256,7 +272,7 @@ async fn send_draft(
   record_addresses(standing.store.pool(), &draft.from, &recipients, now.timestamp_millis()).await
 }
 
-/// Why a send failed, in words for the log and the screen's reason.
+/// Why a send failed, in words for the log and the send's `failure`.
 fn failure(fault: MailFault) -> String {
   match fault {
     MailFault::Asked(asked) => asked.error,
@@ -264,26 +280,36 @@ fn failure(fault: MailFault) -> String {
   }
 }
 
-/// Send: saves the draft, then holds the message for the hold's length before it goes. Answers the hold's
-/// id, which undo send names, and where the draft now stands.
+/// A send of the draft a `Message-ID` names: it waits until `send_at`, and then goes. A draft that is not there,
+/// or has no recipient, is refused before anything waits.
 pub async fn queue_send(
   standing: Arc<Standing>,
   session: Arc<MailSession>,
   smtp: MailEndpoint,
-  draft: Draft,
-) -> Result<(String, MailRef), MailFault> {
+  account: &str,
+  draft_id: &str,
+  send_at: i64,
+) -> Result<Send, MailFault> {
+  let draft = draft_named(&session, draft_id).await?;
+
   if draft.to.len() + draft.cc.len() + draft.bcc.len() == 0 {
-    return Err(MailFault::asked("no_recipients", "a message to send has no recipient"));
+    return Err(Asked::rule("no-recipients", "a message to send has no recipient").into());
   }
 
-  let saved = save_draft(&session, &standing.settings.staging.dir, &draft).await?;
   let id = random_hex(9);
+  let send = Send {
+    id: id.clone(),
+    account_name: account.to_owned(),
+    draft_id: draft_id.to_owned(),
+    state: SendState::Waiting,
+    send_at,
+    failure: None,
+  };
 
   held(&standing.sends).insert(
     id.clone(),
     Held {
-      draft: saved.clone(),
-      state: SendState::Holding,
+      send: send.clone(),
       timer: None,
     },
   );
@@ -291,27 +317,28 @@ pub async fn queue_send(
   let task = {
     let standing = Arc::clone(&standing);
     let id = id.clone();
-    let saved = saved.clone();
+    let draft_id = draft_id.to_owned();
+    let account = account.to_owned();
+    let wait =
+      Duration::from_millis(u64::try_from(send_at - chrono::Utc::now().timestamp_millis()).unwrap_or(0));
 
     tokio::spawn(async move {
-      tokio::time::sleep(SEND_HOLD).await;
+      tokio::time::sleep(wait).await;
 
-      // The hold has fired: from here undo send can no longer take it back.
+      // The wait has ended: from here the send can no longer be taken back.
       let fired = held(&standing.sends).get_mut(&id).and_then(|entry| entry.timer.take()).is_some();
 
       if !fired {
         return;
       }
 
-      let state = match send_draft(&standing, &session, &smtp, &saved).await {
-        Ok(()) => SendState::Sent,
-        Err(fault) => SendState::Failed {
-          reason: failure(fault),
-        },
+      let settled = match send_draft(&standing, &session, &smtp, &draft_id).await {
+        Ok(()) => standing.sends.settle(&id, SendState::Sent, None),
+        Err(fault) => standing.sends.settle(&id, SendState::Failed, Some(failure(fault))),
       };
 
-      if let Some(entry) = held(&standing.sends).get_mut(&id) {
-        entry.state = state;
+      if let Some(send) = settled {
+        standing.events.publish(SEND_CHANGED, Some(&account), &send).await;
       }
 
       tokio::time::sleep(SETTLED_KEPT).await;
@@ -323,5 +350,13 @@ pub async fn queue_send(
     entry.timer = Some(task.abort_handle());
   }
 
-  Ok((id, saved))
+  Ok(send)
+}
+
+/// Forgets a cancelled send once a reader has had its while to ask about it.
+pub fn forget_later(standing: Arc<Standing>, id: String) {
+  tokio::spawn(async move {
+    tokio::time::sleep(SETTLED_KEPT).await;
+    held(&standing.sends).remove(&id);
+  });
 }

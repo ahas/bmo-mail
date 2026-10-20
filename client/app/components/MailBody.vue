@@ -20,7 +20,7 @@
       <UButton size="sm" color="neutral" variant="outline" :label="$t('mail.action.show_images')" @click="allowRemote = true" />
     </div>
 
-    <div v-if="props.message.html !== null" :class="painted ? '-mx-4 bg-white px-4 py-3 text-[#111827]' : ''">
+    <div v-if="props.message.html != null" :class="painted ? '-mx-4 bg-white px-4 py-3 text-[#111827]' : ''">
       <iframe
         ref="frame"
         :srcdoc="document"
@@ -67,7 +67,7 @@ const painted = computed(() => cleaned.value !== null && paintsItself(cleaned.va
 
 // DOMPurify needs the browser's DOM, so the cleaning module is loaded where the body is shown.
 async function clean(): Promise<void> {
-  if (props.message.html === null || import.meta.server) {
+  if (props.message.html == null || import.meta.server) {
     return;
   }
 

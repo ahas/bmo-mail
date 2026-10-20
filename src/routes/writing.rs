@@ -1,41 +1,72 @@
-//! Writing (`docs/api.md`, 「Writing」).
+//! Writing (`docs/api.md`, 「Writing」): the addresses to complete from, drafts saved on the server, files
+//! attached to them, sends that wait out the undo span, and read receipts.
 
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, Multipart};
-use axum::http::Method;
+use axum::http::{Method, StatusCode};
 use axum::response::Response;
-use serde_json::{Value, json};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 
 use crate::account_settings::read_settings;
-use crate::http::{Call, Refused, Route};
+use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
 use crate::imap::messages::read_message;
-use crate::routes::requests::{MailFault, configured, draft_of, ref_of, with_mail_account};
+use crate::mail::{AttachmentRef, MailAddress};
+use crate::members::address_of;
+use crate::routes::requests::{
+  Asked, MailContext, MailFault, address_shaped, message_at, one_line, with_account,
+};
+use crate::wire::{
+  Address, AddressQuery, Draft, DraftPatch, Mailbox, NewAttachment, NewDraft, NewReceipt, NewSend, Page,
+  Receipt, Send,
+};
 use crate::writing::addresses::suggest_addresses;
 use crate::writing::compose::{forward_draft, new_draft, reply_draft};
-use crate::writing::drafts::{discard_draft, open_draft, save_draft};
-use crate::writing::receipts::answer_receipt;
-use crate::writing::send::{SEND_HOLD, queue_send};
+use crate::writing::drafts::{discard_draft, draft_named, find_draft, member, save_and_open};
+use crate::writing::receipts::send_receipt;
+use crate::writing::send::{SEND_CHANGED, forget_later, queue_send};
 use crate::writing::staging::{attachments_fit, stage_file};
 
-/// `GET /api/mail/{account}/addresses`: completion for an address field, from the addresses the account
-/// has used and heard from.
+const ACCOUNT: (&str, &str) = ("accountName", "The account's name: its address's local part.");
+const DRAFT: (&str, &str) =
+  ("draftId", "The draft's id: the Message-ID it is saved under, without angle brackets.");
+const SEND: (&str, &str) = ("sendId", "The send's id.");
+
+/// How many addresses a completion offers where none is asked.
+const SUGGESTED: u32 = 10;
+
+/// `GET /accounts/{accountName}/addresses`.
 pub struct Addresses;
 
 impl Route for Addresses {
   const METHOD: Method = Method::GET;
-  const PATH: &'static str = "/api/mail/{account}/addresses";
+  const PATH: &'static str = "/accounts/{accountName}/addresses";
+  const OPERATION: Operation = Operation {
+    id: "listAccountsAddressesByAccountName",
+    summary: "Addresses written to or heard from, most used first.",
+    tag: "accounts",
+    keys: &[ACCOUNT],
+    query: Some(inline::<AddressQuery>),
+    body: None,
+    status: 200,
+    answer: Answer::Json(schema::<Page<Address>>),
+    codes: &["not-found"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let query = call.query();
-    let standing = call.standing().clone();
+    let query: AddressQuery = call.query()?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let typed = query.get("q").and_then(Value::as_str).unwrap_or("");
-      let addresses = suggest_addresses(mail.standing.store.pool(), &mail.account.address, typed).await?;
+    with_account(&mut call, |mail| async move {
+      let limit = query.limit.unwrap_or(SUGGESTED).max(1);
+      let typed = query.q.unwrap_or_default();
+      let pool = mail.standing.store.pool();
+      let mut items =
+        suggest_addresses(pool, &mail.account.address, &typed, query.after.unwrap_or(0), limit).await?;
+      let more = items.len() > limit as usize;
 
-      Ok(configured(json!({ "addresses": addresses })))
+      items.truncate(limit as usize);
+
+      Ok(answer(StatusCode::OK, &Page { items, more }))
     })
     .await
   }
@@ -43,306 +74,435 @@ impl Route for Addresses {
 
 crate::route!(Addresses);
 
-/// `GET /api/mail/{account}/draft`: a saved draft, reopened in the composer.
-pub struct OpenDraft;
+/// Mailboxes as a draft carries them, each address checked.
+fn recipients(list: &[Mailbox]) -> Result<Vec<MailAddress>, Asked> {
+  list
+    .iter()
+    .map(|one| {
+      let address = address_of(one);
 
-impl Route for OpenDraft {
-  const METHOD: Method = Method::GET;
-  const PATH: &'static str = "/api/mail/{account}/draft";
-
-  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let query = call.query();
-    let standing = call.standing().clone();
-
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let draft = open_draft(&mail.session, &ref_of(&query)?).await?;
-
-      Ok(configured(json!({ "draft": draft })))
-    })
-    .await
-  }
-}
-
-crate::route!(OpenDraft);
-
-/// `POST /api/mail/{account}/draft`: the draft saved, replacing the copy it was saved as before; answers
-/// where it now is.
-pub struct SaveDraft;
-
-impl Route for SaveDraft {
-  const METHOD: Method = Method::POST;
-  const PATH: &'static str = "/api/mail/{account}/draft";
-
-  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let body = call.body().await;
-    let standing = call.standing().clone();
-
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let draft = draft_of(&body, &mail.account)?;
-      let saved = save_draft(&mail.session, &mail.standing.settings.staging.dir, &draft).await?;
-
-      Ok(configured(json!({ "saved": saved })))
-    })
-    .await
-  }
-}
-
-crate::route!(SaveDraft);
-
-/// `DELETE /api/mail/{account}/draft`: a draft thrown away.
-pub struct DiscardDraft;
-
-impl Route for DiscardDraft {
-  const METHOD: Method = Method::DELETE;
-  const PATH: &'static str = "/api/mail/{account}/draft";
-
-  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let body = call.body().await;
-    let standing = call.standing().clone();
-
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      discard_draft(&mail.session, &ref_of(&body)?).await?;
-
-      Ok(configured(json!({})))
-    })
-    .await
-  }
-}
-
-crate::route!(DiscardDraft);
-
-/// `POST /api/mail/{account}/draft/start`: what a composer opens with: a new message, a reply, a reply to
-/// all, or a forward of a message, each with the account's signature (`docs/mail.md`, 「Writing」).
-pub struct StartDraft;
-
-impl Route for StartDraft {
-  const METHOD: Method = Method::POST;
-  const PATH: &'static str = "/api/mail/{account}/draft/start";
-
-  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let body = call.body().await;
-    let standing = call.standing().clone();
-
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let settings = read_settings(mail.standing.store.pool(), &mail.account.address).await?;
-      let from = &mail.account.address;
-      let kind = body.get("kind").and_then(Value::as_str);
-
-      if kind.is_none() || kind == Some("new") {
-        return Ok(configured(json!({ "draft": new_draft(from, &settings) })));
+      if address_shaped(&address.address) {
+        Ok(address)
+      } else {
+        Err(Asked::bad_request(format!("{} is not an address", one.address)))
       }
-
-      let Some(original) = read_message(&mail.session, &ref_of(&body)?).await? else {
-        return Err(MailFault::asked("message_not_found", "the message is not on the server"));
-      };
-      let wording = &mail.standing.wording;
-      let draft = match kind {
-        Some("reply") => reply_draft(&original, from, false, &settings, wording),
-        Some("reply-all") => reply_draft(&original, from, true, &settings, wording),
-        Some("forward") => forward_draft(&original, from, &settings, wording),
-        _ => return Err(MailFault::asked("bad_compose_mode", "the kind is none a composer opens as")),
-      };
-
-      Ok(configured(json!({ "draft": draft })))
     })
-    .await
-  }
+    .collect()
 }
 
-crate::route!(StartDraft);
+/// The message a draft's start names, read with its bodies; a 422 where the account holds none.
+async fn original(mail: &MailContext, id: &str) -> Result<crate::mail::MailMessage, MailFault> {
+  let unknown = || Asked::rule("unknown-message", "the account holds no message of that id");
+  let at = message_at(id).map_err(|_| unknown())?;
 
-/// One field of an upload's form.
-struct FormField {
-  name: String,
-  filename: Option<String>,
-  kind: Option<String>,
-  bytes: Vec<u8>,
+  read_message(&mail.session, &at).await?.ok_or_else(|| unknown().into())
 }
 
-/// The fields of a multipart form, none where the body is not one.
-async fn form_fields(call: Call) -> Vec<FormField> {
-  let Ok(mut form) = Multipart::from_request(call.request, &()).await else {
-    return Vec::new();
+/// `POST /accounts/{accountName}/drafts`: a draft started, saved in the drafts folder at once.
+pub struct CreateDraft;
+
+impl Route for CreateDraft {
+  const METHOD: Method = Method::POST;
+  const PATH: &'static str = "/accounts/{accountName}/drafts";
+  const OPERATION: Operation = Operation {
+    id: "createAccountsDraftsByAccountName",
+    summary: "Start a draft, new or answering or carrying a message.",
+    tag: "accounts",
+    keys: &[ACCOUNT],
+    query: None,
+    body: Some(schema::<NewDraft>),
+    status: 201,
+    answer: Answer::Json(schema::<Draft>),
+    codes: &["not-found", "unknown-message", "draft-not-placed"],
   };
-  let mut fields = Vec::new();
-
-  while let Ok(Some(field)) = form.next_field().await {
-    let name = field.name().unwrap_or("").to_owned();
-    let filename = field.file_name().map(str::to_owned);
-    let kind = field.content_type().map(str::to_owned);
-    let Ok(bytes) = field.bytes().await else {
-      break;
-    };
-
-    fields.push(FormField {
-      name,
-      filename,
-      kind,
-      bytes: bytes.to_vec(),
-    });
-  }
-
-  fields
-}
-
-/// `POST /api/mail/{account}/upload`: files attached while a message is written, put in the staging folder
-/// until the draft is saved. They are refused whole when the message would no longer fit what the mail
-/// server takes, counting the attachments the message already carries (the form's `attached`, their sizes).
-pub struct Upload;
-
-impl Route for Upload {
-  const METHOD: Method = Method::POST;
-  const PATH: &'static str = "/api/mail/{account}/upload";
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let standing = call.standing().clone();
-    let fields = form_fields(call).await;
+    let new: NewDraft = call.body().await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let files: Vec<&FormField> =
-        fields.iter().filter(|field| field.name == "file" && field.filename.is_some()).collect();
-      let held: Vec<u64> = fields
-        .iter()
-        .find(|field| field.name == "attached")
-        .and_then(|field| serde_json::from_slice::<Vec<Value>>(&field.bytes).ok())
-        .map(|sizes| sizes.iter().filter_map(Value::as_f64).map(|size| size.max(0.0) as u64).collect())
-        .unwrap_or_default();
+    with_account(&mut call, |mail| async move {
+      let standing = &mail.standing;
+      let from = &mail.account.address;
+      let settings = read_settings(standing.store.pool(), from).await?;
+      let draft = match (&new.reply_to, &new.forward) {
+        (Some(_), Some(_)) => {
+          return Err(Asked::bad_request("a draft answers a message or carries one, not both").into());
+        }
+        (Some(id), None) => {
+          reply_draft(&original(&mail, id).await?, from, new.reply_all, &settings, &standing.wording)
+        }
+        (None, Some(id)) => forward_draft(&original(&mail, id).await?, from, &settings, &standing.wording),
+        (None, None) => new_draft(from, &settings),
+      };
+      let saved = save_and_open(&mail.session, &standing.settings.staging.dir, &draft).await?;
 
-      if files.is_empty() {
-        return Err(MailFault::asked("no_upload", "an upload carries no file"));
+      Ok(answer(StatusCode::CREATED, &member(mail.name(), &saved)))
+    })
+    .await
+  }
+}
+
+crate::route!(CreateDraft);
+
+/// `GET /accounts/{accountName}/drafts/{draftId}`.
+pub struct ReadDraft;
+
+impl Route for ReadDraft {
+  const METHOD: Method = Method::GET;
+  const PATH: &'static str = "/accounts/{accountName}/drafts/{draftId}";
+  const OPERATION: Operation = Operation {
+    id: "readAccountsDraftsByAccountNameDraftId",
+    summary: "One draft.",
+    tag: "accounts",
+    keys: &[ACCOUNT, DRAFT],
+    query: None,
+    body: None,
+    status: 200,
+    answer: Answer::Json(schema::<Draft>),
+    codes: &["not-found"],
+  };
+
+  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
+    let id = call.key("draftId").await?;
+
+    with_account(&mut call, |mail| async move {
+      let draft = draft_named(&mail.session, &id).await?;
+
+      Ok(answer(StatusCode::OK, &member(mail.name(), &draft)))
+    })
+    .await
+  }
+}
+
+crate::route!(ReadDraft);
+
+/// `PATCH /accounts/{accountName}/drafts/{draftId}`: the fields given replace the draft's own, and the draft
+/// is saved anew under the same id.
+pub struct ChangeDraft;
+
+impl Route for ChangeDraft {
+  const METHOD: Method = Method::PATCH;
+  const PATH: &'static str = "/accounts/{accountName}/drafts/{draftId}";
+  const OPERATION: Operation = Operation {
+    id: "changeAccountsDraftsByAccountNameDraftId",
+    summary: "Change a draft, saved again under the same id.",
+    tag: "accounts",
+    keys: &[ACCOUNT, DRAFT],
+    query: None,
+    body: Some(schema::<DraftPatch>),
+    status: 200,
+    answer: Answer::Json(schema::<Draft>),
+    codes: &["not-found", "draft-not-placed"],
+  };
+
+  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
+    let id = call.key("draftId").await?;
+    let patch: DraftPatch = call.body().await?;
+
+    with_account(&mut call, |mail| async move {
+      let mut draft = draft_named(&mail.session, &id).await?;
+
+      if let Some(to) = &patch.to {
+        draft.to = recipients(to)?;
       }
 
-      let sizes: Vec<u64> =
-        held.iter().copied().chain(files.iter().map(|file| file.bytes.len() as u64)).collect();
+      if let Some(cc) = &patch.cc {
+        draft.cc = recipients(cc)?;
+      }
+
+      if let Some(bcc) = &patch.bcc {
+        draft.bcc = recipients(bcc)?;
+      }
+
+      if let Some(subject) = &patch.subject {
+        draft.subject = one_line(subject);
+      }
+
+      if let Some(body) = patch.body {
+        draft.html = body;
+      }
+
+      if let Some(kept) = &patch.attachments {
+        draft.attachments.retain(|attachment| match attachment {
+          AttachmentRef::Part { part, .. } => kept.iter().any(|one| &one.part_id == part),
+          AttachmentRef::Upload { .. } => true,
+        });
+      }
+
+      if let Some(receipt) = patch.receipt_requested {
+        draft.receipt = receipt;
+      }
+
+      let saved = save_and_open(&mail.session, &mail.standing.settings.staging.dir, &draft).await?;
+
+      Ok(answer(StatusCode::OK, &member(mail.name(), &saved)))
+    })
+    .await
+  }
+}
+
+crate::route!(ChangeDraft);
+
+/// `DELETE /accounts/{accountName}/drafts/{draftId}`.
+pub struct DeleteDraft;
+
+impl Route for DeleteDraft {
+  const METHOD: Method = Method::DELETE;
+  const PATH: &'static str = "/accounts/{accountName}/drafts/{draftId}";
+  const OPERATION: Operation = Operation {
+    id: "deleteAccountsDraftsByAccountNameDraftId",
+    summary: "Throw a draft away.",
+    tag: "accounts",
+    keys: &[ACCOUNT, DRAFT],
+    query: None,
+    body: None,
+    status: 204,
+    answer: Answer::Nothing,
+    codes: &["not-found"],
+  };
+
+  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
+    let id = call.key("draftId").await?;
+
+    with_account(&mut call, |mail| async move {
+      let Some(at) = find_draft(&mail.session, &id).await? else {
+        return Err(Asked::not_found("no draft has that id").into());
+      };
+
+      discard_draft(&mail.session, &at).await?;
+
+      Ok(nothing())
+    })
+    .await
+  }
+}
+
+crate::route!(DeleteDraft);
+
+/// `POST /accounts/{accountName}/drafts/{draftId}/attachments`: a file attached, the draft saved again with
+/// it.
+pub struct CreateAttachment;
+
+impl Route for CreateAttachment {
+  const METHOD: Method = Method::POST;
+  const PATH: &'static str = "/accounts/{accountName}/drafts/{draftId}/attachments";
+  const OPERATION: Operation = Operation {
+    id: "createAccountsDraftsAttachmentsByAccountNameDraftId",
+    summary: "Attach a file to a draft.",
+    tag: "accounts",
+    keys: &[ACCOUNT, DRAFT],
+    query: None,
+    body: Some(schema::<NewAttachment>),
+    status: 201,
+    answer: Answer::Json(schema::<Draft>),
+    codes: &["not-found", "too-large", "draft-not-placed"],
+  };
+
+  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
+    let id = call.key("draftId").await?;
+    let file: NewAttachment = call.body().await?;
+
+    with_account(&mut call, |mail| async move {
+      let bytes = STANDARD
+        .decode(file.content.trim())
+        .map_err(|why| Asked::bad_request(format!("the content is not base64: {why}")))?;
+      let mut draft = draft_named(&mail.session, &id).await?;
+      let mut sizes: Vec<u64> = draft
+        .attachments
+        .iter()
+        .map(|attachment| match attachment {
+          AttachmentRef::Upload { size, .. } | AttachmentRef::Part { size, .. } => *size,
+        })
+        .collect();
+
+      sizes.push(bytes.len() as u64);
+
       let limit = mail.standing.sends.submission_limit(&mail.config.smtp).await;
 
       if !attachments_fit(&sizes, limit) {
-        return Err(MailFault::asked(
-          "upload_too_large",
-          "the files would not fit the size the server takes",
-        ));
+        return Err(
+          Asked::too_large("the file would take the draft past the size the server takes").into(),
+        );
       }
 
       let staging = &mail.standing.settings.staging.dir;
-      let staged = files
-        .iter()
-        .map(|file| {
-          let kind = file.kind.as_deref().unwrap_or("application/octet-stream");
+      let name = if file.name.trim().is_empty() { "attachment" } else { file.name.trim() };
+      let staged = stage_file(staging, name, &file.media_type, &bytes).map_err(MailFault::server)?;
 
-          stage_file(staging, file.filename.as_deref().unwrap_or(""), kind, &file.bytes)
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(MailFault::server)?;
+      draft.attachments.push(AttachmentRef::Upload {
+        id: staged.id,
+        filename: staged.filename,
+        kind: staged.kind,
+        size: staged.size,
+      });
 
-      Ok(configured(json!({ "files": staged })))
+      let saved = save_and_open(&mail.session, staging, &draft).await?;
+
+      Ok(answer(StatusCode::CREATED, &member(mail.name(), &saved)))
     })
     .await
   }
 }
 
-crate::route!(Upload);
+crate::route!(CreateAttachment);
 
-/// `POST /api/mail/{account}/send`: the draft saved and the message held for the hold's length, while undo
-/// send can still take it back (`docs/mail.md`, 「Writing」).
-pub struct Send;
+/// `POST /accounts/{accountName}/sends`: a draft sent once the undo span has run, at once, or at a time
+/// within the span.
+pub struct CreateSend;
 
-impl Route for Send {
+impl Route for CreateSend {
   const METHOD: Method = Method::POST;
-  const PATH: &'static str = "/api/mail/{account}/send";
+  const PATH: &'static str = "/accounts/{accountName}/sends";
+  const OPERATION: Operation = Operation {
+    id: "createAccountsSendsByAccountName",
+    summary: "Send a draft, at once or after the undo span.",
+    tag: "accounts",
+    keys: &[ACCOUNT],
+    query: None,
+    body: Some(schema::<NewSend>),
+    status: 201,
+    answer: Answer::Json(schema::<Send>),
+    codes: &["not-found", "no-recipients", "send-too-late"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let body = call.body().await;
-    let standing = call.standing().clone();
+    let new: NewSend = call.body().await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let draft = draft_of(&body, &mail.account)?;
-      let smtp = mail.config.smtp.clone();
-      let (id, saved) =
-        queue_send(Arc::clone(&mail.standing), Arc::clone(&mail.session), smtp, draft).await?;
+    with_account(&mut call, |mail| async move {
+      let standing = Arc::clone(&mail.standing);
+      let settings = read_settings(standing.store.pool(), &mail.account.address).await?;
+      let now = chrono::Utc::now().timestamp_millis();
+      let latest = now + settings.undo_send_ms;
+      let send_at = match new.send_at {
+        None => latest,
+        Some(at) if at <= now => now,
+        Some(at) if at > latest => {
+          return Err(Asked::rule("send-too-late", "a send waits no longer than the undo span").into());
+        }
+        Some(at) => at,
+      };
+      let session = Arc::clone(&mail.session);
+      let send =
+        queue_send(standing, session, mail.config.smtp.clone(), mail.name(), &new.draft_id, send_at)
+          .await?;
 
-      Ok(configured(json!({ "id": id, "draft": saved, "holdMs": SEND_HOLD.as_millis() })))
+      mail.standing.events.publish(SEND_CHANGED, Some(mail.name()), &send).await;
+
+      Ok(answer(StatusCode::CREATED, &send))
     })
     .await
   }
 }
 
-crate::route!(Send);
+crate::route!(CreateSend);
 
-/// `GET /api/mail/{account}/send/{id}`: where a send stands: held, sent, taken back or failed; null once it
-/// has long ended.
-pub struct SendStanding;
+/// `GET /accounts/{accountName}/sends/{sendId}`.
+pub struct ReadSend;
 
-impl Route for SendStanding {
+impl Route for ReadSend {
   const METHOD: Method = Method::GET;
-  const PATH: &'static str = "/api/mail/{account}/send/{id}";
+  const PATH: &'static str = "/accounts/{accountName}/sends/{sendId}";
+  const OPERATION: Operation = Operation {
+    id: "readAccountsSendsByAccountNameSendId",
+    summary: "A send as it stands.",
+    tag: "accounts",
+    keys: &[ACCOUNT, SEND],
+    query: None,
+    body: None,
+    status: 200,
+    answer: Answer::Json(schema::<Send>),
+    codes: &["not-found"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let mut params = call.path_params().await?;
-    let key = params.remove("account");
-    let id = params.remove("id").unwrap_or_default();
-    let standing = call.standing().clone();
+    let id = call.key("sendId").await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      Ok(configured(json!({ "state": mail.standing.sends.state(&id) })))
+    with_account(&mut call, |mail| async move {
+      let Some(send) = mail.standing.sends.send(mail.name(), &id) else {
+        return Err(Asked::not_found("no send has that id").into());
+      };
+
+      Ok(answer(StatusCode::OK, &send))
     })
     .await
   }
 }
 
-crate::route!(SendStanding);
+crate::route!(ReadSend);
 
-/// `DELETE /api/mail/{account}/send/{id}`: undo send: answers the draft to reopen, or null when the message
-/// has already gone.
-pub struct UndoSend;
+/// `DELETE /accounts/{accountName}/sends/{sendId}`: undo send, while the send still waits.
+pub struct CancelSend;
 
-impl Route for UndoSend {
+impl Route for CancelSend {
   const METHOD: Method = Method::DELETE;
-  const PATH: &'static str = "/api/mail/{account}/send/{id}";
+  const PATH: &'static str = "/accounts/{accountName}/sends/{sendId}";
+  const OPERATION: Operation = Operation {
+    id: "deleteAccountsSendsByAccountNameSendId",
+    summary: "Take a send back while it waits; its draft stays.",
+    tag: "accounts",
+    keys: &[ACCOUNT, SEND],
+    query: None,
+    body: None,
+    status: 204,
+    answer: Answer::Nothing,
+    codes: &["not-found", "conflict"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let mut params = call.path_params().await?;
-    let key = params.remove("account");
-    let id = params.remove("id").unwrap_or_default();
-    let standing = call.standing().clone();
+    let id = call.key("sendId").await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      Ok(configured(json!({ "draft": mail.standing.sends.cancel(&id) })))
+    with_account(&mut call, |mail| async move {
+      let Some(cancelled) = mail.standing.sends.cancel(mail.name(), &id) else {
+        return Err(Asked::not_found("no send has that id").into());
+      };
+      let send = cancelled?;
+
+      mail.standing.events.publish(SEND_CHANGED, Some(mail.name()), &send).await;
+      forget_later(Arc::clone(&mail.standing), id);
+
+      Ok(nothing())
     })
     .await
   }
 }
 
-crate::route!(UndoSend);
+crate::route!(CancelSend);
 
-/// `POST /api/mail/{account}/receipt`: send or don't send, on a message's read-receipt bar. Nothing is sent
-/// without that press.
-pub struct Receipt;
+/// `POST /accounts/{accountName}/receipts`: the read receipt a message asks for, sent.
+pub struct CreateReceipt;
 
-impl Route for Receipt {
+impl Route for CreateReceipt {
   const METHOD: Method = Method::POST;
-  const PATH: &'static str = "/api/mail/{account}/receipt";
+  const PATH: &'static str = "/accounts/{accountName}/receipts";
+  const OPERATION: Operation = Operation {
+    id: "createAccountsReceiptsByAccountName",
+    summary: "Send a read receipt for a message.",
+    tag: "accounts",
+    keys: &[ACCOUNT],
+    query: None,
+    body: Some(schema::<NewReceipt>),
+    status: 201,
+    answer: Answer::Json(schema::<Receipt>),
+    codes: &["not-found", "no-receipt-asked"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let body = call.body().await;
-    let standing = call.standing().clone();
+    let new: NewReceipt = call.body().await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let at = ref_of(&body)?;
-      let send = matches!(body.get("send"), Some(Value::Bool(true)));
+    with_account(&mut call, |mail| async move {
+      let at = message_at(&new.message_id)?;
 
-      answer_receipt(&mail.session, &mail.config.smtp, &mail.standing.wording, &at, send).await?;
+      send_receipt(&mail.session, &mail.config.smtp, &mail.standing.wording, &at).await?;
 
-      Ok(configured(json!({})))
+      Ok(answer(
+        StatusCode::CREATED,
+        &Receipt {
+          message_id: new.message_id,
+          sent: true,
+        },
+      ))
     })
     .await
   }
 }
 
-crate::route!(Receipt);
+crate::route!(CreateReceipt);

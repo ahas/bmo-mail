@@ -1,6 +1,5 @@
-//! Read receipts answered (`docs/mail.md`, 「Read receipts」). Nothing is ever sent without the reader's
-//! press: sending writes a disposition notification (RFC 8098) from the account the message came to, and
-//! either answer sets `$MDNSent`, so the question is asked once.
+//! Read receipts sent (`docs/mail.md`, 「Read receipts」): a disposition notification (RFC 8098) from the
+//! account the message came to, after which the message carries `$MDNSent`, so the question is asked once.
 
 use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
@@ -10,8 +9,8 @@ use mail_builder::mime::{BodyPart, MimePart};
 use crate::accounts::MailEndpoint;
 use crate::imap::messages::{change_flags, read_message};
 use crate::imap::session::MailSession;
-use crate::routes::requests::MailFault;
-use crate::wire::{MailMessage, MailRef};
+use crate::mail::{MailMessage, MailRef};
+use crate::routes::requests::{Asked, MailFault};
 use crate::wording::{Wording, fill};
 use crate::writing::compose::new_message_id;
 use crate::writing::send::submit;
@@ -32,7 +31,7 @@ pub fn build_receipt(
   date: i64,
 ) -> Result<Vec<u8>, MailFault> {
   let Some(receipt_to) = &original.receipt_to else {
-    return Err(MailFault::asked("no_receipt_asked", "the message asks for no read receipt"));
+    return Err(Asked::rule("no-receipt-asked", "the message asks for no read receipt").into());
   };
   let subject = &original.listed.subject;
   let human = format!("{}\r\n", fill(&wording.receipt.body, &[("account", account), ("subject", subject)]));
@@ -67,25 +66,22 @@ pub fn build_receipt(
   message.body(body).write_to_vec().map_err(MailFault::server)
 }
 
-/// Send or don't send, on a message's read-receipt bar.
-pub async fn answer_receipt(
+/// Sends the read receipt a message asks for, and marks the message `$MDNSent`.
+pub async fn send_receipt(
   session: &MailSession,
   smtp: &MailEndpoint,
   wording: &Wording,
   at: &MailRef,
-  send: bool,
 ) -> Result<(), MailFault> {
   let Some(message) = read_message(session, at).await? else {
-    return Err(MailFault::asked("message_not_found", "the message is not on the server"));
+    return Err(Asked::not_found("no message has that id").into());
   };
+  let Some(to) = message.receipt_to.clone() else {
+    return Err(Asked::rule("no-receipt-asked", "the message asks for no read receipt").into());
+  };
+  let account = &session.account.address;
+  let raw = build_receipt(&message, account, wording, chrono::Utc::now().timestamp())?;
 
-  if send {
-    let account = &session.account.address;
-    let raw = build_receipt(&message, account, wording, chrono::Utc::now().timestamp())?;
-    let to = message.receipt_to.clone().into_iter().collect::<Vec<_>>();
-
-    submit(smtp, &session.account, account, &to, &raw).await?;
-  }
-
-  change_flags(session, std::slice::from_ref(at), &["$MDNSent".to_owned()], &[]).await
+  submit(smtp, &session.account, account, &[to], &raw).await?;
+  change_flags(session, at, &["$MDNSent".to_owned()], &[]).await
 }

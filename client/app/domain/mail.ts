@@ -1,6 +1,6 @@
 import { identityMark } from "./mail-avatars";
 
-import type { FolderRole, MailAddress, MailConversation, MailFolderState, MailLabel, MailRef, MailSortBy } from "../../shared/mail";
+import type { FolderRole, MailConversation, MailFolder, MailLabel, MailMailbox, MailMessage } from "../../shared/mail";
 import type { Translate } from "bmo-ui/shared/wording";
 import type { AvatarProps } from "@nuxt/ui";
 
@@ -27,14 +27,12 @@ export const ROLE_ICONS: Record<FolderRole, string> = {
 // The order the folder roles stand in the mail nav, with the starred view after the inbox.
 export const NAV_ROLES: readonly FolderRole[] = ["inbox", "sent", "drafts", "junk", "trash"];
 
-// One place chosen mail can go: a role (`trash`, `inbox` through not-spam when it leaves the spam folder, or
-// the inbox folder by its path) or a folder by its path.
+// One place chosen mail can go: the inbox, the trash, or another folder, each by its folder's name.
 export interface MoveTarget {
   key: string;
   label: string;
   icon: string;
-  to: "trash" | "folder";
-  folder?: string;
+  folderName: string;
 }
 
 // What a list shows, as its address spells it: a folder role, `starred`, `label:<id>`,
@@ -97,7 +95,7 @@ export function isRole(view: MailViewKey): view is FolderRole {
 }
 
 // What the screen calls a view: a role's Korean name, the starred view, a label's name, a folder's name, the search.
-export function viewTitle(t: Translate, view: MailViewKey, labels: readonly MailLabel[], folders: readonly MailFolderState[]): string {
+export function viewTitle(t: Translate, view: MailViewKey, labels: readonly MailLabel[], folders: readonly MailFolder[]): string {
   if (isRole(view)) return t(ROLE_LABELS[view]);
   if (view === "starred") return t("mail.label.view_starred");
   if (view === "search") return t("mail.label.view_search");
@@ -107,7 +105,7 @@ export function viewTitle(t: Translate, view: MailViewKey, labels: readonly Mail
   }
 
   if (view.startsWith("folder:")) {
-    return folders.find((folder) => folder.path === view.slice(7))?.name ?? view.slice(7);
+    return folders.find((folder) => folder.name === view.slice(7))?.shortName ?? view.slice(7);
   }
 
   return view;
@@ -115,11 +113,27 @@ export function viewTitle(t: Translate, view: MailViewKey, labels: readonly Mail
 
 // The folder a list's action works from: the role folder the view names, or the folder itself.
 // A view across folders — the starred view, a label, a search — acts on each message where it lies.
-export function viewRole(view: MailViewKey, folders: readonly MailFolderState[]): FolderRole | null {
+export function viewRole(view: MailViewKey, folders: readonly MailFolder[]): FolderRole | null {
   if (isRole(view)) return view;
 
   if (view.startsWith("folder:")) {
-    return folders.find((folder) => folder.path === view.slice(7))?.role ?? null;
+    return folders.find((folder) => folder.name === view.slice(7))?.role ?? null;
+  }
+
+  return null;
+}
+
+// The one folder a view reads, where it reads one: a folder by its name, or a role the mailbox holds in
+// one folder. A view across folders — starred, a label, a search — reads none.
+export function viewFolder(view: MailViewKey, folders: readonly MailFolder[]): MailFolder | null {
+  if (view.startsWith("folder:")) {
+    return folders.find((folder) => folder.name === view.slice(7)) ?? null;
+  }
+
+  if (isRole(view)) {
+    const holding = folders.filter((folder) => folder.role === view);
+
+    return holding.length === 1 ? holding[0]! : null;
   }
 
   return null;
@@ -148,12 +162,12 @@ export function mailDateLong(at: number): string {
 
 // A person as a row names them: their name, or the part of the address before `@`; the account
 // itself is "me".
-export function personName(t: Translate, person: MailAddress, self: string): string {
+export function personName(t: Translate, person: MailMailbox, self: string): string {
   if (person.address.toLowerCase() === self.toLowerCase()) {
     return t("mail.label.self");
   }
 
-  return person.name !== "" ? person.name : person.address.split("@")[0]!;
+  return person.name != null && person.name !== "" ? person.name : person.address.split("@")[0]!;
 }
 
 // A conversation's senders as its row names them, and its count after them when it holds more
@@ -170,16 +184,19 @@ export function subjectText(t: Translate, subject: string): string {
   return subject.trim() === "" ? t("mail.label.no_subject") : subject;
 }
 
-// The range the toolbar shows: which messages of the view this page holds, of how many.
-export function rangeText(offset: number, shown: number, total: number): string {
-  if (total === 0 || shown === 0) {
-    return `0 / ${total.toLocaleString("ko-KR")}`;
+// The range the toolbar shows: which messages of the view this page holds, of how many where the view is
+// one folder and its count is known.
+export function rangeText(offset: number, shown: number, total: number | null): string {
+  const of = total === null ? "" : ` / ${total.toLocaleString("ko-KR")}`;
+
+  if (shown === 0) {
+    return `0${of}`;
   }
 
-  return `${(offset + 1).toLocaleString("ko-KR")}–${(offset + shown).toLocaleString("ko-KR")} / ${total.toLocaleString("ko-KR")}`;
+  return `${(offset + 1).toLocaleString("ko-KR")}–${(offset + shown).toLocaleString("ko-KR")}${of}`;
 }
 
-// How many messages a page shows: the server pages by fifty messages.
+// How many messages a page asks for: the service pages by fifty messages.
 export const PAGE_MESSAGES = 50;
 
 // The list's leading cell, which holds the checkbox, the star, the unread mark and the avatar.
@@ -204,14 +221,6 @@ export function rowFit(room: number, from: number, date: number): { oneLine: boo
   return left < least ? { oneLine: false, from } : { oneLine: true, from: Math.min(from, left) };
 }
 
-// The columns a one-line row stands in, in the order it stands them (docs/mail.md, 「The screen」).
-// Only the ones a reader could want a list ordered by are here: the marks and the attachment are
-// cells of the row, not columns of the list.
-export const MAIL_COLUMNS: { by: MailSortBy; label: string }[] = [
-  { by: "from", label: "mail.label.column_from" },
-  { by: "subject", label: "mail.label.column_subject" },
-  { by: "date", label: "mail.label.column_date" },
-];
 
 // What a column's width may be dragged to. A column narrower than its floor shows nothing at all;
 // one wider than its ceiling leaves the subject no room, which is the one column that must have it.
@@ -275,7 +284,7 @@ export function selectBy(kind: SelectKind, conversations: readonly MailConversat
 }
 
 // Every message of the chosen conversations, which is what a bulk action acts on.
-export function refsOf(keys: ReadonlySet<string>, conversations: readonly MailConversation[]): MailRef[] {
+export function messagesOf(keys: ReadonlySet<string>, conversations: readonly MailConversation[]): MailMessage[] {
   return conversations.filter((conversation) => keys.has(conversation.key)).flatMap((conversation) => conversation.messages);
 }
 
@@ -293,14 +302,10 @@ export function selectionState(keys: ReadonlySet<string>, conversations: readonl
 // The labels a set of conversations carries: those every one of them has, and those only some do.
 export function labelsState(keys: ReadonlySet<string>, conversations: readonly MailConversation[]): { all: Set<string>; some: Set<string> } {
   const chosen = conversations.filter((conversation) => keys.has(conversation.key));
-  const some = new Set(chosen.flatMap((conversation) => conversation.labels));
-  const all = new Set([...some].filter((label) => chosen.every((conversation) => conversation.labels.includes(label))));
+  const some = new Set(chosen.flatMap((conversation) => conversation.labelIds));
+  const all = new Set([...some].filter((label) => chosen.every((conversation) => conversation.labelIds.includes(label))));
 
   return { all, some };
-}
-
-export function labelKeyword(id: string): string {
-  return `bmo_${id}`;
 }
 
 // A key the mail screen answers on a desktop, and what it does. A key typed into a field is the
@@ -342,13 +347,13 @@ export function shortcutOf(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaK
 export const LABEL_COLORS: readonly string[] = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899", "#64748b"];
 
 // An address as a field shows it and a completion offers it.
-export function addressText(person: MailAddress): string {
-  return person.name === "" ? person.address : `${person.name} <${person.address}>`;
+export function addressText(person: { name?: string | null; address: string }): string {
+  return person.name == null || person.name === "" ? person.address : `${person.name} <${person.address}>`;
 }
 
 // What was typed into an address field, read as addresses: `Name <a@b>` or a bare address, split at
 // commas and semicolons. A piece that is not an address is left out.
-export function readAddresses(typed: string): MailAddress[] {
+export function readAddresses(typed: string): MailMailbox[] {
   return typed
     .split(/[,;\n]/)
     .map((piece) => piece.trim())
@@ -360,9 +365,9 @@ export function readAddresses(typed: string): MailAddress[] {
         return { name: named[1]!.replace(/^"|"$/g, "").trim(), address: named[2]!.toLowerCase() };
       }
 
-      return /^[^@\s<>]+@[^@\s<>]+$/.test(piece) ? { name: "", address: piece.toLowerCase() } : null;
+      return /^[^@\s<>]+@[^@\s<>]+$/.test(piece) ? { name: null, address: piece.toLowerCase() } : null;
     })
-    .filter((person): person is MailAddress => person !== null);
+    .filter((person): person is MailMailbox => person !== null);
 }
 
 // A size as an attachment chip shows it.

@@ -10,8 +10,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use crate::wire::PublicMailAccount;
-
 /// A server the accounts file names.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MailEndpoint {
@@ -26,7 +24,7 @@ pub struct MailEndpoint {
 #[derive(Clone, PartialEq, Eq)]
 pub struct MailAccount {
   pub address: String,
-  /// The address's local part: what the screen's addresses and the routes name an account by.
+  /// The address's local part: the account's name, which the routes name it by.
   pub key: String,
   pub login: String,
   pub password: String,
@@ -51,19 +49,7 @@ pub struct MailConfig {
 }
 
 impl MailConfig {
-  /// What of the accounts may reach the browser: their addresses and keys.
-  pub fn public_accounts(&self) -> Vec<PublicMailAccount> {
-    self
-      .accounts
-      .iter()
-      .map(|account| PublicMailAccount {
-        address: account.address.clone(),
-        key: account.key.clone(),
-      })
-      .collect()
-  }
-
-  /// The account a key names, matched without regard to case.
+  /// The account a name names, matched without regard to case.
   pub fn find_account(&self, key: &str) -> Option<&MailAccount> {
     let key = key.to_lowercase();
 

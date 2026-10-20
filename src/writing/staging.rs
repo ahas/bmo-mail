@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use rand::RngCore;
 
-use crate::wire::StagedFile;
+use crate::mail::StagedFile;
 
 /// How long a staged file is kept: a draft saved since holds its own copy, and one never saved was
 /// abandoned.

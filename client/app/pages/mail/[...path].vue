@@ -5,13 +5,7 @@
        place — account, view, conversation and search — is the address. -->
   <UDashboardPanel id="mail" :ui="{ body: 'p-0 sm:p-0 gap-0 sm:gap-0 overflow-y-hidden [&>*]:max-w-none' }">
     <template #header>
-      <UDashboardNavbar :title="$t('screens.label.mail')" icon="i-material-symbols-mail-outline">
-        <template #right>
-          <DeployMark />
-          <TodoOpenButton />
-          <UsageMeters />
-        </template>
-      </UDashboardNavbar>
+      <UDashboardNavbar :title="$t('mail.title.screen')" icon="i-material-symbols-mail-outline" />
     </template>
 
     <template #body>
@@ -49,7 +43,6 @@
             @read-all="readAll"
             @page="goToPage"
             @search="search"
-            @sort="chooseSort"
             @unread-only="onlyUnread"
             @nav="navDrawer = true"
             @stop-choosing="stopChoosing"
@@ -156,7 +149,6 @@
                 @read-all="readAll"
                 @page="goToPage"
                 @search="search"
-                @sort="chooseSort"
                 @unread-only="onlyUnread"
               />
             </div>
@@ -226,32 +218,20 @@ import { useCloseGuard } from "bmo-ui/app/domain/form-save";
 import { useIsland } from "bmo-ui/app/domain/island";
 import { usePainted } from "bmo-ui/app/domain/loading";
 import { useBackClose } from "bmo-ui/app/domain/layers";
-import {
-  isRole,
-  labelKeyword,
-  mailPath,
-  parseMailPath,
-  refsOf,
-  ROLE_ICONS,
-  ROLE_LABELS,
-  selectBy,
-  shortcutOf,
-  viewRole,
-  viewTitle,
-} from "../../domain/mail";
-import { mailAccounts, mailApi } from "../../domain/mail-api";
+import { mailPath, messagesOf, PAGE_MESSAGES, parseMailPath, ROLE_ICONS, ROLE_LABELS, selectBy, shortcutOf, viewFolder, viewRole, viewTitle } from "../../domain/mail";
+import { mailAccounts, mailApi, pageQuery, roleFolder } from "../../domain/mail-api";
 import { loadMailEditor } from "../../domain/mail-editor-load";
+import { useMailStream } from "../../domain/mail-stream";
 import { useMailSummary } from "../../domain/mail-summary";
 import { countText } from "bmo-ui/app/domain/numbers";
 import { useNarrow } from "bmo-ui/app/domain/screen";
 import { FULL_SHEET, SPLIT_HANDLE } from "bmo-ui/app/domain/side-parts";
 
-import { sortFirstAscending } from "../../../shared/mail";
+import { conversationsOf, isRead, SEEN } from "../../../shared/mail";
 
 import type { MailListAction } from "../../components/MailList.vue";
-import type { MoveTarget } from "../../domain/mail";
-import type { SelectKind } from "../../domain/mail";
-import type { MailConversation, MailFolderState, MailLabel, MailMessage, MailRef, MailSettings, MailSort, MailSortBy, PublicMailAccount } from "../../../shared/mail";
+import type { MoveTarget, SelectKind } from "../../domain/mail";
+import type { MailAccount, MailConversation, MailEvent, MailFolder, MailLabel, MailMessage, MailSend, MailSettings } from "../../../shared/mail";
 import type { SplitterItem } from "@nuxt/ui";
 
 // The mail screen is one screen for every place inside it: the account, the folder, the search and
@@ -267,6 +247,9 @@ const SIDES: SplitterItem[] = [
   { slot: "thread", minSize: 25, defaultSize: 44 },
 ];
 
+// How long a burst of changes the stream tells of is gathered before the list is read again.
+const GATHER_MS = 400;
+
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
@@ -274,11 +257,13 @@ const island = useIsland(t);
 const narrow = useNarrow();
 const painted = usePainted();
 
-const accounts = ref<PublicMailAccount[] | null>(null);
-const folders = ref<MailFolderState[]>([]);
+const accounts = ref<MailAccount[] | null>(null);
+const folders = ref<MailFolder[]>([]);
 const labels = ref<MailLabel[]>([]);
 const conversations = ref<MailConversation[] | null>(null);
-const total = ref(0);
+// Whether older messages stand past the page, and the cursor the next page is asked from.
+const more = ref(false);
+const nextBefore = ref<number | null>(null);
 const listFailure = ref("");
 const loading = ref(false);
 const threadMessages = ref<MailMessage[] | null>(null);
@@ -304,6 +289,10 @@ const showImages = computed(() => settings.value?.showImages === true);
 // puts its messages up rather than a skeleton. It is this visit's own and is dropped with the page.
 const threadsRead = new Map<string, MailMessage[]>();
 
+// The cursor each page of this visit was read from, by its number, so stepping back a page asks the
+// same messages again. A page opened from a link has no pages before it known, and steps back to the first.
+const cursors = new Map<number, number>();
+
 const list = useTemplateRef<{ focusSearch: () => void }>("list");
 const composer = useTemplateRef<{ start: (draft: import("#shared/mail").Draft) => Promise<void> }>("composer");
 const sides = useTemplateRef<{ panelsRef: Array<{ collapse: () => void; expand: () => void }> }>("sides");
@@ -313,36 +302,43 @@ const segments = computed(() => {
 
   return Array.isArray(path) ? path : typeof path === "string" && path !== "" ? [path] : [];
 });
-const place = computed(() => parseMailPath(segments.value, accounts.value?.[0]?.key ?? null));
+const place = computed(() => parseMailPath(segments.value, accounts.value?.[0]?.name ?? null));
 const query = computed(() => (typeof route.query.q === "string" ? route.query.q : ""));
-const offset = computed(() => {
-  const value = Number(route.query.offset ?? 0);
+// The page of the view the address names, from 1, and the message time it is read from.
+const pageNumber = computed(() => {
+  const value = Number(route.query.page ?? 1);
 
-  return Number.isSafeInteger(value) && value > 0 ? value : 0;
+  return Number.isSafeInteger(value) && value > 1 ? value : 1;
 });
-// How the list stands, as the address spells it: the column it is ordered by, which way that
-// column runs, and whether it holds back what has been read. It is in the address rather than in
-// this visit alone, so a link opens the list as it was being read.
-const sort = computed<MailSort>(() => ({
-  by: route.query.sort === "from" || route.query.sort === "subject" ? route.query.sort : "date",
-  ascending: route.query.dir === "asc",
-  unread: route.query.unread === "1",
-}));
-const address = computed(() => accounts.value?.find((one) => one.key === place.value?.account)?.address ?? "");
+const before = computed(() => {
+  const value = Number(route.query.before);
+
+  return pageNumber.value > 1 && Number.isSafeInteger(value) ? value : null;
+});
+// Whether the list holds back what has been read: in the address, so a link opens the list as it was read.
+const unreadOnly = computed(() => route.query.unread === "1");
+const address = computed(() => accounts.value?.find((one) => one.name === place.value?.account)?.address ?? "");
 const api = computed(() => mailApi(place.value?.account ?? ""));
 const role = computed(() => (place.value === null ? null : viewRole(place.value.view, folders.value)));
 const title = computed(() => (place.value === null ? "" : viewTitle(t, place.value.view, labels.value, folders.value)));
+// The one folder the view reads, which mark-all-read marks and whose count the range stands against.
+const openFolder = computed(() => (place.value === null ? null : viewFolder(place.value.view, folders.value)));
 
 const moveTargets = computed<MoveTarget[]>(() => [
-  { key: "inbox", label: t(ROLE_LABELS.inbox), icon: ROLE_ICONS.inbox, to: "folder", folder: folders.value.find((one) => one.role === "inbox")?.path ?? "INBOX" },
-  { key: "trash", label: t(ROLE_LABELS.trash), icon: ROLE_ICONS.trash, to: "trash" },
-  ...folders.value.filter((one) => one.role === null).map((one) => ({ key: `folder:${one.path}`, label: one.name, icon: "i-material-symbols-folder-outline", to: "folder" as const, folder: one.path })),
+  ...(["inbox", "trash"] as const).flatMap((one) => {
+    const folderName = roleFolder(folders.value, one);
+
+    return folderName === null ? [] : [{ key: one, label: t(ROLE_LABELS[one]), icon: ROLE_ICONS[one], folderName }];
+  }),
+  ...folders.value.filter((one) => one.role === null).map((one) => ({ key: `folder:${one.name}`, label: one.shortName, icon: "i-material-symbols-folder-outline", folderName: one.name })),
 ]);
 
 const listProps = computed(() => ({
   conversations: conversations.value,
-  total: total.value,
-  offset: offset.value,
+  total: unreadOnly.value ? null : (openFolder.value?.totalCount ?? null),
+  offset: (pageNumber.value - 1) * PAGE_MESSAGES,
+  page: pageNumber.value,
+  more: more.value,
   labels: labels.value,
   moveTargets: moveTargets.value,
   view: place.value?.view ?? "inbox",
@@ -350,32 +346,22 @@ const listProps = computed(() => ({
   role: role.value,
   address: address.value,
   query: query.value,
-  sort: sort.value,
+  unreadOnly: unreadOnly.value,
+  readAll: openFolder.value !== null,
   selected: selected.value,
   focused: focused.value,
   loading: loading.value,
   failure: listFailure.value,
 }));
 
-// Every account's inbox at a glance, read on mount, on the stream's word and on every open. A change
-// in the open account's inbox reads the list and the folders again.
-const { summary } = useMailSummary((next, previous) => {
-  const open = place.value?.account;
-  const now = next.accounts.find((one) => one.account === open);
-  const before = previous?.accounts.find((one) => one.account === open);
+// Every account's inbox at a glance, read on mount and whenever a folder's counts move.
+const { summary, refresh: refreshSummary } = useMailSummary();
 
-  if (previous !== null && now !== undefined && (now.unread !== before?.unread || now.newest?.uid !== before?.newest?.uid)) {
-    void refreshAll();
-  }
-});
-
-const unreadByAccount = computed<Record<string, boolean>>(() => Object.fromEntries((summary.value?.accounts ?? []).map((one) => [one.account, one.unread > 0])));
+const unreadByAccount = computed<Record<string, boolean>>(() => Object.fromEntries((summary.value?.accounts ?? []).map((one) => [one.name, one.unreadCount > 0])));
 
 async function loadAccounts(): Promise<void> {
   try {
-    const answer = await mailAccounts();
-
-    accounts.value = answer.configured ? answer.accounts : [];
+    accounts.value = await mailAccounts();
   } catch (error) {
     accounts.value = [];
     listFailure.value = mailFailure(t, error, t("mail.error.accounts_failed"));
@@ -398,10 +384,10 @@ async function loadFolders(): Promise<void> {
   if (place.value === null) return;
 
   try {
-    const read = await api.value.folders();
+    const [read, held] = await Promise.all([api.value.folders(), api.value.labels()]);
 
-    folders.value = read.folders;
-    labels.value = read.labels;
+    folders.value = read;
+    labels.value = held;
   } catch (error) {
     listFailure.value = mailFailure(t, error, t("mail.error.folders_failed"));
   }
@@ -417,15 +403,19 @@ async function loadList(): Promise<void> {
   loading.value = true;
 
   try {
-    const page = await api.value.list(place.value.view, offset.value, sort.value, place.value.view === "search" ? query.value : undefined);
+    // A role's view is asked by its folder once the folders are known; the inbox needs none.
+    const page = await api.value.page(pageQuery(place.value.view, query.value, unreadOnly.value, folders.value), before.value);
 
     if (asked !== listAsked) return;
 
-    conversations.value = page.conversations;
-    total.value = page.total;
+    conversations.value = conversationsOf(page.items);
+    more.value = page.more;
+    nextBefore.value = page.items.length === 0 ? null : page.items[page.items.length - 1]!.at;
     listFailure.value = "";
 
-    const keys = new Set(page.conversations.map((one) => one.key));
+    if (before.value !== null) cursors.set(pageNumber.value, before.value);
+
+    const keys = new Set(conversations.value.map((one) => one.key));
 
     selected.value = new Set([...selected.value].filter((key) => keys.has(key)));
   } catch (error) {
@@ -455,7 +445,7 @@ async function loadThread(): Promise<void> {
   threadMessages.value = threadsRead.get(threadKey(open)) ?? null;
 
   try {
-    const from = conversations.value?.find((one) => one.key === open.thread)?.messages[0]?.folder ?? (isRole(open.view) ? folders.value.find((one) => one.role === open.view)?.path : undefined) ?? "INBOX";
+    const from = conversations.value?.find((one) => one.key === open.thread)?.messages[0]?.folderName ?? openFolder.value?.name ?? null;
     const { messages } = await api.value.thread(open.thread, from);
 
     if (place.value?.thread !== open.thread) return;
@@ -464,14 +454,21 @@ async function loadThread(): Promise<void> {
     threadsRead.set(threadKey(open), messages);
 
     // Opening a thread reads it.
-    const unread: MailRef[] = messages.filter((one) => !one.seen).map(({ folder, uid }) => ({ folder, uid }));
+    const unread = messages.filter((one) => !isRead(one));
 
     if (unread.length > 0) {
-      await api.value.flags(unread, ["\\Seen"], []);
+      await api.value.markRead(unread, true);
+
+      for (const one of messages) {
+        if (!isRead(one)) one.flags = [...one.flags, SEEN];
+      }
 
       const hit = conversations.value?.find((one) => one.key === open.thread);
 
-      if (hit !== undefined) hit.unread = false;
+      if (hit !== undefined) {
+        hit.unread = false;
+        hit.messages = hit.messages.map((one) => (isRead(one) ? one : { ...one, flags: [...one.flags, SEEN] }));
+      }
 
       void loadFolders();
     }
@@ -480,17 +477,20 @@ async function loadThread(): Promise<void> {
   }
 }
 
-// Mark-all-read over the whole view. What is chosen is read by the toolbar's own mark-read; this is
-// for the folder, the label or the search standing open, whatever page of it the list has read.
+// Mark-all-read over the whole folder standing open, whatever page of it the list has read. What is chosen
+// is read by the toolbar's own mark-read.
 async function readAll(): Promise<void> {
-  if (place.value === null || markingRead.value) return;
+  const folder = openFolder.value;
+
+  if (folder === null || markingRead.value) return;
 
   markingRead.value = true;
 
   try {
-    const { marked } = await api.value.readAll(place.value.view, place.value.view === "search" ? query.value : undefined);
+    const unread = folder.unreadCount;
 
-    island.say({ title: marked === 0 ? t("mail.status.no_unread") : t("mail.message.marked_read", { n: countText(marked) }), tone: marked === 0 ? "info" : "success" });
+    await api.value.readFolder(folder.name);
+    island.say({ title: unread === 0 ? t("mail.status.no_unread") : t("mail.message.marked_read", { n: countText(unread) }), tone: unread === 0 ? "info" : "success" });
     await refreshAll();
   } catch (error) {
     island.fail(error, t("mail.error.mark_read_failed"));
@@ -507,6 +507,30 @@ async function refreshAll(): Promise<void> {
   await Promise.all([loadFolders(), loadList()]);
 }
 
+// What the stream tells of the account open here reads the list and the folders again, a burst of changes
+// once; a folder's counts moving reads the summary the nav's marks stand on.
+let gathering: ReturnType<typeof setTimeout> | null = null;
+
+function onEvent(event: MailEvent): void {
+  const account = (event.data as { accountName?: unknown }).accountName;
+
+  if (event.kind === "folder.changed") void refreshSummary();
+
+  if (account !== place.value?.account || event.kind === "send.changed") return;
+
+  if (gathering !== null) clearTimeout(gathering);
+
+  gathering = setTimeout(() => {
+    gathering = null;
+    void refreshAll();
+  }, GATHER_MS);
+}
+
+useMailStream(onEvent, () => {
+  void refreshSummary();
+  void refreshAll();
+});
+
 // The editor is loaded apart from this screen, and fetched once the screen stands and the browser
 // is idle, so the first composer opened finds it already here rather than on its skeleton.
 onNuxtReady(() => {
@@ -521,19 +545,24 @@ onMounted(async () => {
   }
 });
 
+onBeforeUnmount(() => {
+  if (gathering !== null) clearTimeout(gathering);
+});
+
 // What each of the three reads is asked for by name rather than as a list of parts. A watch whose
 // source hands back a fresh array is a watch on nothing: the array is a new one every time any
 // part of it is read again, so it never compares equal and the read runs on every change of the
 // address — opening a conversation would empty the list and read it back, which is the one thing
-// the list standing under the conversation is for.
+// the list standing under the conversation is for. A role's view waits for the folders that name it.
 const folderPlace = computed(() => JSON.stringify([place.value?.account, accounts.value !== null]));
-const listPlace = computed(() => JSON.stringify([place.value?.account, place.value?.view, offset.value, query.value, sort.value]));
+const listPlace = computed(() => JSON.stringify([place.value?.account, place.value?.view, pageNumber.value, before.value, query.value, unreadOnly.value, folders.value.length > 0]));
 const threadPlace = computed(() => JSON.stringify([place.value?.account, place.value?.thread]));
 
 watch(folderPlace, () => {
   folders.value = [];
   labels.value = [];
   settings.value = null;
+  cursors.clear();
   void loadFolders();
   void loadSettings();
 });
@@ -558,17 +587,20 @@ function go(change: Partial<{ view: string; thread: string | null }>, extra: Rec
   const next = { ...place.value, ...change };
   const target = mailPath(next);
   // An empty value in `extra` says to drop that word rather than to write it empty, which is how a
-  // list is put back to the column, the direction or the page it stands on by default.
+  // list is put back to its first page or to holding what was read.
   const params = new URLSearchParams(Object.entries(extra).filter(([, value]) => value !== ""));
 
   if (next.view === "search" && query.value !== "" && extra.q === undefined) params.set("q", query.value);
-  if (offset.value > 0 && change.view === undefined && extra.offset === undefined) params.set("offset", String(offset.value));
 
-  // How the list stands goes wherever the screen goes, folder and thread alike: it is a way of
-  // reading rather than a place, and one chosen in the inbox holds in the next folder opened.
-  if (sort.value.by !== "date" && extra.sort === undefined) params.set("sort", sort.value.by);
-  if (sort.value.ascending && extra.dir === undefined) params.set("dir", "asc");
-  if (sort.value.unread && extra.unread === undefined) params.set("unread", "1");
+  if (pageNumber.value > 1 && change.view === undefined && extra.page === undefined) {
+    params.set("page", String(pageNumber.value));
+
+    if (before.value !== null) params.set("before", String(before.value));
+  }
+
+  // The unread filter goes wherever the screen goes, folder and thread alike: it is a way of reading
+  // rather than a place, and one chosen in the inbox holds in the next folder opened.
+  if (unreadOnly.value && extra.unread === undefined) params.set("unread", "1");
 
   const search = params.toString();
 
@@ -577,11 +609,11 @@ function go(change: Partial<{ view: string; thread: string | null }>, extra: Rec
 
 async function openConversation(conversation: MailConversation): Promise<void> {
   // A draft opens in the composer, where it is written on; everything else opens as a thread.
-  if (place.value?.view === "drafts" && conversation.messages[0] !== undefined) {
-    try {
-      const { draft } = await api.value.openDraft(conversation.messages[0]);
+  const first = conversation.messages[0];
 
-      await composer.value?.start(draft);
+  if (place.value?.view === "drafts" && first?.internetMessageId != null) {
+    try {
+      await composer.value?.start(await api.value.openDraft(first.internetMessageId));
     } catch (error) {
       island.fail(error, t("mail.error.draft_open_failed"));
     }
@@ -601,8 +633,27 @@ function backToList(): void {
   }
 }
 
-function goToPage(next: number): void {
-  go({ thread: null }, { ...(query.value !== "" ? { q: query.value } : {}), offset: String(next) });
+// A page forward is asked from the last message's time; a page back from the cursor that page was read
+// from this visit, else from the first page.
+function goToPage(step: 1 | -1): void {
+  const target = pageNumber.value + step;
+  const words: Record<string, string> = query.value !== "" ? { q: query.value } : {};
+
+  if (target <= 1) {
+    go({ thread: null }, { ...words, page: "", before: "" });
+
+    return;
+  }
+
+  const cursor = step === 1 ? nextBefore.value : (cursors.get(target) ?? null);
+
+  if (cursor === null) {
+    go({ thread: null }, { ...words, page: "", before: "" });
+
+    return;
+  }
+
+  go({ thread: null }, { ...words, page: String(target), before: String(cursor) });
 }
 
 function search(text: string): void {
@@ -613,17 +664,8 @@ function search(text: string): void {
   }
 }
 
-// A column pressed again turns round; another column is taken up the way that column opens — a
-// date at its newest, a name and a subject at their first. The page starts over, since the row
-// that was fiftieth in one order is not the fiftieth in another.
-function chooseSort(by: MailSortBy): void {
-  const ascending = sort.value.by === by ? !sort.value.ascending : sortFirstAscending(by);
-
-  go({}, { sort: by === "date" ? "" : by, dir: ascending ? "asc" : "", offset: "" });
-}
-
 function onlyUnread(on: boolean): void {
-  go({}, { unread: on ? "1" : "", offset: "" });
+  go({}, { unread: on ? "1" : "", page: "", before: "" });
 }
 
 function toggle(key: string): void {
@@ -656,8 +698,8 @@ function selectKind(kind: SelectKind): void {
   selected.value = selectBy(kind, conversations.value ?? []);
 }
 
-function chosenRefs(): MailRef[] {
-  return refsOf(selected.value, conversations.value ?? []);
+function chosenMessages(): MailMessage[] {
+  return messagesOf(selected.value, conversations.value ?? []);
 }
 
 // A change of place empties the selection, since what was chosen has left the list; a change of
@@ -688,10 +730,19 @@ function leavesOpenThread(): boolean {
   return place.value?.thread !== null && place.value?.thread !== undefined && selected.value.has(place.value.thread);
 }
 
-function act(action: MailListAction): void {
-  const refs = chosenRefs();
+// The folder of a role, or a refusal said where the mailbox has none.
+function folderOf(one: "inbox" | "junk" | "trash"): string {
+  const name = roleFolder(folders.value, one);
 
-  if (refs.length === 0) return;
+  if (name === null) throw new Error(t("mail.error.no_role_folder"));
+
+  return name;
+}
+
+function act(action: MailListAction): void {
+  const messages = chosenMessages();
+
+  if (messages.length === 0) return;
 
   const leaving = leavesOpenThread();
   const after = () => {
@@ -700,29 +751,29 @@ function act(action: MailListAction): void {
 
   switch (action) {
     case "read":
-      void perform(() => api.value.flags(refs, ["\\Seen"], []), t("mail.error.mark_read_failed"), undefined, true);
+      void perform(() => api.value.markRead(messages, true), t("mail.error.mark_read_failed"), undefined, true);
       break;
     case "unread":
-      void perform(() => api.value.flags(refs, [], ["\\Seen"]), t("mail.error.mark_unread_failed"), undefined, true);
+      void perform(() => api.value.markRead(messages, false), t("mail.error.mark_unread_failed"), undefined, true);
       break;
     case "star":
-      void perform(() => api.value.flags(refs, ["\\Flagged"], []), t("mail.error.star_failed"), undefined, true);
+      void perform(() => api.value.star(messages, true), t("mail.error.star_failed"), undefined, true);
       break;
     case "unstar":
-      void perform(() => api.value.flags(refs, [], ["\\Flagged"]), t("mail.error.unstar_failed"), undefined, true);
+      void perform(() => api.value.star(messages, false), t("mail.error.unstar_failed"), undefined, true);
       break;
     case "trash":
-      void perform(() => api.value.move(refs, "trash"), t("mail.error.trash_failed"), t("mail.message.trashed")).then(after);
+      void perform(() => api.value.changeAll(messages, { folderName: folderOf("trash") }), t("mail.error.trash_failed"), t("mail.message.trashed")).then(after);
       break;
     case "delete":
-      void perform(() => api.value.deleteForever(refs), t("mail.error.delete_failed"), t("mail.message.deleted")).then(after);
+      void perform(() => api.value.deleteForever(messages), t("mail.error.delete_failed"), t("mail.message.deleted")).then(after);
       break;
     case "spam":
       spamSenders.value = false;
       spamAsk.value = true;
       break;
     case "not-spam":
-      void perform(() => api.value.move(refs, "not-spam"), t("mail.error.not_spam_failed"), t("mail.message.not_spam")).then(after);
+      void perform(() => api.value.reportNotSpam(messages, folderOf("inbox")), t("mail.error.not_spam_failed"), t("mail.message.not_spam")).then(after);
       break;
   }
 }
@@ -735,13 +786,13 @@ const spamAddresses = computed(() => {
 });
 
 async function confirmSpam(): Promise<void> {
-  const refs = chosenRefs();
+  const messages = chosenMessages();
   const senders = spamSenders.value ? spamAddresses.value : [];
   const leaving = leavesOpenThread();
 
   await perform(
     async () => {
-      await api.value.move(refs, "spam");
+      await api.value.reportSpam(messages, folderOf("junk"));
 
       if (senders.length > 0) await api.value.addSpamSenders(senders);
 
@@ -756,31 +807,27 @@ async function confirmSpam(): Promise<void> {
 }
 
 function moveTo(target: MoveTarget): void {
-  const refs = chosenRefs();
+  const messages = chosenMessages();
   const leaving = leavesOpenThread();
 
-  void perform(() => api.value.move(refs, target.to, target.folder), t("mail.error.move_failed"), t("mail.message.moved_to", { name: target.label })).then(() => {
+  void perform(() => api.value.changeAll(messages, { folderName: target.folderName }), t("mail.error.move_failed"), t("mail.message.moved_to", { name: target.label })).then(() => {
     if (leaving) go({ thread: null });
   });
 }
 
 function labelSelected(id: string, on: boolean): void {
-  const refs = chosenRefs();
+  const messages = chosenMessages();
 
-  void perform(() => api.value.flags(refs, on ? [labelKeyword(id)] : [], on ? [] : [labelKeyword(id)]), t("mail.error.label_failed"), undefined, true);
+  void perform(() => api.value.changeAll(messages, on ? { addLabels: [id] } : { removeLabels: [id] }), t("mail.error.label_failed"), undefined, true);
 }
 
 function starOne(conversation: MailConversation): void {
-  const refs = conversation.messages;
-
-  void perform(() => api.value.flags(refs, conversation.flagged ? [] : ["\\Flagged"], conversation.flagged ? ["\\Flagged"] : []), t("mail.error.star_change_failed"), undefined, true);
+  void perform(() => api.value.star(conversation.messages, !conversation.flagged), t("mail.error.star_change_failed"), undefined, true);
 }
 
 async function compose(): Promise<void> {
   try {
-    const { draft } = await api.value.startDraft("new");
-
-    await composer.value?.start(draft);
+    await composer.value?.start(await api.value.startDraft("new"));
   } catch (error) {
     island.fail(error, t("mail.error.compose_failed"));
   }
@@ -788,19 +835,21 @@ async function compose(): Promise<void> {
 
 async function write(kind: "reply" | "reply-all" | "forward", message: MailMessage): Promise<void> {
   try {
-    const { draft } = await api.value.startDraft(kind, { folder: message.folder, uid: message.uid });
-
-    await composer.value?.start(draft);
+    await composer.value?.start(await api.value.startDraft(kind, message));
   } catch (error) {
     island.fail(error, t("mail.error.compose_failed"));
   }
 }
 
+// A read receipt sent, or declined by marking the message answered without sending one.
 async function answerReceipt(message: MailMessage, send: boolean, done: () => void): Promise<void> {
   try {
-    await api.value.answerReceipt({ folder: message.folder, uid: message.uid }, send);
-
-    if (send) island.say({ title: t("mail.message.receipt_sent"), tone: "success" });
+    if (send) {
+      await api.value.sendReceipt(message);
+      island.say({ title: t("mail.message.receipt_sent"), tone: "success" });
+    } else {
+      await api.value.change(message, { add: ["$MDNSent"] });
+    }
 
     await loadThread();
   } catch (error) {
@@ -810,14 +859,15 @@ async function answerReceipt(message: MailMessage, send: boolean, done: () => vo
   }
 }
 
-// The undo-send button stands for as long as the server holds the message; taking it back reopens the draft.
-function onSent(held: { account: string; id: string; draft: MailRef; holdMs: number }): void {
-  const sender = mailApi(held.account);
+// The undo-send button stands for as long as the send waits; taking it back reopens the draft.
+function onSent(account: string, send: MailSend): void {
+  const sender = mailApi(account);
+  const waiting = Math.max(0, send.sendAt - Date.now());
   let cancelled = false;
 
   island.say({
     title: t("mail.status.sending"),
-    duration: held.holdMs,
+    duration: waiting,
     actions: [
       {
         label: t("mail.action.cancel_send"),
@@ -825,18 +875,15 @@ function onSent(held: { account: string; id: string; draft: MailRef; holdMs: num
           cancelled = true;
 
           try {
-            const { draft } = await sender.cancelSend(held.id);
-
-            if (draft === null) {
+            await sender.cancelSend(send.id);
+            await composer.value?.start(await sender.openDraft(send.draftId));
+          } catch (error) {
+            if ((error as { data?: { code?: unknown } } | null)?.data?.code === "conflict") {
               island.say({ title: t("mail.status.already_sent") });
 
               return;
             }
 
-            const reopened = await sender.openDraft(draft);
-
-            await composer.value?.start(reopened.draft);
-          } catch (error) {
             island.fail(error, t("mail.error.cancel_send_failed"));
           }
         }
@@ -848,19 +895,19 @@ function onSent(held: { account: string; id: string; draft: MailRef; holdMs: num
     if (cancelled) return;
 
     try {
-      const { state } = await sender.sendState(held.id);
+      const now = await sender.sendState(send.id);
 
-      if (state?.state === "failed") {
-        island.say({ title: t("mail.error.send_failed"), description: t("mail.message.kept_in_drafts", { reason: state.reason }), tone: "error" });
-      } else if (state?.state === "sent") {
+      if (now.state === "failed") {
+        island.say({ title: t("mail.error.send_failed"), description: t("mail.message.kept_in_drafts", { reason: now.failure ?? "" }), tone: "error" });
+      } else if (now.state === "sent") {
         island.say({ title: t("mail.message.sent"), tone: "success" });
       }
     } catch {
       // The send's state could not be read; the Sent and Drafts folders say where the message is.
     }
 
-    if (held.account === place.value?.account) void refreshAll();
-  }, held.holdMs + 2_000);
+    if (account === place.value?.account) void refreshAll();
+  }, waiting + 2_000);
 }
 
 function onDraftSaved(account: string): void {
@@ -933,5 +980,5 @@ function onKey(event: KeyboardEvent): void {
 onMounted(() => window.addEventListener("keydown", onKey));
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
-useHead({ title: computed(() => (title.value === "" ? t("screens.label.mail") : t("mail.title.page_of", { title: title.value }))) });
+useHead({ title: computed(() => (title.value === "" ? t("mail.title.screen") : t("mail.title.page_of", { title: title.value }))) });
 </script>

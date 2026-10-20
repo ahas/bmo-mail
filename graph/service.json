@@ -2,7 +2,7 @@
   {
     "id": "service/plumbing",
     "title": "Service plumbing",
-    "what": "The service settings in layers, the HTTP routes behind the bearer token with each route registered beside its answer, the SQLite store, the event stream, health, the accounts file and the binary commands, in src/http.rs, settings.rs, store.rs, events.rs, accounts.rs and main.rs.",
+    "what": "The settings, the routes behind the bearer token each stating its OpenAPI part beside its answer, the store, the numbered event stream and its window, health, the accounts file and the command, in src/http.rs, events.rs, wire.rs and main.rs.",
     "files": [
       "src/http.rs",
       "src/settings.rs",
@@ -21,11 +21,40 @@
       "settings.toml",
       "settings.local.toml.example",
       "deploy/bmo-mail.service",
-      "testbed.toml"
+      "testbed.toml",
+      "src/mail.rs",
+      "src/members.rs",
+      "src/keys.rs",
+      "src/announcements.rs",
+      "migrations/0002_events.sql"
     ],
     "symbols": [],
     "aliases": [],
     "needs": [],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
+  },
+  {
+    "id": "service/harness",
+    "title": "Client, OpenAPI document and harness plugin",
+    "what": "The service's client, its OpenAPI 3.1 document written from the routes and types, and the ahas-mail plugin: the MCP server bmo-mail mcp with its eight tools and the skill, in src/client.rs, openapi.rs, mcp.rs and plugin/.",
+    "files": [
+      "src/client.rs",
+      "src/openapi.rs",
+      "src/mcp.rs",
+      "examples/openapi.rs",
+      "docs/openapi.json",
+      "plugin/skills/ahas-mail/SKILL.md"
+    ],
+    "symbols": [
+      "MailClient",
+      "MailServer",
+      "openapi",
+      "tools"
+    ],
+    "aliases": [],
+    "needs": [
+      "service/plumbing"
+    ],
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   }
 ]

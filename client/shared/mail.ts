@@ -1,264 +1,131 @@
-// The mail screen's shapes as they travel between the mail service and the browser (docs/api.md,
-// 「What a message is」). The service answers them and the screen reads them from here, so a list, a
-// message or a draft means the same thing on either side.
+// The mail service's members as the screen reads them (docs/api.md), each the type generated from the
+// service's own OpenAPI document into `openapi.ts`, and the screen's own reading beside them: a conversation
+// made of a page's messages, and what a message's flags and parts say.
 
-export interface MailRef {
-  folder: string;
-  uid: number;
+import type { components } from "./openapi";
+
+type Schemas = components["schemas"];
+
+export type MailAccount = Schemas["Account"];
+export type MailSummary = Schemas["Summary"];
+export type MailFolder = Schemas["Folder"];
+export type FolderRole = Schemas["FolderRole"];
+export type MailMailbox = Schemas["Mailbox"];
+export type MailMessage = Schemas["Message"];
+export type MailMessagePage = Schemas["MessagePage"];
+export type MailPart = Schemas["Part"];
+export type MailThread = Schemas["Thread"];
+export type MailLabel = Schemas["Label"];
+export type MailAddress = Schemas["Address"];
+export type Draft = Schemas["Draft"];
+export type DraftPatch = Schemas["DraftPatch"];
+export type DraftAttachment = Schemas["DraftAttachment"];
+export type DraftKind = Schemas["DraftKind"];
+export type MailSend = Schemas["Send"];
+export type MailRule = Schemas["Rule"];
+export type NewRule = Schemas["NewRule"];
+export type RulePatch = Schemas["RulePatch"];
+export type RuleMatching = Schemas["RuleMatching"];
+export type RuleCondition = Schemas["RuleCondition"];
+export type RuleAction = Schemas["RuleAction"];
+export type RuleField = Schemas["RuleField"];
+export type MailSettings = Schemas["Settings"];
+export type MailSettingsPatch = Schemas["SettingsPatch"];
+export type MailEvent = Schemas["Event"];
+
+// The flags a message's state is read from and written as.
+export const SEEN = "\\Seen";
+export const FLAGGED = "\\Flagged";
+export const JUNK = "$Junk";
+export const NOT_JUNK = "$NotJunk";
+export const RECEIPT_ANSWERED = "$MDNSent";
+
+export function isRead(message: Pick<MailMessage, "flags">): boolean {
+  return message.flags.includes(SEEN);
 }
 
-export interface MailAddress {
-  name: string;
-  address: string;
+export function isStarred(message: Pick<MailMessage, "flags">): boolean {
+  return message.flags.includes(FLAGGED);
 }
 
-export interface MailListMessage extends MailRef {
-  key: string;
-  messageId: string | null;
-  subject: string;
-  from: MailAddress[];
-  to: MailAddress[];
-  date: number;
-  seen: boolean;
-  flagged: boolean;
-  answered: boolean;
-  draft: boolean;
-  // Whether a read receipt this message asked for has been answered, sent or declined.
-  receiptAnswered: boolean;
-  labels: string[];
-  hasAttachments: boolean;
-  snippet: string;
+// Whether a read receipt the message asked for has been answered, sent or declined.
+export function receiptAnswered(message: Pick<MailMessage, "flags">): boolean {
+  return message.flags.includes(RECEIPT_ANSWERED);
 }
 
-export interface MailConversation {
-  key: string;
-  subject: string;
-  date: number;
-  // The senders of the conversation's messages on this page, newest first, each once.
-  from: MailAddress[];
-  count: number;
-  unread: boolean;
-  flagged: boolean;
-  labels: string[];
-  hasAttachments: boolean;
-  snippet: string;
-  messages: MailRef[];
-}
-
-export interface MailPage {
-  // How many messages the view holds, and where this page starts among them.
-  total: number;
-  offset: number;
-  conversations: MailConversation[];
-}
-
-export interface MailMessage extends MailListMessage {
-  cc: MailAddress[];
-  bcc: MailAddress[];
-  replyTo: MailAddress[];
-  inReplyTo: string | null;
-  references: string[];
-  // Where a read receipt is asked to go, when the message asks for one.
-  receiptTo: string | null;
-  text: string | null;
-  html: string | null;
-  attachments: MailPart[];
-  inline: MailPart[];
-}
-
-export interface MailFolderState extends MailFolder {
-  unseen: number;
-  total: number;
+// The files a message carries, and the pictures its HTML body shows by content id.
+export function attachmentsOf(message: Pick<MailMessage, "parts">): MailPart[] {
+  return message.parts.filter((part) => part.kind === "attachment");
 }
 
 // The decoded size of a part the server reports by its encoded size.
-export function partSize(part: { size: number; encoding: string | null }): number {
+export function partSize(part: { size: number; encoding?: string | null }): number {
   return part.encoding === "base64" ? Math.floor((part.size * 3) / 4) : part.size;
 }
 
-export interface MailPart {
-  // The part's number in the message, as a fetch asks for it.
-  part: string;
-  type: string;
-  charset: string | null;
-  encoding: string | null;
-  filename: string | null;
-  // The encoded size the server reports; a base64 part decodes to about three quarters of it.
-  size: number;
-  // The content id without its angle brackets, for a part an HTML body shows inline.
-  cid: string | null;
-}
-
-export interface MailParts {
-  text: MailPart | null;
-  html: MailPart | null;
-  attachments: MailPart[];
-  inline: MailPart[];
-}
-
-export type FolderRole = "inbox" | "sent" | "drafts" | "junk" | "trash";
-
-export interface MailFolder {
-  path: string;
-  // The last part of the path, as the screen shows a folder that has no role.
-  name: string;
-  role: FolderRole | null;
-}
-
-export interface MailLabel {
-  id: string;
-  name: string;
-  color: string;
-  position: number;
-}
-
-// An attachment of a message being written: a file uploaded into the staging folder, or a part of a
-// message already on the server — the original of a forward, or the saved draft being reopened.
-export type AttachmentRef =
-  | { kind: "upload"; id: string; filename: string; type: string; size: number }
-  | { kind: "part"; folder: string; uid: number; part: string; filename: string; type: string; size: number };
-
-export type DraftKind = "new" | "reply" | "forward";
-
-export interface Draft {
-  // The account the message goes out from, by its address.
-  from: string;
-  to: MailAddress[];
-  cc: MailAddress[];
-  bcc: MailAddress[];
-  subject: string;
-  html: string;
-  attachments: AttachmentRef[];
-  // Whether a read receipt is asked for.
-  receipt: boolean;
-  kind: DraftKind;
-  // The message a reply answers or a forward carries, by its message ID.
-  original: string | null;
-  inReplyTo: string | null;
-  references: string[];
-  // The saved draft this one replaces, when it has been saved before.
-  saved: MailRef | null;
-}
-
-export type RuleField = "from" | "to" | "subject" | "header";
-
-export interface RuleCondition {
-  field: RuleField;
-  // The header's name, for a header condition.
-  header?: string;
-  // The text the field must hold, compared without regard to case.
-  contains: string;
-}
-
-export type RuleAction =
-  | { kind: "label"; label: string }
-  | { kind: "star" }
-  | { kind: "read" }
-  | { kind: "move"; folder: string }
-  | { kind: "spam" }
-  | { kind: "trash" };
-
-export interface MailRule {
-  id: number;
-  position: number;
-  enabled: boolean;
-  match: "all" | "any";
-  conditions: RuleCondition[];
-  actions: RuleAction[];
-}
-
-export type RuleDraft = Omit<MailRule, "id" | "position">;
-
-export interface MailSettings {
-  // The signature is markup, written in the same editor a message's body is.
-  signature: string;
-  receiptDefault: boolean;
-  // Whether a message's pictures from outside the console are shown as the message opens, or held
-  // behind the bar over the body until the reader asks for them.
-  showImages: boolean;
-}
-
-export interface StagedFile {
-  id: string;
-  filename: string;
-  type: string;
-  size: number;
-}
-
-export type SendState = { state: "holding" } | { state: "sent" } | { state: "cancelled" } | { state: "failed"; reason: string };
-
-// What of an account may reach the browser.
-export interface PublicMailAccount {
-  address: string;
+// A conversation as a row of the list shows it: the messages of one page that share a thread, the newest
+// first, and what the row says of them, read from the newest.
+export interface MailConversation {
+  // The thread's id, which the screen's address names the conversation by.
   key: string;
-}
-
-// What a list on the mail screen shows (docs/mail.md, 「The screen」): a folder by its role or its
-// path, the starred view, one label's view, or a search.
-export type MailView =
-  | { kind: "role"; role: FolderRole }
-  | { kind: "folder"; path: string }
-  | { kind: "starred" }
-  | { kind: "label"; id: string }
-  | { kind: "search"; query: string };
-
-// What every mail route answers where this console has no mail accounts file.
-export interface NoMailAccounts {
-  configured: false;
-}
-
-// A mail route's answer: its own shape, or that there are no mail accounts at all.
-export type MailAnswer<T> = ({ configured: true } & T) | NoMailAccounts;
-
-// How a list stands (docs/mail.md, 「Reading」): which column orders it, which way that column
-// runs, and whether it holds only what has not been read. The columns a list can be ordered by are
-// the ones its rows show — who wrote, what about, and when.
-export type MailSortBy = "date" | "from" | "subject";
-
-export interface MailSort {
-  by: MailSortBy;
-  // Whether the least stands first: the oldest date, the first name, the first subject.
-  ascending: boolean;
-  // Whether the list holds back everything already read.
+  subject: string;
+  at: number;
+  // The senders of the conversation's messages on this page, newest first, each once.
+  from: MailMailbox[];
+  count: number;
   unread: boolean;
+  flagged: boolean;
+  labelIds: string[];
+  hasAttachments: boolean;
+  snippet: string;
+  messages: MailMessage[];
 }
 
-// A list asked for with nothing said: the newest first, nothing held back.
-export const MAIL_SORT_NEWEST: MailSort = { by: "date", ascending: false, unread: false };
+// A page's messages gathered into the conversations they make up, in the page's order: a conversation takes
+// the place of its newest message on the page.
+export function conversationsOf(messages: readonly MailMessage[]): MailConversation[] {
+  const groups = new Map<string, MailMessage[]>();
 
-// Which way a column runs when it is chosen: a date opens at its newest, a name and a subject at
-// their first.
-export function sortFirstAscending(by: MailSortBy): boolean {
-  return by !== "date";
+  for (const message of messages) {
+    const group = groups.get(message.threadId);
+
+    if (group === undefined) groups.set(message.threadId, [message]);
+    else group.push(message);
+  }
+
+  return [...groups.entries()].map(([key, group]) => {
+    const byNewest = [...group].sort((a, b) => b.at - a.at);
+    const newest = byNewest[0]!;
+    const oldest = byNewest[byNewest.length - 1]!;
+    const from: MailMailbox[] = [];
+
+    for (const message of byNewest) {
+      if (message.from != null && !from.some((one) => one.address === message.from!.address)) from.push(message.from);
+    }
+
+    return {
+      key,
+      subject: oldest.subject === "" ? newest.subject : oldest.subject,
+      at: newest.at,
+      from,
+      count: group.length,
+      unread: group.some((message) => !isRead(message)),
+      flagged: group.some(isStarred),
+      labelIds: [...new Set(group.flatMap((message) => message.labelIds))],
+      hasAttachments: group.some((message) => attachmentsOf(message).length > 0),
+      snippet: newest.snippet,
+      messages: byNewest,
+    };
+  });
 }
 
-// One message a mail summary names: enough for a notice and for the address that opens it.
-export interface MailSummaryMessage {
-  uid: number;
-  // The conversation it belongs to, as the screen's addresses name it.
-  key: string;
-  from: { name: string; address: string }[];
-  subject: string;
-  date: number;
-  // The service moved it into the inbox — not spam, a move to the inbox — so it is not new mail.
-  movedIn: boolean;
-}
-
-// One account's inbox as the tabs watch it (docs/mail.md, 「Reaching the open tabs」): how much is
-// unread, the newest message, and the unread messages at the top of the inbox, newest first. A tab
-// compares one summary with the last it read to know what arrived; an account whose server did not
-// answer says so rather than reading as empty.
-export interface MailAccountSummary {
-  address: string;
-  account: string;
-  unread: number;
-  newest: MailSummaryMessage | null;
-  recentUnread: MailSummaryMessage[];
-  failed: boolean;
-}
-
-export interface MailSummary {
-  // Whether the service has mail accounts at all.
-  configured: boolean;
-  accounts: MailAccountSummary[];
-}
+// The ready rules the settings offer: the verdicts a spam filter on the mail server writes into a header,
+// so a filter installed there later reaches the screen with no change here.
+export const SPAM_HEADER_PRESETS: NewRule[] = [
+  ["X-Spam-Flag", "YES"],
+  ["X-Bogosity", "Spam"],
+].map(([header, contains]) => ({
+  match: { kind: "any", conditions: [{ field: "header", header: header!, contains: contains! }] },
+  actions: [{ kind: "spam" }],
+  on: true,
+}));

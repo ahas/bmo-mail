@@ -3,9 +3,8 @@
        header and the rows. The toolbar's groups stand divided: choosing, refresh, mark-all-read and
        the unread-only filter; with something chosen, its state, its place and its labels; and the
        range with previous and next at the right end. Where a row stands on one line the header names
-       its columns, orders the list by the one that is pressed and has its edges dragged to set the
-       widths; where a row stacks instead there is no header, and the same ordering is offered by
-       the toolbar's own sort control. On a phone the search shares its row with the folder button,
+       its columns and has its edges dragged to set the widths; where a row stacks instead there is
+       no header. The list stands newest first. On a phone the search shares its row with the folder button,
        and choosing turns the row into the select-all checkbox, the count, the move-to-Trash and
        mark-read buttons and one menu with the rest; a finger held on a row starts choosing and
        dragging on from it chooses every row it passes. The select-all checkbox is the same one the
@@ -104,26 +103,21 @@
               <UTooltip :text="$t('common.action.refresh')">
                 <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-refresh" :aria-label="$t('common.action.refresh')" :loading="props.loading" @click="emit('refresh')" />
               </UTooltip>
-              <UTooltip :text="$t('mail.action.read_all')">
+              <UTooltip v-if="props.readAll" :text="$t('mail.action.read_all')">
                 <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-mark-email-read-outline" :aria-label="$t('mail.action.read_all')" :loading="props.markingRead" @click="emit('read-all')" />
               </UTooltip>
               <UTooltip :text="unreadOnlyLabel">
                 <UButton
-                  :color="props.sort.unread ? 'primary' : 'neutral'"
-                  :variant="props.sort.unread ? 'solid' : 'ghost'"
+                  :color="props.unreadOnly ? 'primary' : 'neutral'"
+                  :variant="props.unreadOnly ? 'solid' : 'ghost'"
                   size="sm"
                   square
-                  :icon="props.sort.unread ? 'i-material-symbols-filter-alt' : 'i-material-symbols-filter-alt-outline'"
+                  :icon="props.unreadOnly ? 'i-material-symbols-filter-alt' : 'i-material-symbols-filter-alt-outline'"
                   :aria-label="unreadOnlyLabel"
-                  :aria-pressed="props.sort.unread"
-                  @click="emit('unread-only', !props.sort.unread)"
+                  :aria-pressed="props.unreadOnly"
+                  @click="emit('unread-only', !props.unreadOnly)"
                 />
               </UTooltip>
-              <UDropdownMenu v-if="compactRows" :items="sortMenu" :content="{ align: 'start' }">
-                <UTooltip :text="$t('mail.label.sort')">
-                  <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-sort" :aria-label="$t('mail.label.sort')" />
-                </UTooltip>
-              </UDropdownMenu>
             </template>
 
             <UDropdownMenu v-else :items="listMenu" :content="{ align: 'start' }">
@@ -223,10 +217,10 @@
           <SkeletonBar v-if="props.conversations === null" class="inline-block h-4 w-16 align-middle" />
           <span v-else class="text-sm tabular-nums text-muted">{{ range }}</span>
           <UTooltip :text="$t('mail.action.previous')">
-            <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-chevron-left" :aria-label="$t('mail.action.previous')" :disabled="props.offset === 0" @click="emit('page', Math.max(0, props.offset - PAGE_MESSAGES))" />
+            <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-chevron-left" :aria-label="$t('mail.action.previous')" :disabled="props.page === 1" @click="emit('page', -1)" />
           </UTooltip>
           <UTooltip :text="$t('mail.action.next')">
-            <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-chevron-right" :aria-label="$t('mail.action.next')" :disabled="props.offset + PAGE_MESSAGES >= props.total" @click="emit('page', props.offset + PAGE_MESSAGES)" />
+            <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-chevron-right" :aria-label="$t('mail.action.next')" :disabled="!props.more" @click="emit('page', 1)" />
           </UTooltip>
         </div>
       </template>
@@ -247,11 +241,8 @@
       <div v-if="!compactRows" role="row" class="sticky top-0 z-20 flex h-8 items-center gap-2 border-b border-default bg-default px-3 text-sm text-muted">
         <span class="shrink-0" :style="{ width: `${MAIL_ROW_LEAD_PX}px` }" aria-hidden="true" />
 
-        <div role="columnheader" :aria-sort="sortState('from')" class="relative shrink-0" :style="{ width: 'var(--mail-from)' }">
-          <button type="button" class="flex h-8 w-full min-w-0 items-center gap-1 px-1 text-start transition-colors hover:bg-elevated active:bg-accented" @click="emit('sort', 'from')">
-            <span class="truncate">{{ $t("mail.label.column_from") }}</span>
-            <UIcon v-if="props.sort.by === 'from'" :name="arrowIcon" class="size-4 shrink-0" />
-          </button>
+        <div role="columnheader" class="relative shrink-0" :style="{ width: 'var(--mail-from)' }">
+          <span class="flex h-8 w-full min-w-0 items-center px-1"><span class="truncate">{{ $t("mail.label.column_from") }}</span></span>
           <span
             class="group/handle absolute inset-y-0 -end-2 flex w-4 cursor-col-resize touch-none items-center justify-center"
             role="separator"
@@ -267,20 +258,14 @@
           </span>
         </div>
 
-        <div role="columnheader" :aria-sort="sortState('subject')" class="min-w-0 flex-1">
-          <button type="button" class="flex h-8 w-full min-w-0 items-center gap-1 px-1 text-start transition-colors hover:bg-elevated active:bg-accented" @click="emit('sort', 'subject')">
-            <span class="truncate">{{ $t("mail.label.subject") }}</span>
-            <UIcon v-if="props.sort.by === 'subject'" :name="arrowIcon" class="size-4 shrink-0" />
-          </button>
+        <div role="columnheader" class="min-w-0 flex-1">
+          <span class="flex h-8 w-full min-w-0 items-center px-1"><span class="truncate">{{ $t("mail.label.subject") }}</span></span>
         </div>
 
         <span class="size-4 shrink-0" aria-hidden="true" />
 
-        <div role="columnheader" :aria-sort="sortState('date')" class="relative shrink-0" :style="{ width: 'var(--mail-date)' }">
-          <button type="button" class="flex h-8 w-full min-w-0 items-center justify-end gap-1 px-1 text-end transition-colors hover:bg-elevated active:bg-accented" @click="emit('sort', 'date')">
-            <span class="truncate">{{ $t("mail.label.column_date") }}</span>
-            <UIcon v-if="props.sort.by === 'date'" :name="arrowIcon" class="size-4 shrink-0" />
-          </button>
+        <div role="columnheader" aria-sort="descending" class="relative shrink-0" :style="{ width: 'var(--mail-date)' }">
+          <span class="flex h-8 w-full min-w-0 items-center justify-end px-1"><span class="truncate">{{ $t("mail.label.column_date") }}</span></span>
           <span
             class="group/handle absolute inset-y-0 -start-2 flex w-4 cursor-col-resize touch-none items-center justify-center"
             role="separator"
@@ -333,7 +318,7 @@
         <span v-for="one in shown" :key="one.key" class="text-sm whitespace-nowrap" :class="{ 'font-semibold': one.unread }">{{ sendersLine($t, one, props.address) }}</span>
       </div>
       <div ref="measureDate" class="flex flex-col items-start">
-        <span v-for="one in shown" :key="one.key" class="text-sm tabular-nums whitespace-nowrap" :class="{ 'font-semibold': one.unread }">{{ mailDate(one.date) }}</span>
+        <span v-for="one in shown" :key="one.key" class="text-sm tabular-nums whitespace-nowrap" :class="{ 'font-semibold': one.unread }">{{ mailDate(one.at) }}</span>
       </div>
     </div>
   </div>
@@ -342,12 +327,12 @@
 <script setup lang="ts">
 import { barGathers, useBarRoom } from "bmo-ui/app/domain/actionbar";
 import { useDragSelect } from "bmo-ui/app/domain/dragselect";
-import { clampColumn, labelsState, mailDate, MAIL_COLUMNS, MAIL_COLUMN_BOUNDS, MAIL_ROW_LEAD_PX, PAGE_MESSAGES, rowFit, rangeText, SELECT_KINDS, selectionState, sendersLine } from "../domain/mail";
+import { clampColumn, labelsState, mailDate, MAIL_COLUMN_BOUNDS, MAIL_ROW_LEAD_PX, rowFit, rangeText, SELECT_KINDS, selectionState, sendersLine } from "../domain/mail";
 import { useWidth } from "bmo-ui/app/domain/screen";
 import { useMailColumns } from "../domain/mail-columns";
 
 import type { MoveTarget, SelectKind } from "../domain/mail";
-import type { FolderRole, MailConversation, MailLabel, MailSort, MailSortBy } from "../../shared/mail";
+import type { FolderRole, MailConversation, MailLabel } from "../../shared/mail";
 import type { DropdownMenuItem } from "@nuxt/ui";
 
 export type MailListAction = "read" | "unread" | "star" | "unstar" | "trash" | "delete" | "spam" | "not-spam";
@@ -355,8 +340,13 @@ export type MailListAction = "read" | "unread" | "star" | "unstar" | "trash" | "
 const { t } = useI18n();
 const props = defineProps<{
   conversations: MailConversation[] | null;
-  total: number;
+  // How many messages the folder holds, where the view is one folder and holds back nothing.
+  total: number | null;
+  // How many messages the pages before this one held, and this page's number from 1.
   offset: number;
+  page: number;
+  // Whether older messages stand past this page.
+  more: boolean;
   labels: MailLabel[];
   moveTargets: MoveTarget[];
   view: string;
@@ -365,8 +355,10 @@ const props = defineProps<{
   role: FolderRole | null;
   address: string;
   query: string;
-  // The column the list stands ordered by, which way it runs, and whether it holds back what was read.
-  sort: MailSort;
+  // Whether the list holds back what was read.
+  unreadOnly: boolean;
+  // Whether the view is one folder, which mark-all-read marks whole.
+  readAll: boolean;
   selected: Set<string>;
   focused: number;
   loading: boolean;
@@ -390,9 +382,9 @@ const emit = defineEmits<{
   label: [id: string, on: boolean];
   refresh: [];
   "read-all": [];
-  page: [offset: number];
+  // A page forward, older, or back.
+  page: [step: 1 | -1];
   search: [query: string];
-  sort: [by: MailSortBy];
   "unread-only": [on: boolean];
   nav: [];
   "stop-choosing": [];
@@ -462,27 +454,12 @@ const inTrashOrJunk = computed(() => props.role === "trash" || props.role === "j
 const trashLabel = computed(() => (inTrashOrJunk.value ? t("mail.action.delete_forever") : t("mail.action.trash")));
 const trashIcon = computed(() => (inTrashOrJunk.value ? "i-material-symbols-delete-forever-outline" : "i-material-symbols-delete-outline"));
 const range = computed(() => rangeText(props.offset, shown.value.reduce((sum, one) => sum + one.count, 0), props.total));
-const unreadOnlyLabel = computed(() => (props.sort.unread ? t("mail.action.show_all") : t("mail.action.unread_only")));
-const arrowIcon = computed(() => (props.sort.ascending ? "i-material-symbols-arrow-upward" : "i-material-symbols-arrow-downward"));
+const unreadOnlyLabel = computed(() => (props.unreadOnly ? t("mail.action.show_all") : t("mail.action.unread_only")));
 const emptyText = computed(() => {
   if (props.view === "search") return t("mail.status.none_found");
 
-  return props.sort.unread ? t("mail.status.none_unread") : t("mail.status.none");
+  return props.unreadOnly ? t("mail.status.none_unread") : t("mail.status.none");
 });
-
-function sortState(by: MailSortBy): "ascending" | "descending" | "none" {
-  if (props.sort.by !== by) return "none";
-
-  return props.sort.ascending ? "ascending" : "descending";
-}
-
-const sortMenu = computed<DropdownMenuItem[]>(() =>
-  MAIL_COLUMNS.map((column) => ({
-    label: t(column.label),
-    icon: props.sort.by === column.by ? arrowIcon.value : undefined,
-    onSelect: () => emit("sort", column.by),
-  })),
-);
 
 // The sender and the date stand in columns of the width they were dragged to, and where they were
 // never dragged, of the width this page's own rows ask for.
@@ -553,20 +530,19 @@ function endResize(event: PointerEvent): void {
 const selectMenu = computed<DropdownMenuItem[]>(() => SELECT_KINDS.map((one) => ({ label: t(one.label), onSelect: () => emit("select", one.kind) })));
 
 // What the list's own actions become on a bar short of room. The unread-only filter keeps its
-// pressed state as the menu's own check, and sort opens the same three columns the header orders by.
+// pressed state as the menu's own check.
 const listMenu = computed<DropdownMenuItem[][]>(() => [
   [
     { label: t("common.action.refresh"), icon: "i-material-symbols-refresh", onSelect: () => emit("refresh") },
-    { label: t("mail.action.read_all"), icon: "i-material-symbols-mark-email-read-outline", onSelect: () => emit("read-all") },
+    ...(props.readAll ? [{ label: t("mail.action.read_all"), icon: "i-material-symbols-mark-email-read-outline", onSelect: () => emit("read-all") }] : []),
     {
       label: t("mail.action.unread_only"),
       icon: "i-material-symbols-filter-alt-outline",
       type: "checkbox" as const,
-      checked: props.sort.unread,
-      onSelect: () => emit("unread-only", !props.sort.unread),
+      checked: props.unreadOnly,
+      onSelect: () => emit("unread-only", !props.unreadOnly),
     },
   ],
-  [{ label: t("mail.label.sort"), icon: "i-material-symbols-sort", children: sortMenu.value }],
 ]);
 
 // Where the chosen mail can be moved: the inbox, the Trash folder, and the mailbox's other folders.

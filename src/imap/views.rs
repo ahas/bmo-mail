@@ -1,16 +1,20 @@
-//! What a list shows (`docs/mail.md`, 「Reading」, 「Search」): the folders a view stands over, what it asks
-//! of each, its page, and marking the whole of it read.
+//! What a page of messages reads (`docs/mail.md`, 「Reading」, 「Search」): the folders a view stands over and
+//! what it asks of each of them.
 
 use sqlx::SqlitePool;
 
 use crate::imap::folders::{folders_of, role_folders, searched_folders};
-use crate::imap::messages::{NameOrder, folder_page, search_page};
+use crate::imap::messages::{Cursor, messages_page};
 use crate::imap::search::{Search, all_of, parse_mail_query};
 use crate::imap::session::MailSession;
-use crate::imap::{store_flags, uid_search};
-use crate::labels::{label_by_name, label_keyword};
-use crate::routes::requests::MailFault;
-use crate::wire::{FolderRole, MailFolder, MailPage, MailSort, MailSortBy, MailView};
+use crate::labels::{label_by_name, label_keyword, list_labels};
+use crate::mail::{FolderRole, MailFolder, MailMessage, MailView};
+use crate::routes::requests::{Asked, MailFault};
+use crate::wire::MessageQuery;
+
+/// How many messages a page holds where none is asked, and the most it may.
+pub const PAGE_SIZE: u32 = 50;
+pub const MOST_PAGE_SIZE: u32 = 100;
 
 /// The folders `in:` names: a role (`spam` being the junk role's everyday name), `starred`, or a folder by
 /// its name or path. The second answer says whether the scope holds starred mail alone.
@@ -40,7 +44,18 @@ pub struct ViewScope {
   pub search: Search,
 }
 
-/// The scope of a view. A view that names no message at all — a label the account does not have — has no
+/// The one folder a view is held to, or a 404 where the mailbox holds none of that name.
+fn held_to(folders: &[MailFolder], path: &str) -> Result<Vec<MailFolder>, MailFault> {
+  let found: Vec<MailFolder> = folders.iter().filter(|folder| folder.path == path).cloned().collect();
+
+  if found.is_empty() {
+    return Err(Asked::not_found("the mailbox holds no folder of that name").into());
+  }
+
+  Ok(found)
+}
+
+/// The scope of a view. A search that names no message at all — a label the account does not have — has no
 /// scope rather than an empty one, so a reader of this is never left searching every folder for nothing.
 pub async fn view_scope(
   pool: &SqlitePool,
@@ -48,7 +63,7 @@ pub async fn view_scope(
   account: &str,
   view: &MailView,
 ) -> Result<Option<ViewScope>, MailFault> {
-  let query = match view {
+  let (query, held) = match view {
     MailView::Role(role) => {
       let found = role_folders(folders, *role);
 
@@ -58,26 +73,25 @@ pub async fn view_scope(
       }));
     }
     MailView::Folder(path) => {
-      let found: Vec<MailFolder> = folders.iter().filter(|folder| &folder.path == path).cloned().collect();
-
-      return Ok((!found.is_empty()).then_some(ViewScope {
-        folders: found,
+      return Ok(Some(ViewScope {
+        folders: held_to(folders, path)?,
         search: Search::All,
       }));
     }
-    MailView::Starred => {
+    MailView::Label { id, folder } => {
+      if !list_labels(pool, account).await?.iter().any(|label| &label.id == id) {
+        return Err(Asked::not_found("no label of the account has that id").into());
+      }
+
       return Ok(Some(ViewScope {
-        folders: searched_folders(folders),
-        search: Search::Flagged(true),
-      }));
-    }
-    MailView::Label(id) => {
-      return Ok(Some(ViewScope {
-        folders: searched_folders(folders),
+        folders: match folder {
+          Some(path) => held_to(folders, path)?,
+          None => searched_folders(folders),
+        },
         search: Search::Keyword(label_keyword(id)),
       }));
     }
-    MailView::Search(query) => parse_mail_query(query),
+    MailView::Search { query, folder } => (parse_mail_query(query), folder),
   };
   let mut terms = query.terms;
   let mut scope = searched_folders(folders);
@@ -90,6 +104,10 @@ pub async fn view_scope(
     if starred {
       terms.push(Search::Flagged(true));
     }
+  }
+
+  if let Some(path) = held {
+    scope = held_to(folders, path)?;
   }
 
   for name in &query.labels {
@@ -106,67 +124,54 @@ pub async fn view_scope(
   }))
 }
 
-/// One page of a view.
-pub async fn view_page(
-  pool: &SqlitePool,
-  session: &MailSession,
-  account: &str,
-  view: &MailView,
-  offset: usize,
-  sort: MailSort,
-  order: &NameOrder,
-) -> Result<MailPage, MailFault> {
-  let folders = folders_of(session).await?;
-  let Some(scope) = view_scope(pool, &folders, account, view).await? else {
-    return Ok(MailPage {
-      total: 0,
-      offset,
-      conversations: Vec::new(),
-    });
-  };
-  let one_folder = matches!(view, MailView::Role(_) | MailView::Folder(_)) && scope.folders.len() == 1;
+/// The view a page's query asks for: words, a label, a folder, or the inbox.
+fn view_of(query: &MessageQuery) -> MailView {
+  let folder = query.folder_name.clone();
 
-  // The sent role may be two folders; one folder standing in its own arrival order is read by place, two
-  // are merged by search. A list ordered by a name or a subject, or holding back what was read, is a search
-  // too: neither is the order the folder itself stands in.
-  if one_folder && sort.by == MailSortBy::Date && !sort.unread {
-    return folder_page(session, &scope.folders[0].path, offset, sort.ascending).await;
+  match (&query.q, &query.label_id) {
+    (Some(words), _) if !words.trim().is_empty() => MailView::Search {
+      query: words.clone(),
+      folder,
+    },
+    (_, Some(id)) => MailView::Label {
+      id: id.clone(),
+      folder,
+    },
+    _ => match folder {
+      Some(path) => MailView::Folder(path),
+      None => MailView::Role(FolderRole::Inbox),
+    },
   }
-
-  let search = if sort.unread { all_of(vec![scope.search, Search::Seen(false)]) } else { scope.search };
-
-  search_page(session, &scope.folders, &search, offset, sort, order).await
 }
 
-/// Every unread message the view holds, marked read where it lies, and how many there were. It is the
-/// view's own scope rather than the page on the screen, so a folder read to its end is read to its end and
-/// not only as far as the list had been paged.
-pub async fn mark_view_read(
+/// One page of the messages a query asks for, without their bodies, and whether more stand past it.
+pub async fn page_of(
   pool: &SqlitePool,
   session: &MailSession,
   account: &str,
-  view: &MailView,
-) -> Result<usize, MailFault> {
-  let folders = folders_of(session).await?;
-  let Some(scope) = view_scope(pool, &folders, account, view).await? else {
-    return Ok(0);
+  query: &MessageQuery,
+) -> Result<(Vec<MailMessage>, bool), MailFault> {
+  let cursor = match (query.before, query.after) {
+    (Some(_), Some(_)) => return Err(Asked::bad_request("a page takes before or after, not both").into()),
+    (Some(before), None) => Cursor::Before(before),
+    (None, Some(after)) => Cursor::After(after),
+    (None, None) => Cursor::Newest,
   };
-  let search = all_of(vec![scope.search, Search::Seen(false)]);
-  let mut marked = 0;
+  let limit = query.limit.unwrap_or(PAGE_SIZE).clamp(1, MOST_PAGE_SIZE) as usize;
+  let folders = folders_of(session).await?;
+  let view = view_of(query);
+  let Some(mut scope) = view_scope(pool, &folders, account, &view).await? else {
+    return Ok((Vec::new(), false));
+  };
 
-  for folder in &scope.folders {
-    let mut connection = session.folder(&folder.path).await?;
-    let done = async {
-      let uids = uid_search(connection.session(), &search.command()).await?;
-
-      store_flags(connection.session(), &uids, "+", &["\\Seen".to_owned()]).await?;
-
-      Ok(uids.len())
+  // Words and a label together are the words searched within the label.
+  if let (MailView::Search { .. }, Some(id)) = (&view, &query.label_id) {
+    if !list_labels(pool, account).await?.iter().any(|label| &label.id == id) {
+      return Err(Asked::not_found("no label of the account has that id").into());
     }
-    .await;
 
-    marked += connection.settle(done)?;
+    scope.search = all_of(vec![scope.search, Search::Keyword(label_keyword(id))]);
   }
 
-  Ok(marked)
+  messages_page(session, &scope.folders, &scope.search, cursor, limit).await
 }

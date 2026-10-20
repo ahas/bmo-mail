@@ -6,16 +6,16 @@
 use std::collections::HashMap;
 
 use mail_parser::{Address, HeaderName, MessageParser};
-use serde_json::Value;
 use sqlx::SqlitePool;
 
 use crate::imap::folders::{ensure_role, list_folders};
 use crate::imap::messages::move_uids;
 use crate::imap::session::{Connection, MailSession};
 use crate::imap::{store_flags, uid_fetch, uid_search};
-use crate::labels::{label_keyword, list_labels};
-use crate::routes::requests::MailFault;
-use crate::wire::{FolderRole, MailRule, RuleAction, RuleCondition, RuleDraft, RuleField, RuleMatch};
+use crate::labels::{label_id_of, label_keyword, list_labels};
+use crate::mail::{FolderRole, MailRule, RuleAction, RuleCondition, RuleDraft, RuleField, RuleMatch};
+use crate::routes::requests::{Asked, MailFault, address_shaped};
+use crate::wire::{RuleMatching, RulePatch};
 
 /// What a rule is judged against: a message's senders and recipients (addresses and names), its subject
 /// and its headers.
@@ -46,24 +46,6 @@ pub struct RulePlan {
   pub matched: Vec<i64>,
   /// Whether an always-spam sender did.
   pub spam_sender: bool,
-}
-
-/// The rules the settings offer ready-made: the verdicts a spam filter on the server writes into a header,
-/// so a filter installed there later reaches the screen with no change here.
-pub fn spam_header_rules() -> Vec<RuleDraft> {
-  [("X-Spam-Flag", "YES"), ("X-Bogosity", "Spam")]
-    .into_iter()
-    .map(|(header, contains)| RuleDraft {
-      enabled: true,
-      matching: RuleMatch::Any,
-      conditions: vec![RuleCondition {
-        field: RuleField::Header,
-        header: Some(header.to_owned()),
-        contains: contains.to_owned(),
-      }],
-      actions: vec![RuleAction::Spam],
-    })
-    .collect()
 }
 
 impl RuleCondition {
@@ -114,10 +96,10 @@ impl RuleAction {
     };
 
     match self {
-      Self::Label { label } => add(label_keyword(label)),
+      Self::Label { label_id } => add(label_keyword(label_id)),
       Self::Star => add("\\Flagged".to_owned()),
       Self::Read => add("\\Seen".to_owned()),
-      Self::Move { folder } => plan.destination = Some(RuleDestination::Folder(folder.clone())),
+      Self::Move { folder_name } => plan.destination = Some(RuleDestination::Folder(folder_name.clone())),
       Self::Spam => plan.destination = Some(RuleDestination::Spam),
       Self::Trash => plan.destination = Some(RuleDestination::Trash),
     }
@@ -256,7 +238,7 @@ pub async fn rule_context(
     .into_iter()
     .map(|mut rule| {
       rule.rule.actions.retain(|action| match action {
-        RuleAction::Label { label } => labels.contains(label),
+        RuleAction::Label { label_id } => labels.contains(label_id),
         _ => true,
       });
       rule
@@ -266,67 +248,65 @@ pub async fn rule_context(
   Ok((rules, list_spam_senders(pool, account).await?))
 }
 
-/// What rules do to messages of the selected folder: each one's facts read, its plan made and carried out.
-/// Answers which messages stayed and which were moved.
-pub async fn run_rules_in_selected(
-  connection: &mut Connection,
-  pool: &SqlitePool,
-  account: &str,
-  uids: &[u32],
-) -> Result<(Vec<u32>, Vec<u32>), MailFault> {
-  let mut kept = Vec::new();
-  let mut moved = Vec::new();
-
-  if uids.is_empty() {
-    return Ok((kept, moved));
-  }
-
-  let (rules, spam_senders) = rule_context(pool, account).await?;
-  let mut fetched = uid_fetch(connection.session(), uids, "(UID BODY.PEEK[HEADER])").await?;
-
-  fetched.sort_by_key(|fetch| fetch.uid);
-
-  for fetch in &fetched {
-    let Some(uid) = fetch.uid else {
-      continue;
-    };
-    let plan = plan_rules(&rules, &spam_senders, &message_facts(fetch.header()));
-    let acts = !plan.flags.is_empty() || plan.destination.is_some();
-
-    if acts && apply_plan(connection, uid, &plan).await? {
-      moved.push(uid);
-    } else {
-      kept.push(uid);
-    }
-  }
-
-  Ok((kept, moved))
+/// What a run of the rules over a folder did: how many messages it moved and how many it labelled.
+#[derive(Debug, Default)]
+pub struct RulesRun {
+  pub moved: u32,
+  pub labelled: u32,
 }
 
-/// A rule run over a folder, for the mail that came before the rule existed: how many messages stayed and
-/// how many were moved.
+/// A run of the rules over a folder, for the mail that came before a rule existed: each message's facts read,
+/// its plan made and carried out.
 pub async fn run_rules_over_folder(
   pool: &SqlitePool,
   session: &MailSession,
   account: &str,
   folder: &str,
-) -> Result<(usize, usize), MailFault> {
+) -> Result<RulesRun, MailFault> {
+  let (rules, spam_senders) = rule_context(pool, account).await?;
   let mut connection = session.folder(folder).await?;
   let done = async {
     let uids = uid_search(connection.session(), "ALL").await?;
-    let (kept, moved) = run_rules_in_selected(&mut connection, pool, account, &uids).await?;
+    let mut run = RulesRun::default();
 
-    Ok((kept.len(), moved.len()))
+    if uids.is_empty() {
+      return Ok(run);
+    }
+
+    let mut fetched = uid_fetch(connection.session(), &uids, "(UID BODY.PEEK[HEADER])").await?;
+
+    fetched.sort_by_key(|fetch| fetch.uid);
+
+    for fetch in &fetched {
+      let Some(uid) = fetch.uid else {
+        continue;
+      };
+      let plan = plan_rules(&rules, &spam_senders, &message_facts(fetch.header()));
+
+      if plan.flags.is_empty() && plan.destination.is_none() {
+        continue;
+      }
+
+      if plan.flags.iter().any(|flag| label_id_of(flag).is_some()) {
+        run.labelled += 1;
+      }
+
+      if apply_plan(&mut connection, uid, &plan).await? {
+        run.moved += 1;
+      }
+    }
+
+    Ok(run)
   }
   .await;
 
   connection.settle(done)
 }
 
-/// The account's rules, in their order.
+/// The account's rules, in their order, each at its place in it from 1.
 pub async fn list_rules(pool: &SqlitePool, account: &str) -> Result<Vec<MailRule>, MailFault> {
-  let rows: Vec<(i64, i64, i64, String, String, String)> = sqlx::query_as(
-    "SELECT id, position, enabled, match, conditions, actions FROM rules WHERE account = ? ORDER BY position, id",
+  let rows: Vec<(i64, i64, String, String, String)> = sqlx::query_as(
+    "SELECT id, enabled, match, conditions, actions FROM rules WHERE account = ? ORDER BY position, id",
   )
   .bind(account)
   .fetch_all(pool)
@@ -334,10 +314,11 @@ pub async fn list_rules(pool: &SqlitePool, account: &str) -> Result<Vec<MailRule
 
   rows
     .into_iter()
-    .map(|(id, position, enabled, matching, conditions, actions)| {
+    .enumerate()
+    .map(|(index, (id, enabled, matching, conditions, actions))| {
       Ok(MailRule {
         id,
-        position,
+        position: index as i64 + 1,
         rule: RuleDraft {
           enabled: enabled == 1,
           matching: if matching == "all" { RuleMatch::All } else { RuleMatch::Any },
@@ -349,85 +330,56 @@ pub async fn list_rules(pool: &SqlitePool, account: &str) -> Result<Vec<MailRule
     .collect()
 }
 
-fn refused(code: &'static str, error: &str) -> MailFault {
-  MailFault::asked(code, error)
-}
-
-/// A rule as the screen sent it, checked: every condition complete, every action one the engine knows.
-pub fn checked_rule(value: &Value) -> Result<RuleDraft, MailFault> {
-  let matching = match value.get("match").and_then(Value::as_str) {
-    Some("all") => RuleMatch::All,
-    Some("any") => RuleMatch::Any,
-    _ => return Err(refused("bad_rule_match", "the match is neither all nor any")),
-  };
-  let empty = Vec::new();
-  let conditions = value.get("conditions").and_then(Value::as_array).unwrap_or(&empty);
-  let actions = value.get("actions").and_then(Value::as_array).unwrap_or(&empty);
-
-  if conditions.is_empty() || actions.is_empty() {
-    return Err(refused("rule_empty", "a rule has no condition or no action"));
+/// A rule's match and actions, checked: at least one of each, every condition complete, every action naming
+/// what it acts with.
+pub fn checked_rule(
+  matching: &RuleMatching,
+  actions: &[RuleAction],
+  on: bool,
+) -> Result<RuleDraft, MailFault> {
+  if matching.conditions.is_empty() || actions.is_empty() {
+    return Err(Asked::bad_request("a rule has no condition or no action").into());
   }
 
-  let conditions = conditions
+  let conditions = matching
+    .conditions
     .iter()
     .map(|condition| {
-      let field = condition
-        .get("field")
-        .and_then(|field| serde_json::from_value::<RuleField>(field.clone()).ok());
-      let contains =
-        condition.get("contains").and_then(Value::as_str).filter(|text| !text.trim().is_empty());
-      let (Some(field), Some(contains)) = (field, contains) else {
-        return Err(refused(
-          "bad_condition",
-          "a condition's field is none of the kinds, or it contains nothing",
-        ));
-      };
-      let header = condition.get("header").and_then(Value::as_str).map(str::to_owned);
+      if condition.contains.trim().is_empty() {
+        return Err(Asked::bad_request("a condition contains nothing"));
+      }
 
-      if field == RuleField::Header && header.as_deref().unwrap_or("").trim().is_empty() {
-        return Err(refused("header_name_needed", "a header condition names no header"));
+      let header = condition.header.as_deref().map(str::trim).filter(|header| !header.is_empty());
+
+      if condition.field == RuleField::Header && header.is_none() {
+        return Err(Asked::bad_request("a header condition names no header"));
       }
 
       Ok(RuleCondition {
-        field,
-        header,
-        contains: contains.to_owned(),
+        field: condition.field,
+        header: if condition.field == RuleField::Header { header.map(str::to_owned) } else { None },
+        contains: condition.contains.clone(),
       })
     })
     .collect::<Result<Vec<_>, _>>()?;
-  let actions = actions
-    .iter()
-    .map(|action| {
-      let target = |name: &str| {
-        action
-          .get(name)
-          .and_then(Value::as_str)
-          .filter(|target| !target.is_empty())
-          .map(str::to_owned)
-      };
-      let needed = || refused("rule_target_needed", "a label action names no label, or a move no folder");
 
-      match action.get("kind").and_then(Value::as_str) {
-        Some("label") => Ok(RuleAction::Label {
-          label: target("label").ok_or_else(needed)?,
-        }),
-        Some("star") => Ok(RuleAction::Star),
-        Some("read") => Ok(RuleAction::Read),
-        Some("move") => Ok(RuleAction::Move {
-          folder: target("folder").ok_or_else(needed)?,
-        }),
-        Some("spam") => Ok(RuleAction::Spam),
-        Some("trash") => Ok(RuleAction::Trash),
-        _ => Err(refused("bad_rule_action", "an action is none of the kinds")),
-      }
-    })
-    .collect::<Result<Vec<_>, _>>()?;
+  for action in actions {
+    let named = match action {
+      RuleAction::Label { label_id } => !label_id.is_empty(),
+      RuleAction::Move { folder_name } => !folder_name.is_empty(),
+      _ => true,
+    };
+
+    if !named {
+      return Err(Asked::bad_request("a label action names no label, or a move no folder").into());
+    }
+  }
 
   Ok(RuleDraft {
-    enabled: value.get("enabled") != Some(&Value::Bool(false)),
-    matching,
+    enabled: on,
+    matching: matching.kind,
     conditions,
-    actions,
+    actions: actions.to_vec(),
   })
 }
 
@@ -438,14 +390,33 @@ fn matching_name(matching: RuleMatch) -> &'static str {
   }
 }
 
-/// A new rule, placed after the others.
-pub async fn create_rule(pool: &SqlitePool, account: &str, value: &Value) -> Result<MailRule, MailFault> {
-  let rule = checked_rule(value)?;
-  let top: Option<i64> = sqlx::query_scalar("SELECT MAX(position) FROM rules WHERE account = ?")
+/// Writes every rule of the account at its place in the order given.
+async fn write_rules(pool: &SqlitePool, account: &str, rules: &[MailRule]) -> Result<(), MailFault> {
+  let mut transaction = pool.begin().await?;
+
+  for (index, rule) in rules.iter().enumerate() {
+    sqlx::query(
+      "UPDATE rules SET position = ?, enabled = ?, match = ?, conditions = ?, actions = ? WHERE account = ? AND id = ?",
+    )
+    .bind(index as i64 + 1)
+    .bind(i64::from(rule.rule.enabled))
+    .bind(matching_name(rule.rule.matching))
+    .bind(serde_json::to_string(&rule.rule.conditions).map_err(MailFault::server)?)
+    .bind(serde_json::to_string(&rule.rule.actions).map_err(MailFault::server)?)
     .bind(account)
-    .fetch_one(pool)
+    .bind(rule.id)
+    .execute(&mut *transaction)
     .await?;
-  let position = top.unwrap_or(-1) + 1;
+  }
+
+  transaction.commit().await?;
+
+  Ok(())
+}
+
+/// A new rule, placed after the others.
+pub async fn create_rule(pool: &SqlitePool, account: &str, rule: RuleDraft) -> Result<MailRule, MailFault> {
+  let position = list_rules(pool, account).await?.len() as i64 + 1;
   let id: i64 = sqlx::query_scalar(
     "INSERT INTO rules (account, position, enabled, match, conditions, actions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
   )
@@ -462,64 +433,50 @@ pub async fn create_rule(pool: &SqlitePool, account: &str, value: &Value) -> Res
   Ok(MailRule { id, position, rule })
 }
 
-/// A rule written again: its conditions, its actions, on or off.
+/// A rule changed: the fields the patch names, and its place among the others, which close up around it; the
+/// rule as it now stands.
 pub async fn update_rule(
   pool: &SqlitePool,
   account: &str,
   id: i64,
-  value: &Value,
-) -> Result<(), MailFault> {
-  let rule = checked_rule(value)?;
-  let changed = sqlx::query(
-    "UPDATE rules SET enabled = ?, match = ?, conditions = ?, actions = ? WHERE account = ? AND id = ?",
-  )
-  .bind(i64::from(rule.enabled))
-  .bind(matching_name(rule.matching))
-  .bind(serde_json::to_string(&rule.conditions).map_err(MailFault::server)?)
-  .bind(serde_json::to_string(&rule.actions).map_err(MailFault::server)?)
-  .bind(account)
-  .bind(id)
-  .execute(pool)
-  .await?;
+  patch: &RulePatch,
+) -> Result<MailRule, MailFault> {
+  let mut rules = list_rules(pool, account).await?;
+  let Some(at) = rules.iter().position(|rule| rule.id == id) else {
+    return Err(Asked::not_found("no rule of the account has that id").into());
+  };
+  let mut rule = rules.remove(at);
+  let matching = patch.matching.clone().unwrap_or_else(|| RuleMatching {
+    kind: rule.rule.matching,
+    conditions: rule.rule.conditions.clone(),
+  });
+  let actions = patch.actions.clone().unwrap_or_else(|| rule.rule.actions.clone());
 
-  if changed.rows_affected() == 0 {
-    return Err(refused("rule_not_found", "no rule of the account has that id"));
-  }
+  rule.rule = checked_rule(&matching, &actions, patch.on.unwrap_or(rule.rule.enabled))?;
 
-  Ok(())
+  let place = patch.position.map_or(at, |position| (position.max(1) as usize - 1).min(rules.len()));
+
+  rules.insert(place, rule);
+  write_rules(pool, account, &rules).await?;
+
+  let mut rule = rules.swap_remove(place);
+
+  rule.position = place as i64 + 1;
+
+  Ok(rule)
 }
 
 /// A rule deleted.
 pub async fn delete_rule(pool: &SqlitePool, account: &str, id: i64) -> Result<(), MailFault> {
-  sqlx::query("DELETE FROM rules WHERE account = ? AND id = ?")
+  let deleted = sqlx::query("DELETE FROM rules WHERE account = ? AND id = ?")
     .bind(account)
     .bind(id)
     .execute(pool)
     .await?;
 
-  Ok(())
-}
-
-/// Puts the rules in the order given; rules left out keep their places after them.
-pub async fn order_rules(pool: &SqlitePool, account: &str, ids: &[i64]) -> Result<(), MailFault> {
-  let rest: Vec<i64> = list_rules(pool, account)
-    .await?
-    .into_iter()
-    .map(|rule| rule.id)
-    .filter(|id| !ids.contains(id))
-    .collect();
-  let mut transaction = pool.begin().await?;
-
-  for (position, id) in ids.iter().chain(&rest).enumerate() {
-    sqlx::query("UPDATE rules SET position = ? WHERE account = ? AND id = ?")
-      .bind(position as i64)
-      .bind(account)
-      .bind(id)
-      .execute(&mut *transaction)
-      .await?;
+  if deleted.rows_affected() == 0 {
+    return Err(Asked::not_found("no rule of the account has that id").into());
   }
-
-  transaction.commit().await?;
 
   Ok(())
 }
@@ -534,48 +491,42 @@ pub async fn list_spam_senders(pool: &SqlitePool, account: &str) -> Result<Vec<S
   )
 }
 
-/// Whether a text has the shape `<local>@<domain>`, neither part holding `@` or a space.
-fn address_shaped(address: &str) -> bool {
-  let plain = |part: &str| !part.is_empty() && !part.chars().any(|c| c == '@' || c.is_whitespace());
-
-  address.split_once('@').is_some_and(|(local, domain)| plain(local) && plain(domain))
-}
-
-/// Senders whose mail always goes to spam; a text that is not an address is passed over.
-pub async fn add_spam_senders(
+/// A sender whose mail always goes to spam, kept in lower case; a text that is not an address is refused.
+/// Answers whether it was not one already.
+pub async fn add_spam_sender(
   pool: &SqlitePool,
   account: &str,
-  addresses: &[String],
-) -> Result<(), MailFault> {
-  let mut transaction = pool.begin().await?;
+  address: &str,
+) -> Result<(String, bool), MailFault> {
+  let clean = address.trim().to_lowercase();
 
-  for address in addresses {
-    let clean = address.trim().to_lowercase();
-
-    if address_shaped(&clean) {
-      sqlx::query(
-        "INSERT INTO spam_senders (account, address, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-      )
-      .bind(account)
-      .bind(&clean)
-      .bind(chrono::Utc::now().timestamp_millis())
-      .execute(&mut *transaction)
-      .await?;
-    }
+  if !address_shaped(&clean) {
+    return Err(Asked::bad_request("the sender is not an address").into());
   }
 
-  transaction.commit().await?;
+  let added = sqlx::query(
+    "INSERT INTO spam_senders (account, address, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+  )
+  .bind(account)
+  .bind(&clean)
+  .bind(chrono::Utc::now().timestamp_millis())
+  .execute(pool)
+  .await?;
 
-  Ok(())
+  Ok((clean, added.rows_affected() > 0))
 }
 
 /// A sender taken off the always-spam list.
 pub async fn remove_spam_sender(pool: &SqlitePool, account: &str, address: &str) -> Result<(), MailFault> {
-  sqlx::query("DELETE FROM spam_senders WHERE account = ? AND address = ?")
+  let removed = sqlx::query("DELETE FROM spam_senders WHERE account = ? AND address = ?")
     .bind(account)
     .bind(address.trim().to_lowercase())
     .execute(pool)
     .await?;
+
+  if removed.rows_affected() == 0 {
+    return Err(Asked::not_found("the sender is not on the always-spam list").into());
+  }
 
   Ok(())
 }

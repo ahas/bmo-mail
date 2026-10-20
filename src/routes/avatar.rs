@@ -4,12 +4,11 @@ use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 use crate::avatars::avatar_domain;
-use crate::http::{Call, Refused, Route};
+use crate::http::{Answer, Call, NOT_FOUND, Operation, Refused, Route};
 
-/// `GET /api/mail/avatar`: one sender domain's logo (`docs/mail.md`, 「Sender avatars」), fetched by the
-/// service and never by the browser. A domain that publishes none answers with nothing at all, and the
-/// screen draws the sender's initial in its place; that answer is kept by the browser for the hour, so a
-/// list drawn again does not ask for every row it already asked for.
+/// `GET /avatars/{address}`: the logo a sender's domain publishes (`docs/mail.md`, 「Sender avatars」),
+/// fetched by the service and never by a browser. A domain that publishes none is a 404, which a reader keeps
+/// for the hour, so a list drawn again does not ask for every row it already asked for.
 pub struct Avatar;
 
 fn with_headers(mut response: Response, headers: &[(header::HeaderName, &str)]) -> Response {
@@ -24,22 +23,29 @@ fn with_headers(mut response: Response, headers: &[(header::HeaderName, &str)]) 
 
 impl Route for Avatar {
   const METHOD: Method = Method::GET;
-  const PATH: &'static str = "/api/mail/avatar";
+  const PATH: &'static str = "/avatars/{address}";
+  const OPERATION: Operation = Operation {
+    id: "readAvatarsByAddress",
+    summary: "A sender's picture.",
+    tag: "avatars",
+    keys: &[("address", "A mail address, or its domain.")],
+    query: None,
+    body: None,
+    status: 200,
+    answer: Answer::Bytes,
+    codes: &["not-found"],
+  };
 
-  async fn answer(&self, call: Call) -> Result<Response, Refused> {
+  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let standing = call.standing().clone();
-    let asked = call
-      .query()
-      .get("domain")
-      .and_then(|domain| domain.as_str().map(str::to_owned))
-      .unwrap_or_default();
+    let asked = call.key("address").await?;
     let found = match avatar_domain(&asked) {
       Some(domain) => standing.avatars.sender_avatar(standing.store.pool().clone(), domain).await,
       None => None,
     };
     let Some(found) = found else {
       return Ok(with_headers(
-        StatusCode::NO_CONTENT.into_response(),
+        Refused::new(StatusCode::NOT_FOUND, NOT_FOUND, "the domain publishes no logo").into_response(),
         &[(header::CACHE_CONTROL, "private, max-age=3600")],
       ));
     };

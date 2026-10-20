@@ -12,12 +12,12 @@
     "needs": [
       "service/plumbing"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   },
   {
     "id": "mail/reading",
     "title": "Reading and changing mail",
-    "what": "Mail read over IMAP: folders and their roles, lists and threads, message parts and bodies, the search box, flags, moves and deletion, and the inbox summary, in src/imap/ and the list and change routes.",
+    "what": "Mail read over IMAP: folders and their roles, pages by time window, threads, parts and bodies, the search box, a message's flags, labels and folder set whole, and deletion, in src/imap/ and the message and folder routes.",
     "files": [
       "src/imap/mod.rs",
       "src/imap/session.rs",
@@ -29,10 +29,10 @@
       "src/imap/search.rs",
       "src/imap/views.rs",
       "src/imap/moved_in.rs",
-      "src/routes/lists.rs",
-      "src/routes/changes.rs",
       "src/routes/downloads.rs",
-      "docs/mail.md"
+      "docs/mail.md",
+      "src/routes/messages.rs",
+      "src/routes/folders.rs"
     ],
     "symbols": [],
     "aliases": [
@@ -42,12 +42,12 @@
       "service/plumbing",
       "mail/labels"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   },
   {
     "id": "mail/filters",
     "title": "Filter rules and spam senders",
-    "what": "An account's filter rules, checked, ordered, planned over a message's headers and carried out by flag and move, and its always-spam senders, in src/rules.rs and src/routes/filters.rs.",
+    "what": "An account's filter rules, checked, ordered by position, planned over a message's headers and carried out by flag and move, their runs over a folder, and its always-spam senders, in src/rules.rs and src/routes/filters.rs.",
     "files": [
       "src/rules.rs",
       "src/routes/filters.rs"
@@ -59,12 +59,12 @@
       "mail/reading",
       "mail/labels"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   },
   {
     "id": "mail/writing",
     "title": "Writing and sending mail",
-    "what": "The composer opened new, as a reply or a forward, drafts saved and reopened, uploads staged, sending held for undo send then submitted, read receipts, known addresses, the account's settings and the service's own words, in src/writing/.",
+    "what": "Drafts started, changed and saved on the server under the Message-ID they keep, files attached, sends that wait out the account's undo span then go, read receipts, known addresses, the settings and the service's own words, in src/writing/.",
     "files": [
       "src/writing/mod.rs",
       "src/writing/compose.rs",
@@ -86,7 +86,7 @@
       "service/plumbing",
       "mail/reading"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   },
   {
     "id": "mail/avatars",
@@ -105,16 +105,15 @@
     "needs": [
       "service/plumbing"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   },
   {
     "id": "mail/watcher",
     "title": "Inbox watcher",
-    "what": "One IMAP connection per account standing in IDLE on the inbox, running the rules over new mail and saying on the event stream what changed and what arrived with its push; the accounts file followed, in src/watcher/.",
+    "what": "One IMAP connection per account standing in IDLE on the inbox, running the rules over new mail and publishing message.created and folder.changed; the accounts file followed, in src/watcher/.",
     "files": [
       "src/watcher/mod.rs",
-      "src/watcher/arrivals.rs",
-      "src/watcher/notice.rs"
+      "src/announcements.rs"
     ],
     "symbols": [],
     "aliases": [],
@@ -124,6 +123,6 @@
       "mail/filters",
       "mail/writing"
     ],
-    "base": "ec7a678ddb0547969ad0b09bfee789d1723ccd15"
+    "base": "879e5e98f95feddf4b719aa260e554e70344c55b"
   }
 ]

@@ -1,42 +1,75 @@
-//! Labels (`docs/api.md`, 「Labels」).
+//! An account's labels (`docs/api.md`, 「Labels」).
 
-use axum::http::Method;
+use axum::http::{Method, StatusCode};
 use axum::response::Response;
-use serde_json::{Value, json};
 
-use crate::http::{Call, Refused, Route};
-use crate::labels::{create_label, delete_label, update_label};
-use crate::routes::requests::{color_of, configured, with_mail_account};
+use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
+use crate::labels::{create_label, delete_label, list_labels, update_label};
+use crate::routes::requests::{colour_of, with_account};
+use crate::wire::{Label, LabelPatch, ListQuery, NewLabel, Page};
 
-/// A field read as text the way the screen's old server read it: a string as it is, nothing as empty, and
-/// any other value as its own text.
-fn text_of(value: Option<&Value>) -> String {
-  match value {
-    None | Some(Value::Null) => String::new(),
-    Some(Value::String(text)) => text.clone(),
-    Some(other) => other.to_string(),
+const ACCOUNT: (&str, &str) = ("accountName", "The account's name: its address's local part.");
+const LABEL: (&str, &str) = ("labelId", "The label's id.");
+
+/// `GET /accounts/{accountName}/labels`.
+pub struct Labels;
+
+impl Route for Labels {
+  const METHOD: Method = Method::GET;
+  const PATH: &'static str = "/accounts/{accountName}/labels";
+  const OPERATION: Operation = Operation {
+    id: "listAccountsLabelsByAccountName",
+    summary: "An account's labels in their order.",
+    tag: "accounts",
+    keys: &[ACCOUNT],
+    query: Some(inline::<ListQuery>),
+    body: None,
+    status: 200,
+    answer: Answer::Json(schema::<Page<Label>>),
+    codes: &["not-found"],
+  };
+
+  async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
+    let query: ListQuery = call.query()?;
+
+    with_account(&mut call, |mail| async move {
+      let labels = list_labels(mail.standing.store.pool(), &mail.account.address).await?;
+
+      Ok(answer(StatusCode::OK, &Page::by_position(labels, |label| label.position, &query)))
+    })
+    .await
   }
 }
 
-/// `POST /api/mail/{account}/labels`: a new label, placed after the others.
+crate::route!(Labels);
+
+/// `POST /accounts/{accountName}/labels`.
 pub struct CreateLabel;
 
 impl Route for CreateLabel {
   const METHOD: Method = Method::POST;
-  const PATH: &'static str = "/api/mail/{account}/labels";
+  const PATH: &'static str = "/accounts/{accountName}/labels";
+  const OPERATION: Operation = Operation {
+    id: "createAccountsLabelsByAccountName",
+    summary: "Make a label, placed after the others.",
+    tag: "accounts",
+    keys: &[ACCOUNT],
+    query: None,
+    body: Some(schema::<NewLabel>),
+    status: 201,
+    answer: Answer::Json(schema::<Label>),
+    codes: &["not-found", "conflict", "too-many-labels"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let key = call.path_param("account").await?;
-    let body = call.body().await;
-    let standing = call.standing().clone();
+    let new: NewLabel = call.body().await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let color = color_of(body.get("color"))?;
+    with_account(&mut call, |mail| async move {
+      let colour = colour_of(&new.colour)?;
       let label =
-        create_label(mail.standing.store.pool(), &mail.account.address, &text_of(body.get("name")), color)
-          .await?;
+        create_label(mail.standing.store.pool(), &mail.account.address, &new.name, colour).await?;
 
-      Ok(configured(json!({ "label": label })))
+      Ok(answer(StatusCode::CREATED, &label))
     })
     .await
   }
@@ -44,30 +77,36 @@ impl Route for CreateLabel {
 
 crate::route!(CreateLabel);
 
-/// `PATCH /api/mail/{account}/labels/{id}`: a label renamed or given another colour.
+/// `PATCH /accounts/{accountName}/labels/{labelId}`.
 pub struct ChangeLabel;
 
 impl Route for ChangeLabel {
   const METHOD: Method = Method::PATCH;
-  const PATH: &'static str = "/api/mail/{account}/labels/{id}";
+  const PATH: &'static str = "/accounts/{accountName}/labels/{labelId}";
+  const OPERATION: Operation = Operation {
+    id: "changeAccountsLabelsByAccountNameLabelId",
+    summary: "Rename, recolour or move a label.",
+    tag: "accounts",
+    keys: &[ACCOUNT, LABEL],
+    query: None,
+    body: Some(schema::<LabelPatch>),
+    status: 200,
+    answer: Answer::Json(schema::<Label>),
+    codes: &["not-found", "conflict"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let mut params = call.path_params().await?;
-    let key = params.remove("account");
-    let id = params.remove("id").unwrap_or_default();
-    let body = call.body().await;
-    let standing = call.standing().clone();
+    let id = call.key("labelId").await?;
+    let patch: LabelPatch = call.body().await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
-      let name = body.get("name").and_then(Value::as_str);
-      let color = match body.get("color") {
-        None => None,
-        Some(color) => Some(color_of(Some(color))?),
-      };
+    with_account(&mut call, |mail| async move {
+      let colour = patch.colour.as_deref().map(colour_of).transpose()?;
+      let pool = mail.standing.store.pool();
+      let label =
+        update_label(pool, &mail.account.address, &id, patch.name.as_deref(), colour, patch.position)
+          .await?;
 
-      update_label(mail.standing.store.pool(), &mail.account.address, &id, name, color).await?;
-
-      Ok(configured(json!({})))
+      Ok(answer(StatusCode::OK, &label))
     })
     .await
   }
@@ -75,24 +114,31 @@ impl Route for ChangeLabel {
 
 crate::route!(ChangeLabel);
 
-/// `DELETE /api/mail/{account}/labels/{id}`: a label deleted, its keyword taken off every message that
-/// carried it.
+/// `DELETE /accounts/{accountName}/labels/{labelId}`.
 pub struct DeleteLabel;
 
 impl Route for DeleteLabel {
   const METHOD: Method = Method::DELETE;
-  const PATH: &'static str = "/api/mail/{account}/labels/{id}";
+  const PATH: &'static str = "/accounts/{accountName}/labels/{labelId}";
+  const OPERATION: Operation = Operation {
+    id: "deleteAccountsLabelsByAccountNameLabelId",
+    summary: "Remove a label, its keyword taken off every message that carried it.",
+    tag: "accounts",
+    keys: &[ACCOUNT, LABEL],
+    query: None,
+    body: None,
+    status: 204,
+    answer: Answer::Nothing,
+    codes: &["not-found"],
+  };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
-    let mut params = call.path_params().await?;
-    let key = params.remove("account");
-    let id = params.remove("id").unwrap_or_default();
-    let standing = call.standing().clone();
+    let id = call.key("labelId").await?;
 
-    with_mail_account(&standing, key.as_deref(), |mail| async move {
+    with_account(&mut call, |mail| async move {
       delete_label(mail.standing.store.pool(), &mail.session, &mail.account.address, &id).await?;
 
-      Ok(configured(json!({})))
+      Ok(nothing())
     })
     .await
   }

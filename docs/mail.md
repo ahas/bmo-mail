@@ -1,15 +1,17 @@
 # Mail
 
 The mail service and its screen: the mailboxes the accounts file names, read, written and watched
-through this service's routes and through the console screen its plugin bundle carries, laid out the
-way Gmail lays out its web client. This document is the canonical statement of what the service and
-the screen do, where each piece of state lives and what belongs to the mail server rather than to this
-repository. How the service is asked — its routes, events, store and settings — is `docs/api.md`.
+through this service's routes, through the MCP server a coding harness takes it by, and through the
+console screen its plugin bundle carries, laid out the way Gmail lays out its web client. This document
+is the canonical statement of what the service and the screen do, where each piece of state lives and
+what belongs to the mail server rather than to this repository. How the service is asked — its routes,
+events, client, harness plugin, store and settings — is `docs/api.md`.
 
 ```mermaid
 flowchart TD
-  Browser[browser: the mail screen] --> Console[console: sign-in, hands on /api/mail]
-  Console --> Service[bmo-mail]
+  Harness[a coding harness] -->|bmo-mail mcp| Service[bmo-mail]
+  Browser[browser: the mail screen] --> Console[a console: sign-in and relay]
+  Console --> Service
   Service --> IMAP[mail server: IMAP]
   Service --> SMTP[mail server: submission]
   Service --> Store[the service's store]
@@ -25,15 +27,15 @@ flowchart TD
     folder the mailbox holds, and search.
   - Conversations grouped into threads, read and unread state, stars, labels, selecting many and
     acting on all of them at once, moving between folders, permanent deletion from trash and spam.
-  - A list ordered by any of the columns its rows show, either way round, with the column widths
-    dragged; and a filter that holds the list to what has not been read.
+  - A list newest first, with the column widths dragged; and a filter that holds the list to what
+    has not been read.
   - The sender's own logo beside their name, found where their domain publishes it.
   - Writing, replying, replying to all, forwarding, attachments both ways, drafts saved as the
     writing goes, and a short window to take a sent message back (undo send).
   - A signature per account, read receipts both ways, filter rules, spam reported and un-reported,
     a sender always sent to spam, address completion from the addresses already used.
-  - New mail refreshing the open list, a notice on whatever console page is open, and a browser
-    push on every device that receives the mail kind.
+  - New mail refreshing the open list, and a notice on whatever console page is open, raised by the
+    console from the kind the bundle declares.
   - A small set of desktop keyboard shortcuts.
 - **Left to the mail server (its operator's work, outside this repository):**
   - Judging spam by content. The service files mail into spam by its own rules and by a spam
@@ -43,7 +45,8 @@ flowchart TD
   - DKIM signing, one SPF record, a DMARC record.
 - **Not built:**
   - Snooze and scheduled send. Both need a clock that sends or moves mail later, and a message
-    must never depend on a process staying up past the moment it was written.
+    must never depend on a process staying up past the moment it was written: a send waits at most
+    the account's undo span.
   - Gmail's category tabs and priority inbox. They need a trained classifier; a few personal
     mailboxes have no volume that would train one.
   - An archive action. The mailboxes have no archive folder, and the folder set is the one above.
@@ -108,15 +111,17 @@ flowchart TD
   - Labels: the keyword, the name, the colour, the order.
   - Filter rules: an ordered list of conditions and actions, each rule on or off.
   - Settings: the signature as the markup it is written in, whether read receipts are asked by
-    default, whether a message's outside pictures are shown as it opens, and the senders always
-    sent to spam.
+    default, whether a message's outside pictures are shown as it opens, how long a send waits
+    before it goes, and the senders always sent to spam.
   - The watcher's high-water mark: the folder's UID validity and the highest UID it has handled.
   - Known addresses: every address written to or received from, with its name and when it was
     last used, for completion.
   - Sender logos: one row per sender domain holding the picture found there or nothing found, and
     when the looking was done.
-- **In the staging folder** the setting `staging.dir` names: uploaded attachments until the message
-  carrying them is saved as a draft or sent; files older than a day are swept every hour.
+- **In the staging folder** the setting `staging.dir` names: a file posted to a draft until the draft
+  carrying it is saved; files older than a day are swept every hour.
+- **In the store's event window:** the events of the last day, so a reader that was away resumes
+  where it stopped.
 - **In the browser the reading was done in:** how wide the list's sender and date columns were
   dragged. Everything else about how a list stands is in the address instead, so it travels with a
   link.
@@ -139,10 +144,10 @@ flowchart TD
   1. Runs the filter rules and the always-spam senders over it.
   2. Moves the mark past it, so a message is handled once even across restarts.
   3. Records the sender in the known addresses.
-- **Then, once for all it took:**
-  1. Says on the event stream that the account changed.
-  2. Says on the event stream which messages arrived: those still in the inbox, unread and not from
-     the account itself, with the notification they make (「Push」).
+- **Then, once for all it took:** it says on the event stream which messages arrived, each still in
+  the inbox after the rules, as `message.created`, and that the inbox's counts moved, as
+  `folder.changed` (`docs/api.md`, 「The event stream」). Which of them a reader shows as new mail —
+  unread, not from the account itself — is the reader's to judge.
 - **A message the service itself moved into the inbox is not new mail** — not spam, or a move to
   the inbox. The service notes where each such message landed, and the watcher waits for a move in
   progress to be noted before it handles anything; it moves the mark past a noted message without
@@ -154,71 +159,55 @@ flowchart TD
   folder the server rebuilt — sets it at the newest message and handles nothing older.
 - **The accounts file is read again every minute;** when it changed, the watchers stop and start
   again on what it now says.
-- A flag or an expunge the server reports on the inbox only says that the account changed.
+- A flag or an expunge the server reports on the inbox only says that the inbox changed, as
+  `folder.changed`.
 
 ## Reaching the open tabs
 
-- **The service says what changed on its event stream** (`docs/api.md`, 「The event stream」), and
-  the console relays it into each tab's one event stream as its mail word. A mail word carries no
-  cursor, so it never moves the tab's place in the console's own stream.
-- The word says only which account changed. The tab then asks the mail summary — per account, the
-  unread count of the inbox, the newest message and the newest unread ones, or that the account's
-  server did not answer — and compares it with what it last knew. The summary marks a message the
-  service moved into the inbox, and the tab raises no notice for it.
-- **Nothing is lost to a dropped stream.** The tab asks the summary when a screen holding it mounts
-  and each time the stream opens, so mail that arrived while it was closed is noticed then. A screen
-  that listens only for mail holds the stream open on its own.
-- **What the tab does with it:**
-  - The mail screen open on that account refreshes its list and its folder marks, and shows no
-    notice.
-  - Any other page — the mail screen on another account included — raises a notice on the console's
-    island naming the account, the sender and the subject, and pressing any of it opens the thread.
-    Several messages at once make one notice per account with their number, and a second notice for
-    an account replaces the first where it stands.
-  - The sidebar's mail entry carries the unread mark while any inbox holds unread mail.
+- **The service says what changed on its event stream** (`docs/api.md`, 「The event stream」), and a
+  console relays the stream to the bundle's screens as bmo-ui's console plugin contract has it. Each
+  event is numbered, so a screen that reconnects resumes after the last one it read, and one that was
+  away past the stream's window reads the collections again.
+- **What a screen does with it:**
+  - The mail screen open on that account refreshes its list and its folder marks on `message.*` and
+    `folder.changed`, and shows no notice.
+  - The mail nav marks each account whose inbox holds unread mail, read from the summary when the
+    screen mounts and again on each `folder.changed`.
+- **Notices on any other page** are the console's: the bundle declares `message.created` among its
+  notice kinds and gives it words in its pack, and a console that raises notices raises one for each
+  such event on a page other than the mail screen on that account. A message from the account itself,
+  or one already read, is passed over. Pressing the notice opens the thread.
 
 ## Push
 
-- **Mail is a notification kind of its own,** `mail`, received by a device unless it was turned off
-  for that device, devices subscribed before the kind existed included. The console holds the kinds
-  and the devices and rings them.
-- One notification per account per arrival: the sender and the subject of the newest message, and
-  the count when more came at once. Pressing it opens that thread, and a console already showing that
-  place is not rung.
-- The notification carries the address, the sender's name and the subject. Nothing of the body.
-- **The service writes the notification** in its own words (`docs/api.md`, 「The service's own
-  words」) and hands it on the event stream with the arrival; ringing it is the console's.
+- **A browser push is the console's to ring,** from the same declared kind: the console holds the
+  devices and their notification kinds, and the bundle's pack the words. The service writes no
+  notification; an event carries the message without its bodies.
 
 ## Reading
 
-- **A list** is a page of fifty messages, newest first, shown as the conversations they make up. For
-  a folder the service reads the folder's messages in arrival order; for a view across folders —
-  starred, a label, a search — it searches the inbox, the sent folder, the drafts folder and every
-  other folder except spam and trash, and merges the results by arrival time. The range the
-  toolbar shows counts messages, since counting a view's conversations would read the whole view.
-- **A list stands on one column, one way round and one filter,** and all three are in the address,
-  so a link opens the list as it was being read and Back steps between them. The columns are the
-  ones the rows show: the sender, the subject and the date. The filter holds the list to what has
-  not been read. A change of any of them starts the paging over, since the row that was fiftieth in
-  one order is not the fiftieth in another; a change of folder does not, because how a list is read
-  is not where it is read.
-- **Ordering is the service's own work,** as threading is. Newest or oldest first over one folder
-  is that folder's own order and is read by each message's place in it, which touches only the page
-  asked for. Every other list — ordered by a sender or a subject, held to unread mail, or standing
-  over more than one folder — is a search instead, and a sender or a subject is read from the
-  envelope of every message the view holds before the page is cut out of it. So the list as it
-  stands by default costs one page, and ordering a large folder by a name costs one reading of its
-  envelopes.
-- Names and subjects are compared as the service's language reads them (the setting
-  `wording.language`) rather than by the order of their code points, and two that compare the same
-  fall back to their dates.
-- A conversation takes the place of its first message in that order, and what its row says of it —
-  the date, the senders, the snippet — is read from the newest message of the group whatever the
-  order is.
+- **A list** is a page of fifty messages, newest first by the time each reached its folder, which the
+  screen shows as the conversations they make up. A folder's page is read from that folder; a view
+  across folders — starred, a label, a search — searches the inbox, the sent folder, the drafts
+  folder and every other folder except spam and trash, and merges the results. The range the toolbar
+  shows counts messages, and stands against the folder's total where the view is one folder, since
+  counting a search would read the whole of it.
+- **A list stands on one filter,** held in the address, so a link opens the list as it was being read
+  and Back steps between them: the filter holds the list to what has not been read, which is the
+  search word `is:unread` beside whatever the view asks. A change of it starts the paging over; a
+  change of folder does not, because how a list is read is not where it is read.
+- **A page is read by time, a window of days at a time.** The service asks the server for the
+  messages that reached each folder in a window of days before the page's cursor, widening the window
+  until the page is full or the folder holds nothing older, and reads only the arrival times of what
+  the window found before the page is cut out of it. So a page costs about one page however large the
+  folder is, and a page never ends inside a run of messages of one time, so the next page starts
+  exactly after it.
+- A conversation takes the place of its newest message on the page, and what its row says of it —
+  the date, the senders, the snippet — is read from that message.
 - A conversation whose messages fall on two pages shows on both, each row carrying the messages of
   its own page.
 - **A conversation** is keyed by the first message ID in `References`, else `In-Reply-To`, else
-  the message's own ID. A list groups the page's messages by that key; a thread gathers every
+  the message's own ID. The screen groups the page's messages by that key; a thread gathers every
   message of the key from the inbox, the sent folder and the folder it was opened from.
 - **A message** is read from its body structure: the text and HTML parts are fetched and decoded
   by their charset (`ks_c_5601-1987` read as `euc-kr`, an unknown charset as UTF-8), and the other
@@ -231,7 +220,7 @@ flowchart TD
     to show them for that message. A held image keeps its place in the layout but draws nothing,
     neither a broken-image mark nor its alternative text. The account's settings can say instead
     that a message opens with them already shown, and the bar then never stands.
-  - `cid:` references are pointed at the service's inline-image route, as the console hands it on.
+  - `cid:` references are pointed at the route of the message's part that holds them, as the console hands it on.
   - The result is shown in a frame with no scripts, a content policy that lets images in only from
     the console (and from the web once shown), and links that open a new tab. The frame grows to
     its content's height, so the thread region is the only thing that scrolls.
@@ -356,18 +345,23 @@ flowchart TD
   that message's recipients, as a follow-up. **Forward** prefixes `Fwd:`, heads the quoted original
   with its sender, date, subject and recipients in the service's own words, carries the original's
   attachments, and marks it `$Forwarded`.
-- **Attachments** are uploaded to the staging folder as they are added. A forwarded or
-  draft-held attachment is referred to as a part of a message on the server. The total is capped so
-  the encoded message stays under the server's `SIZE`; a file past that is refused before upload.
+- **A draft stands on the server from its start.** Opening the composer starts the draft, saved in
+  the drafts folder at once under a `Message-ID` it keeps across every save, so the composer, a
+  harness and any other client name the same draft by it.
+- **Attachments** are posted to the draft as they are added: the file waits in the staging folder
+  until the draft carrying it is saved, and from then on it is a part of the saved draft. A
+  forwarded original's attachments are parts of the draft from its start. The total is capped so the
+  encoded message stays under the server's `SIZE`; a file past that is refused.
 - **Drafts are saved as the writing goes** — a few seconds after typing stops, and when the
   composer closes. A save writes the new draft first and deletes the one it replaces afterwards, so
   a failed save never loses the older copy. A reopened draft is parsed back into the composer
   with its attachments.
-- **Sending** saves the draft, then holds the message for ten seconds in the service while a notice
-  on the island offers undo send for exactly that long. Taking it back reopens the draft. After the
-  hold the service sends it over submission, appends the copy to the sent folder read, deletes the
-  draft and records the recipients as known addresses. A service that stops during the hold leaves
-  the draft in drafts, never a half-sent message.
+- **Sending** saves the draft, then the send waits in the service for the account's undo span, ten
+  seconds until the settings say otherwise, while a notice on the island offers undo send for exactly
+  that long. Taking it back reopens the draft. After the wait the service sends it over submission,
+  appends the copy to the sent folder read, deletes the draft and records the recipients as known
+  addresses. A service that stops during the wait leaves the draft in drafts, never a half-sent
+  message.
 
 ## Read receipts
 
@@ -383,9 +377,9 @@ flowchart TD
 - **A filter rule** is conditions joined by all or any — sender, recipient, subject containing a
   text, or a header holding a value — and actions: add a label, star, mark read, move to a folder,
   move to spam, move to trash. Rules run in order, and one that moves the message ends the run.
-- **A spam verdict written on the server** is a condition like any other; the settings offer a
-  ready rule for `X-Spam-Flag: YES` and `X-Bogosity: Spam`, which is how a filter installed on the
-  server later reaches the screen without a change here.
+- **A spam verdict written on the server** is a condition like any other; the screen's settings
+  offer a ready rule for `X-Spam-Flag: YES` and `X-Bogosity: Spam`, which is how a filter installed on
+  the server later reaches the screen without a change here.
 - **Reporting spam** moves the selection to spam and sets `$Junk`; its dialog can add the senders to
   the always-spam list. **Not spam** moves it back to the inbox and sets `$NotJunk`.
 - A rule can be run over the folder that is open, for the mail that came before it existed.
@@ -420,10 +414,10 @@ flowchart TD
 - **The list toolbar** spans the list edge to edge, groups divided by dividers:
   - Selection: the select-all checkbox with its menu (all, none, read, unread, starred, unstarred),
     refresh, mark all read and unread only, which give their place to the selection's actions while
-    anything is chosen. Mark all read marks every unread message of the view read — the whole
-    folder, label or search, not only the page the list has read — and says how many it marked;
-    what is chosen is read by mark read instead. Unread only is a state the button itself shows,
-    since a list holding only part of what it names must say so wherever it is read.
+    anything is chosen. Mark all read, offered where the view is one folder, marks every unread
+    message of the folder read — the whole folder, not only the page the list has read; what is
+    chosen is read by mark read instead. Unread only is a state the button itself shows, since a
+    list holding only part of what it names must say so wherever it is read.
   - With a selection: state (read or unread, star), place (trash, report spam or not spam, move)
     and labels. Each group is three icons or fewer with tooltips; move opens the console's menu of
     the places mail can go, and labels a popover of checkboxes, both at the button. In trash and
@@ -431,8 +425,8 @@ flowchart TD
     chosen for the next action; a change of place empties it.
   - **The bar gathers by the room it has**, which is this panel's and not the window's: this list
     stands beside a thread and is often narrower than a phone on a wide screen. Short of that room
-    the bar keeps the select-all checkbox and its menu, and folds refresh, mark all read, unread
-    only and sort into one more menu; with a selection it keeps trash and mark read and folds star,
+    the bar keeps the select-all checkbox and its menu, and folds refresh, mark all read and unread
+    only into one more menu; with a selection it keeps trash and mark read and folds star,
     spam, move and labels into the same one menu a phone's row carries. The reading is bmo-ui's
     action bar's, so the bar takes the same shape wherever it ends up this narrow.
   - At the right end: the range shown (`1–50 / 1,213`, tabular) with previous and next. In a list
@@ -454,14 +448,10 @@ flowchart TD
   phone's two lines. Beside the thread at the default split this is a desktop window about
   1,900 pixels wide, and any narrower one that folds the sidebar or drags the list wider.
 - **The column header** stands over a list whose rows are one line and sticks to the top of it; over
-  rows that stack it is not drawn at all, since there is no column for a name to stand over.
-  Pressing a column orders the list by it, and pressing the one it already stands on turns that
-  column round; a date opens at its newest and a name or a subject at its first. The trailing edge
-  of the sender column and the leading edge of the date column are dragged to set those widths, and
-  what they were dragged to is kept in that browser; an edge pressed twice puts its column back to
-  what the rows ask for.
-- Where there is no header — a phone, or a list too narrow for one line — the toolbar's sort offers
-  the same three columns and the same turning round.
+  rows that stack it is not drawn at all, since there is no column for a name to stand over. The
+  list stands newest first and the header orders nothing. The trailing edge of the sender column and
+  the leading edge of the date column are dragged to set those widths, and what they were dragged to
+  is kept in that browser; an edge pressed twice puts its column back to what the rows ask for.
 - **The composer** is a panel docked at the bottom right of the mail screen, with minimise, maximise
   and close in its header; maximise makes it a centred large modal. Its footer holds the attachment,
   read-receipt and discard icons and the send button at the right. A half-written message is not

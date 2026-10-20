@@ -1,10 +1,11 @@
+import { mailSummary } from "./mail-api";
+
 import type { MailSummary } from "../../shared/mail";
 import type { Ref } from "vue";
 
 // Every mail account's inbox at a glance, kept current for as long as a screen holds it (docs/mail.md,
-// 「Reaching the open tabs」). It is read when the screen mounts, when the stream says an account
-// changed, and each time the stream opens again — mail that came while it was closed was never said
-// on it, so nothing is lost to a dropped stream.
+// 「Reaching the open tabs」): read when the screen mounts, and again whenever the screen hears that a
+// folder's counts moved or the stream had to be opened afresh.
 
 export interface MailSummaryHandle {
   summary: Ref<MailSummary | null>;
@@ -12,7 +13,7 @@ export interface MailSummaryHandle {
 }
 
 // A read in flight takes any further ask with it: one more read follows it, however many asked.
-export function useMailSummary(onRead?: (next: MailSummary, previous: MailSummary | null) => void): MailSummaryHandle {
+export function useMailSummary(): MailSummaryHandle {
   const summary = ref<MailSummary | null>(null);
   let reading: Promise<void> | null = null;
   let again = false;
@@ -22,13 +23,9 @@ export function useMailSummary(onRead?: (next: MailSummary, previous: MailSummar
       again = false;
 
       try {
-        const next = await $fetch<MailSummary>("/api/mail/summary");
-        const previous = summary.value;
-
-        summary.value = next;
-        onRead?.(next, previous);
+        summary.value = await mailSummary();
       } catch {
-        // A summary that could not be read leaves the last one standing; the next word reads again.
+        // A summary that could not be read leaves the last one standing; the next change reads again.
       }
     } while (again);
   }
@@ -48,10 +45,6 @@ export function useMailSummary(onRead?: (next: MailSummary, previous: MailSummar
   }
 
   onMounted(() => {
-    void refresh();
-  });
-
-  useMailEvents(() => {
     void refresh();
   });
 

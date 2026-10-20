@@ -1,13 +1,10 @@
 //! The watchers (`docs/mail.md`, 「Connections and the watcher」): one per account of the accounts file,
 //! each with a connection of its own standing in `IDLE` on the inbox for as long as the service runs. A
 //! watcher takes every message above the high-water mark kept in the store, one at a time — rules first,
-//! then the mark moved past it, then its sender recorded — and then says on the event stream that the
-//! inbox changed and what stayed unread in it. A message the service itself moved into the inbox only has
+//! then the mark moved past it, then its sender recorded — and then says on the event stream which messages
+//! stayed in the inbox and that its counts moved. A message the service itself moved into the inbox only has
 //! the mark moved past it. A changed accounts file is read again within a minute and the watchers follow
 //! it; the staging folder is swept every hour.
-
-pub mod arrivals;
-pub mod notice;
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -17,15 +14,15 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 use crate::accounts::{MailAccount, MailConfig, MailEndpoint};
+use crate::announcements::{MESSAGE_CREATED, folder_now, message_now};
 use crate::http::Standing;
-use crate::imap::conversation::conversation_key;
 use crate::imap::messages::heads;
 use crate::imap::moved_in::{moved_in, moves_settled};
 use crate::imap::session::{Connection, Woke, open};
-use crate::imap::{flag_name, uid_fetch, uid_search};
+use crate::imap::{uid_fetch, uid_search};
+use crate::mail::MailRef;
 use crate::routes::requests::MailFault;
 use crate::rules::{apply_plan, message_facts, plan_rules, rule_context};
-use crate::watcher::arrivals::{ArrivedMessage, MailArrival, announce_arrivals, announce_change};
 use crate::writing::addresses::record_addresses;
 use crate::writing::staging::sweep_staging;
 
@@ -122,6 +119,13 @@ impl Watcher {
     eprintln!("mail watcher {}: {line}", self.account.address);
   }
 
+  /// Says on the event stream that the inbox's counts may have moved.
+  async fn announce_inbox(&self) {
+    let session = self.standing.sessions.session(&self.endpoint, &self.account);
+
+    folder_now(&self.standing, &session, &self.account.key, INBOX).await;
+  }
+
   /// Takes every message above the mark, oldest first, and says what it found.
   async fn handle_new(&self, connection: &mut Connection) -> Result<(), MailFault> {
     let pool = self.standing.store.pool();
@@ -149,8 +153,7 @@ impl Watcher {
     }
 
     let (rules, spam_senders) = rule_context(pool, address).await?;
-    let mut fetched =
-      uid_fetch(connection.session(), &uids, "(UID FLAGS INTERNALDATE BODY.PEEK[HEADER])").await?;
+    let mut fetched = uid_fetch(connection.session(), &uids, "(UID BODY.PEEK[HEADER])").await?;
     let mut arrived = Vec::new();
 
     fetched.sort_by_key(|fetch| fetch.uid);
@@ -177,38 +180,23 @@ impl Watcher {
 
       record_addresses(pool, address, &read.from, chrono::Utc::now().timestamp_millis()).await?;
 
-      let seen = fetch.flags().any(|flag| flag_name(&flag) == "\\Seen")
-        || plan.flags.iter().any(|flag| flag == "\\Seen");
-      let from_self = read.from.iter().any(|one| &one.address == address);
-
-      if !moved && !seen && !from_self {
-        let key = conversation_key(read.message_id.as_deref(), &read.in_reply_to, &read.references)
-          .unwrap_or_else(|| format!("{INBOX}\u{0}{uid}"));
-
-        arrived.push(ArrivedMessage {
-          folder: INBOX.to_owned(),
-          uid,
-          key,
-          from: read.from,
-          subject: read.subject,
-          date: fetch
-            .internal_date()
-            .map_or_else(|| chrono::Utc::now().timestamp_millis(), |date| date.timestamp_millis()),
-        });
+      if !moved {
+        arrived.push(uid);
       }
     }
 
-    announce_change(&self.standing.events, &self.account.key);
+    let session = self.standing.sessions.session(&self.endpoint, &self.account);
 
-    if !arrived.is_empty() {
-      let arrival = MailArrival {
-        address: address.clone(),
-        account: self.account.key.clone(),
-        messages: arrived,
+    for uid in arrived {
+      let at = MailRef {
+        folder: INBOX.to_owned(),
+        uid,
       };
 
-      announce_arrivals(&self.standing.events, &self.standing.wording, &arrival);
+      message_now(&self.standing, &session, &self.account.key, MESSAGE_CREATED, &at).await;
     }
+
+    self.announce_inbox().await;
 
     Ok(())
   }
@@ -247,7 +235,7 @@ impl Watcher {
 
       match woke {
         Woke::Grown => self.handle(&mut connection).await?,
-        Woke::Changed => announce_change(&self.standing.events, &self.account.key),
+        Woke::Changed => self.announce_inbox().await,
         Woke::Quiet => {
           if !idles {
             self.handle(&mut connection).await?;

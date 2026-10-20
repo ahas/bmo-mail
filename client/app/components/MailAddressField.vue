@@ -32,10 +32,10 @@
 import { addressText, MAIL_FIELD_LABEL, readAddresses } from "../domain/mail";
 
 import type { MailApi } from "../domain/mail-api";
-import type { MailAddress } from "../../shared/mail";
+import type { MailMailbox } from "../../shared/mail";
 
 const props = defineProps<{ label: string; api: MailApi }>();
-const model = defineModel<MailAddress[]>({ required: true });
+const model = defineModel<MailMailbox[]>({ required: true });
 
 const typed = ref("");
 const suggestions = ref<string[]>([]);
@@ -87,7 +87,7 @@ watch(typed, (text) => {
 
   timer = setTimeout(async () => {
     try {
-      suggestions.value = (await props.api.addresses(text.trim())).addresses.map(addressText);
+      suggestions.value = (await props.api.addresses(text.trim())).map(addressText);
     } catch {
       suggestions.value = [];
     }

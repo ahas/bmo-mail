@@ -8,8 +8,8 @@ use futures::TryStreamExt;
 
 use crate::imap::session::{Connection, MailSession};
 use crate::imap::{path_of, wire_name};
+use crate::mail::{FolderRole, MailFolder};
 use crate::routes::requests::MailFault;
-use crate::wire::{FolderRole, MailFolder};
 
 impl FolderRole {
   /// The names a folder of the role goes by where nothing marks it, the first being the one a missing

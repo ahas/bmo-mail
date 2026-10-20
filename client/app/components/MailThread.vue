@@ -31,7 +31,7 @@
         </div>
         <div class="flex items-center gap-2">
           <div class="flex min-w-0 flex-1 flex-wrap gap-1">
-            <span v-for="label in threadLabels" :key="label.id" class="rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.color }">{{ label.name }}</span>
+            <span v-for="label in threadLabels" :key="label.id" class="rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.colour }">{{ label.name }}</span>
           </div>
           <div class="flex shrink-0 items-center gap-1">
             <UTooltip :text="$t('mail.action.reply')">
@@ -50,12 +50,12 @@
       <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <MailMessageCard
           v-for="message in props.messages"
-          :key="`${message.folder}:${message.uid}`"
+          :key="message.id"
           :message="message"
           :account="props.account"
           :address="props.address"
           :show-images="props.showImages"
-          :open="opened.has(`${message.folder}:${message.uid}`)"
+          :open="opened.has(message.id)"
           @toggle="toggle(message)"
           @receipt="(send, done) => emit('receipt', message, send, done)"
           @write="(kind) => emit('write', kind, message)"
@@ -67,6 +67,8 @@
 
 <script setup lang="ts">
 import { subjectText } from "../domain/mail";
+
+import { isRead } from "../../shared/mail";
 
 import type { MailLabel, MailMessage } from "../../shared/mail";
 
@@ -90,7 +92,7 @@ const emit = defineEmits<{
 const newest = computed(() => props.messages![props.messages!.length - 1]!);
 const subject = computed(() => props.messages?.[0]?.subject ?? "");
 const threadLabels = computed(() => {
-  const ids = new Set((props.messages ?? []).flatMap((message) => message.labels));
+  const ids = new Set((props.messages ?? []).flatMap((message) => message.labelIds));
 
   return props.labels.filter((label) => ids.has(label.id));
 });
@@ -103,13 +105,13 @@ watch(
   (messages) => {
     const last = messages?.[messages.length - 1];
 
-    opened.value = new Set([...(messages ?? []).filter((message) => !message.seen), ...(last === undefined ? [] : [last])].map((message) => `${message.folder}:${message.uid}`));
+    opened.value = new Set([...(messages ?? []).filter((message) => !isRead(message)), ...(last === undefined ? [] : [last])].map((message) => message.id));
   },
   { immediate: true },
 );
 
 function toggle(message: MailMessage): void {
-  const key = `${message.folder}:${message.uid}`;
+  const key = message.id;
   const next = new Set(opened.value);
 
   if (next.has(key)) next.delete(key);

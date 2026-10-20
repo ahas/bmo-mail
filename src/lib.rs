@@ -4,12 +4,19 @@
 
 pub mod account_settings;
 pub mod accounts;
+pub mod announcements;
 pub mod avatars;
+pub mod client;
 pub mod events;
 pub mod health;
 pub mod http;
 pub mod imap;
+pub mod keys;
 pub mod labels;
+pub mod mail;
+pub mod mcp;
+pub mod members;
+pub mod openapi;
 pub mod routes;
 pub mod rules;
 pub mod settings;
@@ -29,7 +36,7 @@ use crate::settings::Settings;
 use crate::store::Store;
 use crate::wording::Wording;
 
-/// The nouns `bmo` dispatches to this command: none, since the service carries no word of `bmo`.
+/// The nouns a host dispatches to this command: none, since it carries no noun of its own.
 pub const NOUNS: [&str; 0] = [];
 
 /// Opens the store, starts the watchers, then answers the routes on the settings' address until the process

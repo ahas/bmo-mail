@@ -1,9 +1,10 @@
-# The mail service: the HTTP server, its event stream, the inbox watchers and its command in one binary. The
-# only manifest at the root; the console plugin bundle keeps its own under `client/`.
+# The mail service: the HTTP server, its event stream, the inbox watchers, its client, its OpenAPI document and
+# its harness plugin's MCP server, with its command, in one crate and one binary. The only manifest at the root;
+# the console plugin bundle keeps its own under `client/`.
 [package]
 name = "bmo-mail"
 description = "Mailboxes read, written and watched over IMAP and submission, behind one API."
-version = "0.1.0"
+version = "0.1.0-rev.1"
 edition = "2024"
 publish = false
 
@@ -19,13 +20,14 @@ test = false
 # IMAP: the work connection the routes go through and the watcher's IDLE connection.
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
 axum = { version = "0.8.9", features = ["multipart"] }
-# Base64 bodies, read as far as their whole groups go.
+# Base64 bodies, read as far as their whole groups go; a file posted to a draft; a message's and a thread's
+# opaque ids.
 base64 = "0.23.1"
 # Dates: an IMAP internal date, a header's date, a search's day, and a date written in the service's
 # language.
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "unstable-locales"] }
 chrono-tz = "0.10.4"
-clap = { version = "4.6.7", features = ["derive"] }
+clap = { version = "4.6.7", features = ["derive", "env"] }
 # The settings: the built-in defaults, the deployment's files and the environment, layered in that order.
 config = { version = "0.15", default-features = false, features = ["toml"] }
 # The tree an HTML body is read into, walked for its plain text.
@@ -35,9 +37,6 @@ encoding_rs = "0.8.42"
 futures = "0.3.31"
 # A sender domain's BIMI record.
 hickory-resolver = "0.26.3"
-# Names and subjects ordered as the service's language reads them.
-icu_collator = "2.3.1"
-icu_locale = "2.3.0"
 # Each route registers itself beside its own answer.
 inventory = "0.3.24"
 # A message's pictures of its own turned into inline parts, the markup rewritten where they stand.
@@ -49,7 +48,7 @@ mail-builder = { version = "1.0.0", default-features = false }
 mail-parser = "0.11.9"
 # Submission: a message handed to the mail server as the account, and the size it takes.
 mail-send = { version = "0.6.2", default-features = false, features = ["ring", "tls12"] }
-# A filename written into a header in its UTF-8 form.
+# A filename written into a header in its UTF-8 form, and a key the client writes into a path.
 percent-encoding = "2.3.2"
 # The domain somebody registered, under a registry's own tail, from the public suffix list.
 psl = "2.1.243"
@@ -59,8 +58,12 @@ quoted_printable = "0.5.2"
 rand = "0.9.2"
 # The search box's words, a search's day, and a subject's reply prefixes.
 regex = "1.13.1"
-# The health command asking the service, and a sender's logo fetched over HTTPS.
-reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls-no-provider"] }
+# The client's calls, the health command asking the service, and a sender's logo fetched over HTTPS.
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "rustls-no-provider"] }
+# The harness plugin's MCP server.
+rmcp = { version = "3.5.0", default-features = false, features = ["server", "transport-io"] }
+# The JSON Schemas of the bodies, the tools' inputs and outputs and the OpenAPI document.
+schemars = "1.2.3"
 # HTML read for a snippet's words.
 scraper = "0.27.0"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -69,7 +72,7 @@ serde_json = { version = "1.0.151", features = ["preserve_order"] }
 # The store, one SQLite file.
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "macros", "migrate"] }
 thiserror = "2.0.17"
-tokio = { version = "1.53.2", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { version = "1.53.2", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 # The service's own words, one TOML file to a language.
 toml = "1.1.8"
 # TLS to the mail servers, checked against the web's root certificates.

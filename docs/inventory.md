@@ -63,8 +63,8 @@ what the old behaviour was held to.
 | `avatars.ts` | 375 | `src/avatars/mod.rs` |
 | `domains.ts` | 34 | `src/avatars/domains.rs` |
 | `watcher.ts` | 271 | `src/watcher/mod.rs` |
-| `arrivals.ts` | 41 | `src/watcher/arrivals.rs` |
-| `notice.ts` | 34 | `src/watcher/notice.rs` |
+| `arrivals.ts` | 41 | `src/announcements.rs`, the events the watcher and the routes publish |
+| `notice.ts` | 34 | not carried: the notification is the console's, from the kind the bundle declares |
 
 ## The routes: 36 files, 706 lines, ported to Rust
 
@@ -74,8 +74,8 @@ bearer token in place of the console's sign-in (`docs/api.md`).
 | Old files | Here |
 |---|---|
 | `accounts.get.ts`, `summary.get.ts` | `src/routes/accounts.rs` |
-| `[account]/folders.get.ts`, `list.get.ts`, `thread.get.ts`, `message.get.ts`, `part.get.ts`, `cid.get.ts`, `read-all.post.ts` | `src/routes/lists.rs` |
-| `[account]/flags.post.ts`, `move.post.ts`, `delete.post.ts` | `src/routes/changes.rs` |
+| `[account]/folders.get.ts`, `read-all.post.ts` | `src/routes/folders.rs` |
+| `[account]/list.get.ts`, `thread.get.ts`, `message.get.ts`, `part.get.ts`, `cid.get.ts`, `flags.post.ts`, `move.post.ts`, `delete.post.ts` | `src/routes/messages.rs` |
 | `[account]/labels.post.ts`, `labels/[id].patch.ts`, `labels/[id].delete.ts` | `src/routes/labels.rs` |
 | `[account]/addresses.get.ts`, `draft.get.ts`, `draft.post.ts`, `draft.delete.ts`, `draft/start.post.ts`, `upload.post.ts`, `send.post.ts`, `send/[id].get.ts`, `send/[id].delete.ts`, `receipt.post.ts` | `src/routes/writing.rs` |
 | `[account]/rules.get.ts`, `rules.post.ts`, `rules/[id].put.ts`, `rules/[id].delete.ts`, `rules/order.post.ts`, `rules/run.post.ts`, `spam-senders.post.ts`, `spam-senders.delete.ts`, `settings.get.ts`, `settings.post.ts` | `src/routes/filters.rs` |
@@ -115,25 +115,25 @@ and `side-parts`, and its components.
 | Old file | Part | Here |
 |---|---|---|
 | `client/server/utils/db.ts` | the seven `web_mail_*` tables, their index and `migrateMailImages` | `migrations/`, the store (「Stored state」) |
-| `client/server/utils/push.ts` | `clipBody`, the notification body's clip | `src/watcher/notice.rs` |
-| `client/shared/types.ts` | `MailSummary`, `MailAccountSummary`, `MailSummaryMessage` | `src/wire.rs`, and `client/shared/mail.ts` for the screen |
-| `client/shared/types.ts` | `PushPayload` | the `push` of an arrival (`docs/api.md`, 「The event stream」) |
-| `client/shared/config.ts` | `MAIL_PUSH` | its id, `mail`, is the arrival's `kind`; the kind's declaration and words are bmo-web's (`docs/api.md`, 「Missing in siblings」) |
-| `client/shared/paths.ts` | `mailThreadPath` | the arrival's `path`, under the console's base path |
+| `client/server/utils/push.ts` | `clipBody`, the notification body's clip | not carried: the notification is the console's |
+| `client/shared/types.ts` | `MailSummary`, `MailAccountSummary`, `MailSummaryMessage` | the summary and the account in `src/wire.rs`, generated into `client/shared/openapi.ts` for the screen |
+| `client/shared/types.ts` | `PushPayload` | not carried: the console words a notice from the bundle's pack |
+| `client/shared/config.ts` | `MAIL_PUSH` | the bundle's declared notice kind, `message.created` |
+| `client/shared/paths.ts` | `mailThreadPath` | not carried: a notice's address is the console's |
 | `client/shared/links.ts` | `linkParts`, which the screen's frame reads | the bundle, on bmo-markup's `web-address` |
 | `client/app/domain/settings.ts` | `useMailColumns`, the list's column widths kept in the browser | the bundle's own domain module, `mail-columns` |
 | `client/app/domain/avatars.ts` | `identityMark` and the tones and initial it draws with, the letter an address wears without a logo | the bundle's own domain module, `mail-avatars` |
 | `client/app/domain/urls.ts` | `appUrl`, a path under the console's base path, which a part's, an inline picture's and a logo's addresses are written with | the bundle's own domain module, `mail-urls` |
-| `client/app/domain/events.ts` | `useMailEvents` | owed by the host (`docs/api.md`, 「The console plugin bundle」) |
-| `client/app/domain/screens.ts` | the `/mail` navigation entry and its unread mark | the host's; it reads the mark from the bundle's `useMailNotices` |
-| `client/app/layouts/default.vue` | the call of `useMailNotices` | the host's |
-| `client/i18n/locales/ko.yaml` | the `mail` subtree, 292 keys: title 10, label 92, action 58, placeholder 9, aria 15, status 15, message 15, error 78 | `client/i18n/locales/ko.yaml`, the bundle's pack |
-| `client/i18n/locales/ko.yaml` | `screens.label.mail`, `screens.aria.mail_unread` | the bundle's pack |
+| `client/app/domain/events.ts` | `useMailEvents` | the bundle's own reading of the service's stream, `mail-stream` |
+| `client/app/domain/screens.ts` | the `/mail` navigation entry and its unread mark | the console's, by the bundle's declaration |
+| `client/app/layouts/default.vue` | the call of `useMailNotices` | not carried: the console raises notices from the declared kind |
+| `client/i18n/locales/ko.yaml` | the `mail` subtree, 292 keys: title 10, label 92, action 58, placeholder 9, aria 15, status 15, message 15, error 78 | `client/i18n/locales/ko.json`, the bundle's pack, its refusal words under the service's codes of today |
+| `client/i18n/locales/ko.yaml` | `screens.label.mail`, `screens.aria.mail_unread` | the bundle's pack, as `mail.title.screen` and `mail.aria.unread` |
 | `client/i18n/locales/ko.yaml` | 17 `common` keys the screen reads: `common.action.{add,cancel,close,collapse,expand,more,move_up,refresh,save,send}`, `common.error.{not_sent,save_failed}`, `common.label.{code,link,none,count,default}` | the bundle's pack |
-| `client/i18n/locales/ko.yaml` | the 14 words the server wrote: `mail.title.arrival_one`, `arrival_many`, `receipt_subject`; `mail.message.arrival`, `receipt_body`; `mail.label.no_sender`, `no_subject`, `reply_attribution`, `forward_header`, `forward_from`, `forward_date`, `forward_subject`, `forward_to`, `forward_cc` | `wording/ko.toml`, the service's own words, under the keys `docs/api.md` names (「The service's own words」) |
+| `client/i18n/locales/ko.yaml` | the 14 words the server wrote: `mail.title.arrival_one`, `arrival_many`, `receipt_subject`; `mail.message.arrival`, `receipt_body`; `mail.label.no_sender`, `no_subject`, `reply_attribution`, `forward_header`, `forward_from`, `forward_date`, `forward_subject`, `forward_to`, `forward_cc` | `wording/ko.toml`, the service's own words, under the keys `docs/api.md` names (「The service's own words」), but for the arrival's, which the bundle's notice words replace |
 
-The pack's words are 311 keys in all (292 + 2 + 17). The server's refusals, which were the pack's sentences,
-are English sentences and codes here; the screen shows each by `mail.error.<code>`, one of the 78.
+The server's refusals, which were the pack's sentences, are English sentences and kebab-case codes here; the
+screen shows each by `mail.error.<code>`.
 
 ## Not carried: 24 files
 

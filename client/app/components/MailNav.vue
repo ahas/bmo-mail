@@ -18,15 +18,15 @@
 
     <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3">
       <ul class="flex flex-col" :aria-label="$t('mail.aria.accounts')">
-        <li v-for="one in props.accounts" :key="one.key">
+        <li v-for="one in props.accounts" :key="one.name">
           <MailNavEntry
-            :to="mailPath({ account: one.key, view: 'inbox', thread: null })"
+            :to="mailPath({ account: one.name, view: 'inbox', thread: null })"
             :name="one.address"
             icon="i-material-symbols-account-circle-outline"
-            :avatar="addressMark(one.address, one.key)"
-            :unread="props.unread[one.key] === true"
+            :avatar="addressMark(one.address, one.name)"
+            :unread="props.unread[one.name] === true"
             :folded="props.folded"
-            :current="one.key === props.account"
+            :current="one.name === props.account"
             current-as="true"
             name-on-hover
             @navigated="emit('navigated')"
@@ -59,7 +59,7 @@
               :to="mailPath({ account: props.account, view: `label:${label.id}`, thread: null })"
               :name="label.name"
               icon="i-material-symbols-label"
-              :icon-colour="label.color"
+              :icon-colour="label.colour"
               :folded="props.folded"
               :current="`label:${label.id}` === props.view"
               @navigated="emit('navigated')"
@@ -72,14 +72,14 @@
         <p v-if="!props.folded" class="px-3 pt-3 pb-1 text-sm text-muted">{{ $t("mail.label.folders") }}</p>
         <USeparator v-else class="my-2" />
         <ul class="flex flex-col" :aria-label="$t('mail.aria.other_folders')">
-          <li v-for="folder in otherFolders" :key="folder.path">
+          <li v-for="folder in otherFolders" :key="folder.name">
             <MailNavEntry
-              :to="mailPath({ account: props.account, view: `folder:${folder.path}`, thread: null })"
-              :name="folder.name"
+              :to="mailPath({ account: props.account, view: `folder:${folder.name}`, thread: null })"
+              :name="folder.shortName"
               icon="i-material-symbols-folder-outline"
-              :unread="folder.unseen > 0"
+              :unread="folder.unreadCount > 0"
               :folded="props.folded"
-              :current="`folder:${folder.path}` === props.view"
+              :current="`folder:${folder.name}` === props.view"
               @navigated="emit('navigated')"
             />
           </li>
@@ -108,16 +108,16 @@
 <script setup lang="ts">
 import { addressMark, mailPath, NAV_ROLES, ROLE_ICONS, ROLE_LABELS } from "../domain/mail";
 
-import type { MailFolderState, MailLabel, PublicMailAccount } from "../../shared/mail";
+import type { MailAccount, MailFolder, MailLabel } from "../../shared/mail";
 
 const { t } = useI18n();
 const props = defineProps<{
-  accounts: PublicMailAccount[];
+  accounts: MailAccount[];
   account: string;
   view: string;
-  folders: MailFolderState[];
+  folders: MailFolder[];
   labels: MailLabel[];
-  // Which accounts have unread mail in their inbox, by key.
+  // Which accounts have unread mail in their inbox, by name.
   unread: Record<string, boolean>;
   folded: boolean;
   foldable: boolean;
@@ -138,7 +138,7 @@ const roleEntries = computed(() => {
     view: role as string,
     label: t(ROLE_LABELS[role]),
     icon: ROLE_ICONS[role],
-    unread: role !== "sent" && role !== "drafts" && role !== "trash" && props.folders.some((folder) => folder.role === role && folder.unseen > 0),
+    unread: role !== "sent" && role !== "drafts" && role !== "trash" && props.folders.some((folder) => folder.role === role && folder.unreadCount > 0),
   }));
 
   entries.splice(1, 0, { view: "starred", label: t("mail.label.view_starred"), icon: "i-material-symbols-star-outline", unread: false });

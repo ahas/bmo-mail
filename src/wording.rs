@@ -1,5 +1,5 @@
-//! The service's own words (`docs/api.md`, 「The service's own words」): what it writes into a message or a
-//! notification, in the language the settings name. Each language is one TOML file, `wording/<language>.toml`
+//! The service's own words (`docs/api.md`, 「The service's own words」): what it writes into a message, in the
+//! language the settings name. Each language is one TOML file, `wording/<language>.toml`
 //! under the settings folder; the repository's own file for the shipped language is built in, so a service
 //! started where none stands still writes.
 
@@ -11,16 +11,6 @@ use crate::settings::Settings;
 
 /// The shipped language's words, as the repository's own file states them.
 const SHIPPED: &str = include_str!("../wording/ko.toml");
-
-/// An arrival's notification.
-#[derive(Clone, Debug, Deserialize)]
-pub struct Arrival {
-  pub title_one: String,
-  pub title_many: String,
-  pub body: String,
-  pub no_sender: String,
-  pub no_subject: String,
-}
 
 /// The line over a quoted reply.
 #[derive(Clone, Debug, Deserialize)]
@@ -51,7 +41,6 @@ pub struct Receipt {
 struct Words {
   locale: String,
   date: String,
-  arrival: Arrival,
   reply: Reply,
   forward: Forward,
   receipt: Receipt,
@@ -60,7 +49,6 @@ struct Words {
 /// The service's own words, with the time zone its dates are written in.
 #[derive(Clone, Debug)]
 pub struct Wording {
-  pub arrival: Arrival,
   pub reply: Reply,
   pub forward: Forward,
   pub receipt: Receipt,
@@ -100,7 +88,6 @@ impl Wording {
     let time_zone = time_zone.parse::<Tz>().map_err(|_| WordingError::TimeZone(time_zone.to_owned()))?;
 
     Ok(Self {
-      arrival: words.arrival,
       reply: words.reply,
       forward: words.forward,
       receipt: words.receipt,

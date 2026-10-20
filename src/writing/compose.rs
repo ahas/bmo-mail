@@ -18,7 +18,7 @@ use rand::RngCore;
 use regex::Regex;
 use scraper::{Html, Node};
 
-use crate::wire::{AttachmentRef, Draft, DraftKind, MailAddress, MailMessage, MailSettings};
+use crate::mail::{AttachmentRef, Draft, DraftKind, MailAddress, MailMessage, MailSettings};
 use crate::wording::{Wording, fill};
 
 /// An attachment's bytes, ready to be written into a message.
@@ -30,9 +30,9 @@ pub struct ResolvedAttachment {
 
 /// The header a saved draft carries to say what it was written as. A message that goes out never carries
 /// it.
-pub const DRAFT_KIND_HEADER: &str = "X-BMO-Draft-Kind";
+pub const DRAFT_KIND_HEADER: &str = "X-Draft-Kind";
 /// The header a saved draft carries to say what it answers or forwards.
-pub const DRAFT_ORIGINAL_HEADER: &str = "X-BMO-Draft-Original";
+pub const DRAFT_ORIGINAL_HEADER: &str = "X-Draft-Original";
 
 /// A text as HTML writes it, its markup characters escaped.
 pub fn escape_html(text: &str) -> String {
@@ -128,7 +128,8 @@ fn original_body(original: &MailMessage) -> String {
     .unwrap_or_else(|| text_to_html(original.text.as_deref().unwrap_or("")))
 }
 
-/// A new message: an empty line to write on, the signature under it.
+/// A new message: an empty line to write on, the signature under it, and the `Message-ID` it is saved under
+/// from its start.
 pub fn new_draft(from: &str, settings: &MailSettings) -> Draft {
   Draft {
     from: from.to_owned(),
@@ -143,7 +144,9 @@ pub fn new_draft(from: &str, settings: &MailSettings) -> Draft {
     original: None,
     in_reply_to: None,
     references: Vec::new(),
+    message_id: Some(format!("<{}>", new_message_id(from))),
     saved: None,
+    changed_at: chrono::Utc::now().timestamp_millis(),
   }
 }
 
@@ -498,7 +501,7 @@ pub fn build_message(
     .chars()
     .filter(|c| !matches!(c, '<' | '>' | '@') && !c.is_whitespace())
     .collect();
-  let (html, images) = inline_images(&draft.html, if id_seed.is_empty() { "bmo" } else { &id_seed });
+  let (html, images) = inline_images(&draft.html, if id_seed.is_empty() { "mail" } else { &id_seed });
   let alternative = MimePart::new(
     "multipart/alternative",
     vec![

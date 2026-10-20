@@ -8,7 +8,7 @@
         :label="label.name"
         @update:model-value="emit('toggle', label.id, !props.all.has(label.id))"
       />
-      <UIcon name="i-material-symbols-label" class="ms-auto size-4 shrink-0" :style="{ color: label.color }" />
+      <UIcon name="i-material-symbols-label" class="ms-auto size-4 shrink-0" :style="{ color: label.colour }" />
     </li>
   </ul>
 </template>
