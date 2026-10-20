@@ -1,0 +1,30 @@
+[
+  {
+    "id": "harness/plugin",
+    "title": "Harness plugin and OpenAPI document",
+    "what": "The ahas-mail plugin: the MCP server bmo-mail mcp with its eight mail_ tools over the service's client and its skill, and the OpenAPI document written from the routes and types, in src/mcp.rs, src/openapi.rs and plugin/.",
+    "files": [
+      "src/mcp.rs",
+      "src/openapi.rs",
+      "src/client.rs",
+      "examples/openapi.rs",
+      "plugin/skills/ahas-mail/SKILL.md",
+      "docs/openapi.json"
+    ],
+    "symbols": [
+      "MailClient",
+      "MailServer",
+      "openapi",
+      "openapi_json",
+      "tools"
+    ],
+    "aliases": [],
+    "needs": [
+      "service/events",
+      "service/plumbing",
+      "service/wire"
+    ],
+    "base": "e90b84089e7e5e73670144f14094e28f3b66d43a",
+    "changed": 1792499453684
+  }
+]

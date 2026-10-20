@@ -25,7 +25,7 @@ minimal services stand on the new repositories; until then the only check is the
 | `client/` | The console plugin bundle: the mail screen, a project of its own |
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
-| `graph/` | The code graph: one node per feature, with the files it is made of |
+| `.graph/` | The code graph: its settings and its nodes, one feature to a node |
 
 At the root stand the Cargo manifest, `VERSION`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the local settings a

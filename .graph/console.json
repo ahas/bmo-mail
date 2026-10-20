@@ -1,0 +1,98 @@
+[
+  {
+    "id": "console/mail-editor",
+    "title": "Mail composer and editor",
+    "what": "The composer panel and the rich-text editor that writes a body, a signature and images, loaded apart from the mail screen, in the bundle's Mail composer, editor and editor-load modules.",
+    "files": [
+      "client/app/components/MailComposeForm.vue",
+      "client/app/components/MailComposer.vue",
+      "client/app/components/MailAddressField.vue",
+      "client/app/components/MailEditor.vue",
+      "client/app/components/MailEditorSkeleton.vue",
+      "client/app/domain/mail-editor.ts",
+      "client/app/domain/mail-editor-load.ts",
+      "client/shared/mail.ts"
+    ],
+    "symbols": [
+      "loadMailEditor",
+      "AsyncMailEditor",
+      "readImageData",
+      "editorToolbar"
+    ],
+    "aliases": [
+      "메일작성뷰",
+      "tiptap 작성기",
+      "메일 화면 청크"
+    ],
+    "needs": [
+      "console/mail-screen",
+      "mail/writing"
+    ],
+    "base": "e90b84089e7e5e73670144f14094e28f3b66d43a",
+    "changed": 1792499453679
+  },
+  {
+    "id": "console/mail-screen",
+    "title": "Mail screen bundle",
+    "what": "The mail screen as a console bundle on bmo-ui: the nav, list, thread and settings over the relayed API and event stream, with the bundle's language pack, in client/.",
+    "files": [
+      "client/app/components/MailAvatar.vue",
+      "client/app/components/MailBody.vue",
+      "client/app/components/MailLabelChoice.vue",
+      "client/app/components/MailList.vue",
+      "client/app/components/MailMessageCard.vue",
+      "client/app/components/MailNav.vue",
+      "client/app/components/MailNavEntry.vue",
+      "client/app/components/MailRow.vue",
+      "client/app/components/MailSettingsBody.vue",
+      "client/app/components/MailThread.vue",
+      "client/app/domain/mail-api.ts",
+      "client/app/domain/mail-avatars.ts",
+      "client/app/domain/mail-body.ts",
+      "client/app/domain/mail-columns.ts",
+      "client/app/domain/mail-fit.ts",
+      "client/app/domain/mail-frame.ts",
+      "client/app/domain/mail-links.ts",
+      "client/app/domain/mail-refusals.ts",
+      "client/app/domain/mail-stream.ts",
+      "client/app/domain/mail-summary.ts",
+      "client/app/domain/mail.ts",
+      "client/app/domain/mail-urls.ts",
+      "client/app/pages/mail/[...path].vue",
+      "client/shared/mail.ts",
+      "client/i18n/locales/ko.json"
+    ],
+    "symbols": [
+      "mailPath",
+      "parseMailPath",
+      "mailApi",
+      "pageQuery",
+      "useMailStream",
+      "cleanMailHtml",
+      "conversationsOf"
+    ],
+    "aliases": [
+      "웹매일",
+      "메일",
+      "메일뷰",
+      "메일 페이지",
+      "메일리스트",
+      "메일 리스트 영역",
+      "컬럼 리사이징",
+      "읽지않음 필터",
+      "컬럼별 정렬"
+    ],
+    "needs": [
+      "mail/accounts",
+      "mail/avatars",
+      "mail/filters",
+      "mail/labels",
+      "mail/reading",
+      "mail/writing",
+      "service/events",
+      "service/wire"
+    ],
+    "base": "e90b84089e7e5e73670144f14094e28f3b66d43a",
+    "changed": 1792499453681
+  }
+]
