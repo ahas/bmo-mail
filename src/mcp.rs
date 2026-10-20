@@ -25,7 +25,7 @@ use crate::wire::{
 };
 
 /// The plugin a harness takes mail in, and the command that starts its MCP server.
-pub const PLUGIN: &str = "ahas-mail";
+pub const PLUGIN: &str = "bmo-mail";
 pub const MCP: &str = "bmo-mail mcp";
 
 /// What a harness does first with it, which the server tells a harness when it starts.

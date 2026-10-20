@@ -1,9 +1,9 @@
 ---
-name: ahas-mail
+name: bmo-mail
 description: Read, write and send mail through the bmo-mail MCP server - list an account's messages, read a message or a whole conversation with its bodies, change flags, labels and folders, write a draft and send it. Use when asked to look through a mailbox, find or read a mail, answer or forward one, tidy messages into folders or labels, or send a message from one of the service's accounts.
 ---
 
-# ahas-mail
+# bmo-mail
 
 The mail service holds the mailboxes its accounts file names and serves them over one API: accounts, folders,
 messages and conversations, drafts and sends, labels, rules and settings. The `bmo-mail` MCP server gives a

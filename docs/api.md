@@ -308,8 +308,8 @@ generated from `docs/openapi.json` into `client/shared/openapi.ts`.
 
 ## The harness plugin
 
-The plugin `ahas-mail`: the MCP server `bmo-mail mcp` starts on standard input and output, and the skill
-`plugin/skills/ahas-mail/SKILL.md`, which tells a harness when and how to use it.
+The plugin `bmo-mail`: the MCP server `bmo-mail mcp` starts on standard input and output, and the skill
+`plugin/skills/bmo-mail/SKILL.md`, which tells a harness when and how to use it.
 
 - **Where it reaches the service:** the address `--address` or `BMO_MAIL_ADDRESS` names, else
   `http://` and the settings' `server.listen`; the token `--token` or `BMO_MAIL_TOKEN` gives, else the

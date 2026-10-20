@@ -20,7 +20,7 @@
   "x-stage": 2,
   "x-calls": [],
   "x-harness": {
-    "plugin": "ahas-mail",
+    "plugin": "bmo-mail",
     "mcp": "bmo-mail mcp",
     "entry": "A harness reads a mailbox with mail_messages and mail_thread, writes with mail_draft and mail_draft_update, and sends with mail_send."
   },

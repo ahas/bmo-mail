@@ -4,7 +4,7 @@ Mail as one service with its own API: the mailboxes an accounts file names, read
 IMAP and submission. It threads and pages lists itself, runs filter rules as mail arrives, finds sender
 logos, holds a sent message for the account's undo span so it can be taken back, and says on its own event
 stream what came and what changed. It calls no other service. A coding harness takes it through its MCP
-server, `bmo-mail mcp`, and the `ahas-mail` skill; a console takes its screen through the bundle in `client/`,
+server, `bmo-mail mcp`, and the `bmo-mail` skill; a console takes its screen through the bundle in `client/`,
 as `docs/api.md` states.
 
 ## Tests
@@ -23,7 +23,7 @@ the bundle's typecheck.
 | `examples/` | `openapi`, which prints the OpenAPI document as `docs/openapi.json` keeps it |
 | `migrations/` | The store, its tables made by these statements in order |
 | `wording/` | The service's own words, one file to a language |
-| `plugin/` | The harness plugin's skill, `skills/ahas-mail/` |
+| `plugin/` | The harness plugin's skill, `skills/bmo-mail/` |
 | `client/` | The console plugin bundle: the mail screen, a project of its own |
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |

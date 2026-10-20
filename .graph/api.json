@@ -82,10 +82,10 @@
   {
     "id": "api/mcp",
     "title": "Harness plugin tools",
-    "what": "The ahas-mail MCP tools a harness lists and calls, each one call of the service's client, as docs/api.md and the skill state them.",
+    "what": "The bmo-mail MCP tools a harness lists and calls, each one call of the service's client, as docs/api.md and the skill state them.",
     "files": [
       "docs/api.md",
-      "plugin/skills/ahas-mail/SKILL.md",
+      "plugin/skills/bmo-mail/SKILL.md",
       "src/mcp.rs"
     ],
     "symbols": [
@@ -98,7 +98,7 @@
       "harness/plugin"
     ],
     "base": "e90b84089e7e5e73670144f14094e28f3b66d43a",
-    "changed": 1792499434183,
+    "changed": 1792529689522,
     "boundary": {
       "side": "exposes"
     }
