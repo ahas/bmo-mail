@@ -15,8 +15,8 @@
       "console/mail-editor",
       "console/mail-screen"
     ],
-    "base": "e90b84089e7e5e73670144f14094e28f3b66d43a",
-    "changed": 1792499473281,
+    "base": "6ef18c3ac818348dcb310f974b3bfa6172e972ca",
+    "changed": 1792517475698,
     "boundary": {
       "side": "exposes"
     }
