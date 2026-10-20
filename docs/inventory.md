@@ -5,9 +5,10 @@ single repository, with where each came from, how many, and what becomes of it h
 listed from the old repository at its commit `3e4c032`; the command that lists a set stands beside it.
 Nothing here was copied with its history.
 
-The tests are deferred: none is carried, written or run in this phase. They are written and run here once
-the minimal services stand on the new repositories. The deferred tests are listed below so that work knows
-what the old behaviour was held to.
+The behaviour tests are deferred: none is carried, written or run in this phase. They are written and run
+here once the minimal services stand on the new repositories. The deferred tests are listed below so that
+work knows what the old behaviour was held to. The repository carries the personal-data check alone
+(`PERSONAL-DATA.md`).
 
 ## How the set was listed
 

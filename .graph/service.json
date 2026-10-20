@@ -54,8 +54,24 @@
       "service/events",
       "service/wire"
     ],
-    "base": "e90b84089e7e5e73670144f14094e28f3b66d43a",
-    "changed": 1792499453708
+    "base": "accfff67f950ac812315c69a9448d56c19105012",
+    "changed": 1792523097446
+  },
+  {
+    "id": "service/repository-checks",
+    "title": "Personal-data check",
+    "what": "The repository-wide check over every tracked file: no mail address outside the reserved example domains and the two values the repository allows, no home path of a person, no telephone number, token or private network address, as PERSONAL-DATA.md states it.",
+    "files": [
+      "tests/personal_data.rs",
+      "PERSONAL-DATA.md"
+    ],
+    "symbols": [],
+    "aliases": [
+      "개인정보"
+    ],
+    "needs": [],
+    "base": "accfff67f950ac812315c69a9448d56c19105012",
+    "changed": 1792523097437
   },
   {
     "id": "service/wire",

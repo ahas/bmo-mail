@@ -57,8 +57,8 @@ structure (archive document #301, 「원칙」).
   language's words (`docs/api.md`, 「Refusals」). The screen's words stand in the bundle's own language pack,
   one key for every code (`docs/api.md`, 「The console plugin bundle」).
 - No personal data: no user names, home directories, machine names, internal addresses, mail addresses or
-  names of any agent. What the service needs at runtime comes from its settings and the accounts file,
-  never from the code.
+  names of any agent (`PERSONAL-DATA.md`). What the service needs at runtime comes from its settings and the
+  accounts file, never from the code.
 
 ## Layout
 
@@ -67,7 +67,8 @@ structure (archive document #301, 「원칙」).
 - The console plugin bundle stands in `client/`, a project of its own.
 - **`.graph/` is the code dependency graph,** written only by `bmo graph` run in this checkout; a change that
   moves a feature's files updates its node in the same commit.
-- Tests live in `tests/`; no test module stands in `src/`. The tests are deferred for now (README.md).
+- Tests live in `tests/`; no test module stands in `src/`. The repository carries the personal-data check
+  there; the behaviour tests are deferred for now (README.md).
 
 ## The stages of a change
 
@@ -75,4 +76,4 @@ structure (archive document #301, 「원칙」).
 2. **Review:** read the whole diff against the document governing it, then `cargo fmt --all --check` and
    `cargo clippy --all-targets -- -D warnings`.
 3. **Verification:** the tests touched, then the whole suite once, output written to a file and the file
-   read. Until the deferred tests stand, a change reaches stage 2 and is reported as such.
+   read. `cargo test --test personal_data` is the whole suite until the deferred behaviour tests stand.
