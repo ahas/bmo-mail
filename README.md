@@ -27,7 +27,7 @@ minimal services stand on the new repositories; until then the only check is the
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
 | `.graph/` | The code graph: its settings and its nodes, one feature to a node |
 
-At the root stand the Cargo manifest, `VERSION`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
+At the root stand the Cargo manifest, `VERSION`, `LICENSE`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the local settings a
 deployment gives.
 
