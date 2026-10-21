@@ -66,7 +66,8 @@ structure (archive document #301, 「원칙」).
   named after its parent.
 - The console plugin bundle stands in `client/`, a project of its own.
 - **`.graph/` is the code dependency graph,** written only by `bmo graph` run in this checkout; a change that
-  moves a feature's files updates its node in the same commit.
+  moves a feature's files updates its node in the checkout. Its area files are generated and untracked, so a
+  fresh checkout builds them again, while `settings.toml` is the repository's configuration and stays tracked.
 - Tests live in `tests/`; no test module stands in `src/`. The repository carries the personal-data check
   there; the behaviour tests are deferred for now (README.md).
 
