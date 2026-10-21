@@ -5,11 +5,16 @@ testbed = 0
 name = "bmo-mail"
 
 [test]
-languages = ["cargo"]
+# The Cargo workspace's crate, and the TypeScript console plugin under client/, a Bun project whose check
+# script is its typecheck.
+languages = ["cargo", "bun"]
+# A fresh tree gets the client's locked packages through the same frozen install its check step runs.
+setup = ["cd client && bun install --frozen-lockfile"]
 
 [projects]
 # The console plugin bundle under client/ is a project of its own: its manifest stands outside any package
-# workspace, and its check is the client-typecheck step below.
+# workspace. Bun runs its check script in the suite, and the client-typecheck step below runs the same
+# install and typecheck in the static check.
 paths = ["client"]
 check_script = "typecheck"
 
