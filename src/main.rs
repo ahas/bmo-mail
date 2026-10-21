@@ -1,5 +1,6 @@
 //! `bmo-mail`: the service and its command in one binary (`docs/api.md`, 「The command」).
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use bmo_mail::NOUNS;
@@ -31,6 +32,18 @@ enum Word {
   },
   /// The nouns this command carries for a host to dispatch, one a line: none.
   Nouns,
+  /// Moves the old archive's seven mail tables from the item's export into this service's store (TODO #1923).
+  Import {
+    /// The export directory the item's export hand wrote.
+    #[arg(long)]
+    export: PathBuf,
+    /// The store's SQLite file; made and migrated where it does not stand.
+    #[arg(long)]
+    database: PathBuf,
+    /// Reads the export and reports what it would write, writing nothing.
+    #[arg(long)]
+    dry_run: bool,
+  },
 }
 
 #[tokio::main]
@@ -53,6 +66,25 @@ async fn main() -> ExitCode {
     return ExitCode::SUCCESS;
   }
 
+  // The import reads its own arguments and never the deployment's settings.
+  if let Word::Import {
+    export,
+    database,
+    dry_run,
+  } = &command.word
+  {
+    return match bmo_mail::import::run(database, export, *dry_run).await {
+      Ok(report) => {
+        report.lines().iter().for_each(|line| println!("{line}"));
+        if report.sample.failures.is_empty() { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+      }
+      Err(why) => {
+        eprintln!("bmo-mail: {why}");
+        ExitCode::FAILURE
+      }
+    };
+  }
+
   let settings = match Settings::load() {
     Ok(settings) => settings,
     Err(why) => {
@@ -70,6 +102,7 @@ async fn main() -> ExitCode {
       bmo_mail::mcp::serve(MailClient::new(address, token)).await
     }
     Word::Nouns => Ok(()),
+    Word::Import { .. } => unreachable!("the import is answered before the settings are read"),
   };
 
   match done {

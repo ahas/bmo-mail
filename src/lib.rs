@@ -11,6 +11,7 @@ pub mod events;
 pub mod health;
 pub mod http;
 pub mod imap;
+pub mod import;
 pub mod keys;
 pub mod labels;
 pub mod mail;
