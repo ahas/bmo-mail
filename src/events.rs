@@ -1,6 +1,7 @@
 //! The event stream (`docs/api.md`, 「The event stream」): each event numbered and kept in the store for a day,
 //! at most 10,000, so a reader resumes where it stopped; served as server-sent events, or as a page to a
-//! reader asking for JSON.
+//! reader asking for JSON. Each event is an owner's, and a reader reads the events of the owner key it carries
+//! alone.
 
 use std::convert::Infallible;
 use std::time::Duration;
@@ -30,10 +31,11 @@ const KEPT_COUNT: i64 = 10_000;
 const PAGE: u32 = 100;
 const MOST_PAGE: u32 = 1_000;
 
-/// An event and the account it is of, as the broadcast carries it.
+/// An event, its owner and the account it is of, as the broadcast carries it.
 #[derive(Clone, Debug)]
 struct Published {
   event: Event,
+  owner: String,
   account: Option<String>,
 }
 
@@ -44,15 +46,17 @@ pub struct Events {
   sender: broadcast::Sender<Published>,
 }
 
-/// What a reader narrows the stream to.
+/// What a reader narrows the stream to: its owner's events, and of those the kinds and the account it asks.
 struct Narrowing {
+  owner: String,
   kinds: Option<Vec<String>>,
   account: Option<String>,
 }
 
 impl Narrowing {
-  fn of(query: &EventQuery) -> Self {
+  fn of(owner: String, query: &EventQuery) -> Self {
     Self {
+      owner,
       kinds: query.kinds.as_deref().map(|kinds| {
         kinds
           .split(',')
@@ -65,13 +69,16 @@ impl Narrowing {
     }
   }
 
-  fn admits(&self, kind: &str, account: Option<&str>) -> bool {
+  fn admits(&self, owner: Option<&str>, kind: &str, account: Option<&str>) -> bool {
     let kind_admitted = self.kinds.as_ref().is_none_or(|kinds| kinds.iter().any(|one| one == kind));
     let account_admitted = self.account.as_deref().is_none_or(|wanted| account == Some(wanted));
 
-    kind_admitted && account_admitted
+    owner == Some(self.owner.as_str()) && kind_admitted && account_admitted
   }
 }
+
+/// A row of the event window: its number, kind, owner, account, time and data.
+type EventRow = (i64, String, Option<String>, Option<String>, i64, String);
 
 /// Why a reader cannot resume where it asked.
 struct Gone;
@@ -84,16 +91,23 @@ impl Events {
     }
   }
 
-  /// Publishes an event of `kind` about `data`, the member it is of, under the account it belongs to. An
-  /// event that cannot be kept is said in the log and published to nobody, since a reader resuming would
-  /// never find it.
-  pub async fn publish(&self, kind: &'static str, account: Option<&str>, data: &impl Serialize) {
+  /// Publishes an event of `kind` about `data`, the member it is of, under the owner and the account it
+  /// belongs to. An event that cannot be kept is said in the log and published to nobody, since a reader
+  /// resuming would never find it.
+  pub async fn publish(
+    &self,
+    kind: &'static str,
+    owner: &str,
+    account: Option<&str>,
+    data: &impl Serialize,
+  ) {
     let data = serde_json::to_value(data).unwrap_or(Value::Null);
     let at = chrono::Utc::now().timestamp_millis();
     let kept = sqlx::query_scalar::<_, i64>(
-      "INSERT INTO events (kind, account, at, data) VALUES (?, ?, ?, ?) RETURNING id",
+      "INSERT INTO events (kind, owner, account, at, data) VALUES (?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(kind)
+    .bind(owner)
     .bind(account)
     .bind(at)
     .bind(data.to_string())
@@ -123,6 +137,7 @@ impl Events {
         at,
         data,
       },
+      owner: owner.to_owned(),
       account: account.map(str::to_owned),
     });
   }
@@ -147,15 +162,19 @@ impl Events {
       None => first_kept - 1,
     };
 
-    let rows: Vec<(i64, String, Option<String>, i64, String)> =
-      sqlx::query_as("SELECT id, kind, account, at, data FROM events WHERE id > ? ORDER BY id")
-        .bind(after)
-        .fetch_all(&self.pool)
-        .await?;
+    let rows: Vec<EventRow> = sqlx::query_as(
+      "SELECT id, kind, owner, account, at, data FROM events WHERE id > ? AND owner = ? ORDER BY id",
+    )
+    .bind(after)
+    .bind(&narrowing.owner)
+    .fetch_all(&self.pool)
+    .await?;
     let mut admitted = rows
       .into_iter()
-      .filter(|(_, kind, account, _, _)| narrowing.admits(kind, account.as_deref()))
-      .map(|(id, kind, _, at, data)| Event {
+      .filter(|(_, kind, owner, account, _, _)| {
+        narrowing.admits(owner.as_deref(), kind, account.as_deref())
+      })
+      .map(|(id, kind, _, _, at, data)| Event {
         id,
         kind,
         at,
@@ -203,12 +222,13 @@ impl Route for EventStream {
     status: 200,
     answer: Answer::Events(schema::<Page<Event>>),
     codes: &["gone"],
+    owned: true,
   };
 
   async fn answer(&self, call: Call) -> Result<Response, Refused> {
     let query: EventQuery = call.query()?;
     let headers = call.request.headers();
-    let narrowing = Narrowing::of(&query);
+    let narrowing = Narrowing::of(call.owner()?, &query);
     let events = &call.standing().events;
     let paged = headers
       .get(header::ACCEPT)
@@ -239,7 +259,9 @@ impl Route for EventStream {
       let admitted = published
         .ok()
         .filter(|published| published.event.id > last)
-        .filter(|published| narrowing.admits(&published.event.kind, published.account.as_deref()))
+        .filter(|published| {
+          narrowing.admits(Some(&published.owner), &published.event.kind, published.account.as_deref())
+        })
         .map(|published| {
           last = published.event.id;
           sent(&published.event)

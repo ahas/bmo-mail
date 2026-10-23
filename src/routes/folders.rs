@@ -6,12 +6,11 @@ use axum::response::Response;
 
 use crate::announcements::folder_now;
 use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, schema};
-use crate::imap::messages::{folder_state, folder_states, mark_folder};
 use crate::members::folder;
 use crate::routes::requests::{Asked, with_account};
 use crate::wire::{Folder, FolderPatch, ListQuery, Page};
 
-const ACCOUNT: (&str, &str) = ("accountName", "The account's name: its address's local part.");
+const ACCOUNT: (&str, &str) = ("accountName", "The account's name, unique among its owner's accounts.");
 const FOLDER: (&str, &str) = ("folderName", "The folder's full name, percent-encoded.");
 
 /// `GET /accounts/{accountName}/folders`.
@@ -30,13 +29,16 @@ impl Route for Folders {
     status: 200,
     answer: Answer::Json(schema::<Page<Folder>>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let query: ListQuery = call.query()?;
 
     with_account(&mut call, |mail| async move {
-      let folders: Vec<Folder> = folder_states(&mail.session)
+      let folders: Vec<Folder> = mail
+        .mailbox
+        .folder_states()
         .await?
         .into_iter()
         .enumerate()
@@ -68,6 +70,7 @@ impl Route for ChangeFolder {
     status: 200,
     answer: Answer::Json(schema::<Folder>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -75,14 +78,14 @@ impl Route for ChangeFolder {
     let patch: FolderPatch = call.body().await?;
 
     with_account(&mut call, |mail| async move {
-      if folder_state(&mail.session, &path).await?.is_none() {
+      if mail.mailbox.folder_state(&path).await?.is_none() {
         return Err(Asked::not_found("the mailbox holds no folder of that name").into());
       }
 
-      mark_folder(&mail.session, &path, patch.read).await?;
-      folder_now(&mail.standing, &mail.session, mail.name(), &path).await;
+      mail.mailbox.mark_folder(&path, patch.read).await?;
+      folder_now(&mail.standing, &*mail.mailbox, &mail.account, &path).await;
 
-      let Some((index, state)) = folder_state(&mail.session, &path).await? else {
+      let Some((index, state)) = mail.mailbox.folder_state(&path).await? else {
         return Err(Asked::not_found("the mailbox holds no folder of that name").into());
       };
 

@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "bmo-mail"
-version = "0.1.0-rev.1"
+version = "0.1.0-rev.2"
 dependencies = [
  "async-imap",
  "axum",
@@ -293,6 +293,7 @@ dependencies = [
  "rand 0.9.5",
  "regex",
  "reqwest",
+ "ring",
  "rmcp",
  "schemars",
  "scraper",

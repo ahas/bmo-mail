@@ -1,6 +1,6 @@
 # The mail service's boundary
 
-Fixed at 0.1.0-rev.1.
+Fixed at 0.1.0-rev.2.
 
 Every route this service answers, its event stream, its command, its client, its harness plugin, its store, its
 settings, the words it writes and the console plugin bundle it ships. The service is an upstream: a coding
@@ -25,6 +25,11 @@ flowchart TD
   repository keeps it.
 - **Every route, `GET /health` among them, needs `Authorization: Bearer <token>`,** the token of the settings;
   a missing or wrong token is answered 401 `unauthorized`. An empty token lets no caller in.
+- **Every route that reads or changes an account or what it holds needs `Owner-Key: <key>`,** the opaque key
+  of the owner the caller acts for (「Who checks what」): the accounts, the summary, the authorizations, the
+  event stream and every route under an account. One of them asked without the header, or with an empty one, is
+  refused 400 `bad-request`. `GET /health`, `GET /account-kinds` and `GET /avatars/{address}` read no account
+  and take none.
 - **Bodies are JSON with camelCase keys, both ways,** but for the byte answers (「Byte answers」). A body
   carries at most 64 MiB. A body or a query that is not the shape the route takes is refused 400
   `bad-request`, the sentence naming what is wrong.
@@ -33,11 +38,26 @@ flowchart TD
 - **No path carries a prefix.** A console that serves the routes to a browser mounts them under a prefix of
   its own and passes the path on unchanged.
 
+## Who checks what
+
+- **The console checks the person.** It signs the person in, decides which owner key stands for their login
+  account, and sets `Owner-Key` on every request it hands on to the service, replacing any the browser sent, so
+  a browser never chooses its own key. The service never reads the console's login accounts.
+- **The service checks its bearer token, and nothing of the person.** It takes the owner key as given: an opaque
+  string of 1 to 200 characters, compared exactly, never parsed and never answered. Every account stands under
+  the key that added it, and a key reaches only its own: another owner's account is answered as if it did not
+  stand. A caller holding the token may act for any key, so the token is the console's and the harness's alone.
+- **The administrator's key** is the setting `accounts.administrator`. The accounts imported from the accounts
+  file are that key's (`docs/mail.md`, 「The accounts file, imported once」), and the harness plugin acts for
+  it unless it is told another (「The harness plugin」).
+- **The service listens on a loopback address,** so only this machine reaches it.
+
 ## Keys
 
 | Key | What it is |
 |---|---|
-| `{accountName}` | An account's name: its address's local part, matched without regard to case. |
+| `{accountName}` | An account's name, unique among its owner's accounts and matched without regard to case: its address's local part unless it was given another. |
+| `{authorizationId}` | An authorization's id: opaque, given when the authorization is started. |
 | `{folderName}` | A folder's full name on the server, its hierarchy delimiter and all, percent-encoded in the path. |
 | `{messageId}` | A message's id: opaque, naming its folder and its UID there. It stands as long as the message stays in that folder; a move gives the message a new one. |
 | `{threadId}` | A conversation's id: opaque, the same for every message of the conversation whatever its folder. |
@@ -54,21 +74,70 @@ A key that names nothing is answered 404 `not-found`, an account's name naming n
 
 `GET /health` answers `ready` (the store is open and migrated), `reason` (null while ready) and `version`.
 
-## Accounts and the summary
+## Accounts
+
+Every route here but the kinds acts for the owner key the request carries, and reaches that owner's accounts
+alone (「Who checks what」).
 
 | Method and path | Sends | Answers |
 |---|---|---|
-| `GET /accounts` | query `after?`, `limit?` | a page of accounts, in the accounts file's order |
-| `GET /summary` | | `accounts`, every account, and `unreadCount`, the unread messages of every reachable inbox together |
+| `GET /account-kinds` | | a page of the kinds the service declares, one for each adapter built into it |
+| `GET /accounts` | query `after?`, `limit?` | a page of the owner's accounts, in their order |
+| `POST /accounts` | `kind`, `name?`, `address?`, `settings?`, `secrets?`, `authorization?` | 201, the account, once it signed in |
+| `GET /accounts/{accountName}` | | the account |
+| `PATCH /accounts/{accountName}` | any of `name`, `position`, `address`, `settings`, `secrets` | the account |
+| `DELETE /accounts/{accountName}` | | 204; the account is forgotten with everything the store holds for it |
+| `POST /authorizations` | `kind`, `returnTo` | 201, the authorization: the provider's page to send the browser to |
+| `GET /summary` | | `accounts`, every account of the owner, and `unreadCount`, the unread messages of every reachable inbox together |
 
-- **An account** is `name`, `address`, `position` (its place in the accounts file, from 1), `unreadCount` (its
-  inbox's unread messages) and `reachable` (its server answered; where it did not, the count is 0). Nothing
-  else of the accounts file is answered.
+- **A kind** is `name` (its adapter's name, which an account names it by), `signIn` (`password`: an account is
+  added from its fields; `authorization`: through the provider's own page) and `fields`, what a person writes to
+  add an account of it, in the order a form shows them. A field is `name` (the key it stands under in an
+  account's `settings` or `secrets`), `kind` (`text`, `port`, or `secret`: kept encrypted and never answered),
+  `required` and `default` (the value a form starts from, or null). The address and the name are every
+  account's, and no kind declares them as fields.
+- **The kinds** each adapter declares:
+
+  | Kind | Signs in by | Fields |
+  |---|---|---|
+  | `imap-smtp` | password | `imapHost`, `imapPort` (993 by default), `imapTlsName`, `smtpHost`, `smtpPort` (587 by default), `smtpTlsName`, `login`, `password` (secret) |
+  | `gmail` | authorization | none: the Gmail API adapter keeps the tokens Google hands back as the account's secrets |
+  | `graph` | authorization | none: the Microsoft Graph adapter keeps the tokens Microsoft hands back as the account's secrets |
+
+  A kind is declared, listed and taken only where its adapter is built into the service. `imap-smtp` is;
+  `gmail` and `graph` stand here as their contract, and until their adapters are built a request naming either
+  is refused 422 `unknown-kind`. For `imap-smtp`, a TLS name left empty is the host and `-` is a plain
+  connection, for a stand-in server alone; a login left empty is the address; a port is 1 to 65535.
+- **An account** is `name` (1 to 64 characters with no slash or space, kept in lower case), `kind`, `address`,
+  `position` (its place in its owner's list, from 1), `settings` (its fields that are not secret, by name, each
+  a string), `unreadCount` (its inbox's unread messages) and `reachable` (its server answered; where it did
+  not, the count is 0). Its secrets are never answered.
+- **Adding an account by password:** `address` (required), `settings` and `secrets` (by field name, each a
+  string; a required field missing, or a field the kind does not declare there, is refused 400 `bad-request`)
+  and `name` (the address's local part where none is given). A name taken among the owner's accounts is
+  refused 409 `conflict`. The service then signs in, and an account whose servers did not take its login is
+  refused 422 `sign-in-failed` with nothing of it kept. A service with no key file refuses 503 `not-ready`
+  (`docs/mail.md`, 「Accounts and credentials」). The account is placed after the owner's others.
+- **Adding an account by authorization** is two steps. `POST /authorizations` names the `kind` and
+  `returnTo`, the address the provider sends the browser back to, and answers `id`, `kind`, `url` (the
+  provider's page to send the browser to) and `expiresAt`; the service holds it for ten minutes, for that owner
+  alone. The browser comes back to `returnTo` with the provider's answer in its query, and `POST /accounts`
+  with `kind`, `name?` and `authorization`, `{"id", "answer"}`, `answer` that query as an object of strings,
+  finishes it: the adapter takes the tokens, reads the account's address from the provider and the account is
+  kept. An authorization that is not the owner's, has run out or was used is refused 422
+  `unknown-authorization`; `POST /authorizations` for a kind that signs in by password is refused 422
+  `no-authorization`.
+- **A change of an account:** `name` renames it (409 `conflict` where the owner holds that name); `position`
+  moves it among the owner's others; `address` and `settings` replace its own, `settings` whole; `secrets`
+  replaces the secrets it names and keeps the others. A change of the address, the settings or the secrets
+  signs in again before anything is kept, refused 422 `sign-in-failed` where it fails.
+- **An account removed** is forgotten with its labels, rules, settings, spam senders, mark and known
+  addresses; its sends still waiting are taken back, and its mailbox on the server is untouched.
 - **The small lists** — accounts, folders, labels, rules and addresses — are paged by `position`: `after`
   names the position of the last item read, `limit` caps the page, and with neither the whole list comes in
   one page.
-- **With no accounts file** there is no account: the accounts page is empty, the summary counts nothing and
-  every route under an account answers 404.
+- **An owner with no account** has an empty accounts page and a summary that counts nothing, and every route
+  under an account answers 404.
 
 ## Folders
 
@@ -222,7 +291,7 @@ log. A route answers the common codes of the conventions where they apply, and t
 
 | Status | Code | When |
 |---|---|---|
-| 409 | `conflict` | a label's name is taken, or a send has already gone |
+| 409 | `conflict` | an account's or a label's name is taken, or a send has already gone |
 | 413 | `too-large` | a file would take the draft past the size the submission server takes, or the message to send is past it |
 | 422 | `too-many-labels` | the account holds the most labels it may |
 | 422 | `flag-not-settable` | a flag is not one a request may set |
@@ -234,17 +303,22 @@ log. A route answers the common codes of the conventions where they apply, and t
 | 422 | `send-too-late` | a send's `sendAt` is past the undo span from now |
 | 422 | `no-receipt-asked` | the message asks for no read receipt |
 | 422 | `draft-not-placed` | the server did not say where it put a saved draft, and its `Message-ID` finds it nowhere |
+| 422 | `unknown-kind` | a body names a kind of account the service does not declare |
+| 422 | `sign-in-failed` | the account's servers did not take its sign-in |
+| 422 | `no-authorization` | an authorization is asked for a kind that signs in by password |
+| 422 | `unknown-authorization` | a body names an authorization that is not the owner's, has run out or was used |
 | 502 | `upstream-failed` | the mail server did not answer, or failed |
+| 503 | `not-ready` | an account is to be added or changed, and the service has no key file to seal its secrets with |
 
 ## The event stream
 
 `GET /events` is the service's one stream, as server-sent events: each event's SSE `event` is its kind, its
-`id` the event's number, and its `data` the event, `{"id", "kind", "at", "data"}`. A reader resumes with
-`Last-Event-ID` or `after`, narrows with `kinds` (a comma-separated list) and with `accountName`, and asks
-the same events as a page with `Accept: application/json`, by `after` and `limit` (1 to 1,000, 100 where none
-is given). The service keeps the events of the last day, at most 10,000; a resume from before them is answered
-410 `gone`, and the reader reads the collections again. An idle stream carries a comment line every fifteen
-seconds.
+`id` the event's number, and its `data` the event, `{"id", "kind", "at", "data"}`. A reader reads the events
+of the owner key it carries alone, resumes with `Last-Event-ID` or `after`, narrows with `kinds` (a
+comma-separated list) and with `accountName`, and asks the same events as a page with
+`Accept: application/json`, by `after` and `limit` (1 to 1,000, 100 where none is given). The service keeps the events
+of the last day, at most 10,000; a resume from before them is answered 410 `gone`, and the reader reads the
+collections again. An idle stream carries a comment line every fifteen seconds.
 
 | Kind | Data | When |
 |---|---|---|
@@ -253,6 +327,9 @@ seconds.
 | `message.deleted` | `accountName` and `id` | a route deleted it, or moved it out from under that id |
 | `folder.changed` | the folder | its counts may have moved: the watcher saw its inbox change, or a route changed messages in it |
 | `send.changed` | the send | a send was made, or its state moved |
+| `account.created` | the account | an account was added |
+| `account.changed` | the account | an account was renamed, moved, or its address, settings or secrets changed |
+| `account.deleted` | `name` | an account was removed |
 
 A message the service itself moved into an inbox is not new mail and makes no `message.created`.
 
@@ -275,11 +352,14 @@ Dates are written by `date` in `locale` at the setting `wording.time_zone`.
 
 ## The store
 
-A SQLite file, the one `store.path` names, opened and migrated when the service starts. Every row is an
-account's by its address but for a sender logo, which is a domain's, and an event, which is the service's.
+A SQLite file, the one `store.path` names, opened and migrated when the service starts. Every row of the
+tables under an account is that account's by its id, written as text in `account`; a sender logo is a
+domain's, an event is its owner's, and an import is the service's.
 
 | Table | Columns | What it holds |
 |---|---|---|
+| `accounts` | `id` (its own), `owner`, `name`, `kind`, `address`, `position`, `settings` (JSON), `secret` (the sealed secrets), `created_at`; unique `owner`, `name` | the accounts (`docs/mail.md`, 「Accounts and credentials」) |
+| `imports` | `source` (key), `owner`, `count`, `at` | the record that the accounts file was imported, and for which owner key |
 | `labels` | `account`, `id`, `name`, `color`, `position`, `created_at`; key `account`, `id` | the account's labels |
 | `rules` | `id` (its own), `account`, `position`, `enabled`, `match`, `conditions` and `actions` (JSON), `created_at`; indexed by `account`, `position` | the filter rules |
 | `settings` | `account` (key), `signature`, `receipt_default`, `show_images`, `undo_send_ms` | the account's settings |
@@ -287,7 +367,7 @@ account's by its address but for a sender logo, which is a domain's, and an even
 | `marks` | `account`, `folder`, `uid_validity`, `last_uid`; key `account`, `folder` | the watcher's high-water mark |
 | `addresses` | `account`, `address`, `name`, `last_used`, `uses`; key `account`, `address` | the known addresses |
 | `avatars` | `domain` (key), `type`, `bytes` (none where nothing was found), `looked_up_at` | the sender logos |
-| `events` | `id` (the event's number), `kind`, `account`, `at`, `data` (JSON) | the event stream's window |
+| `events` | `id` (the event's number), `kind`, `owner`, `account` (the account's name), `at`, `data` (JSON) | the event stream's window |
 
 ## The command
 
@@ -303,7 +383,7 @@ account's by its address but for a sender logo, which is a domain's, and an even
 
 `bmo_mail::client`, in the repository's crate: one method for each route, sending and reading the bodies the
 OpenAPI document states, and a refusal read back as its status, `code` and `error`. It carries the contract
-and no caller's policy. The console plugin bundle reads the same bodies through the TypeScript types
+and no caller's policy: it acts for the owner key it is given, and sends it on every route that takes one. The console plugin bundle reads the same bodies through the TypeScript types
 generated from `docs/openapi.json` into `client/shared/openapi.ts`.
 
 ## The harness plugin
@@ -313,7 +393,8 @@ The plugin `bmo-mail`: the MCP server `bmo-mail mcp` starts on standard input an
 
 - **Where it reaches the service:** the address `--address` or `BMO_MAIL_ADDRESS` names, else
   `http://` and the settings' `server.listen`; the token `--token` or `BMO_MAIL_TOKEN` gives, else the
-  settings' `server.token`.
+  settings' `server.token`; and it acts for the owner key `--owner` or `BMO_MAIL_OWNER` gives, else the
+  settings' `accounts.administrator`.
 - **Each tool is a thin call of one route** through the client, its input and output the JSON Schemas under
   `x-tools`. A tool answers the route's answer as structured content. A refusal is a tool error whose text is
   JSON: `status`, `code` and `error` as the service answered them, `code` `bad-request` for arguments that
@@ -334,9 +415,11 @@ The plugin `bmo-mail`: the MCP server `bmo-mail mcp` starts on standard input an
 
 It calls no other service.
 
-- **The IMAP and submission servers** the accounts file names, over TLS but where the file says `-`.
-- **The accounts file** the setting `accounts.file` names, read again when it changed and checked every
-  minute.
+- **The servers each account names,** through its kind's adapter: for `imap-smtp` the IMAP and submission
+  servers, over TLS but where a TLS name is `-`.
+- **The key file** the setting `secrets.key_file` names, read once at start.
+- **The accounts file** the setting `accounts.file` names, read once at start until it has been imported, and
+  never after (`docs/mail.md`, 「The accounts file, imported once」).
 - **DNS and the open web** for sender logos: a domain's BIMI record, and an HTTPS address on the open web,
   never one of this machine's own networks (`docs/mail.md`, 「Sender avatars」).
 - **The staging folder** the setting `staging.dir` names, where a file posted to a draft waits until the draft
@@ -355,7 +438,9 @@ the settings folder.
 | `server` | `listen` | where the service answers, as `host:port`, a loopback address | `127.0.0.1:3330` |
 | `server` | `token` | the bearer token every caller presents | none |
 | `store` | `path` | the SQLite file of 「The store」 | `mail.db` |
-| `accounts` | `file` | the accounts file (`docs/mail.md`, 「Accounts and credentials」) | none: no accounts |
+| `accounts` | `file` | the accounts file imported once (`docs/mail.md`, 「The accounts file, imported once」) | none: nothing is imported |
+| `accounts` | `administrator` | the administrator's owner key (「Who checks what」) | none: nothing is imported, and the harness plugin needs `--owner` |
+| `secrets` | `key_file` | the key file account secrets are sealed with: 32 random bytes as base64 on one line | none: no account is kept |
 | `staging` | `dir` | the folder posted files wait in | `mail-staging` |
 | `wording` | `language` | the language of 「The service's own words」 | `ko` |
 | `wording` | `time_zone` | the time zone dates are written in | `Asia/Seoul` |
@@ -378,11 +463,15 @@ notice kind `message.created`.
   the TipTap editor packages its editor is built on. For the bundle's own install and typecheck a packed copy
   of bmo-ui stands in `client/vendor/`, and bmo-text's TypeScript package is read from the base library's own
   folder.
+- **The owner key is not the bundle's.** The bundle calls the routes without `Owner-Key`; the console sets it on
+  each request it relays and on the event stream it relays, from the person signed in (「Who checks what」).
 - **Wording:** every word the screen shows is the bundle's language pack, `client/i18n/locales/ko.json`, one
   JSON file to a locale in the folder its declaration names, under the bundle's namespace: the screen's name
   under `mail.title.screen`, and the words a console raises a notice of a declared kind in under
   `mail.notice.<kind>`, a `title` and a `body` that takes the message's `{from}` and `{subject}`. The screen
-  shows a refusal by the key `mail.error.<code>`.
+  shows a refusal by the key `mail.error.<code>`, a kind of account by `mail.account_kind.<kind>` and each of
+  its fields by `mail.account_field.<field>`, so a kind the service declares is named without the screen
+  knowing it.
 
 ## Versions
 

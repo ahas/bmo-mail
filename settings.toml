@@ -13,10 +13,18 @@ token = ""
 path = "mail.db"
 
 [accounts]
-# The accounts file (docs/mail.md, 「Accounts and credentials」) has no default: an instance run from source
-# reaches no mailbox until its local settings name one, and a deployment names the data root's
-# env/mail-accounts.
+# The accounts file imported once into the store (docs/mail.md, 「The accounts file, imported once」) has no
+# default: an instance run from source imports nothing.
 file = ""
+# The administrator's owner key: the imported accounts are its, and the harness plugin acts for it. A
+# deployment names its own.
+administrator = ""
+
+[secrets]
+# The key file an account's secrets are sealed with: 32 random bytes as base64 on one line. It has no default:
+# an instance run from source keeps no account until its local settings name one, and a deployment names the
+# data root's env/mail-secrets.key.
+key_file = ""
 
 [staging]
 # The folder uploaded attachments wait in until the message carrying them is saved or sent.

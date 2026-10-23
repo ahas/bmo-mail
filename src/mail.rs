@@ -92,6 +92,13 @@ impl MailPart {
   }
 }
 
+/// A part of a message, its transfer encoding undone, with its type and its name.
+pub struct OpenedPart {
+  pub bytes: Vec<u8>,
+  pub kind: Option<String>,
+  pub filename: Option<String>,
+}
+
 /// A message's parts, sorted: the text body, the HTML body, the attachments and the inline pictures.
 #[derive(Clone, Debug, Default)]
 pub struct MailParts {

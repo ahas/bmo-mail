@@ -4,7 +4,7 @@
 [package]
 name = "bmo-mail"
 description = "Mailboxes read, written and watched over IMAP and submission, behind one API."
-version = "0.1.0-rev.1"
+version = "0.1.0-rev.2"
 edition = "2024"
 license = "MIT"
 publish = false
@@ -57,6 +57,9 @@ psl = "2.1.243"
 quoted_printable = "0.5.2"
 # A label's id.
 rand = "0.9.2"
+# An account's secrets sealed at rest with AES-256-GCM, each under a fresh random nonce. The same crate the TLS
+# connections already run on.
+ring = "0.17.14"
 # The search box's words, a search's day, and a subject's reply prefixes.
 regex = "1.13.1"
 # The client's calls, the health command asking the service, and a sender's logo fetched over HTTPS.

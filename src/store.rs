@@ -1,6 +1,7 @@
-//! The store: one SQLite file, opened once as the service starts, holding the labels, the filter rules, the
-//! accounts' settings, the always-spam senders, the watcher's marks, the known addresses and the sender
-//! logos (`docs/api.md`, 「The store」). Each module that keeps rows asks the pool itself.
+//! The store: one SQLite file, opened once as the service starts, holding the accounts with their secrets
+//! sealed, the labels, the filter rules, the accounts' settings, the always-spam senders, the watcher's marks,
+//! the known addresses, the sender logos, the event window and the record of the accounts file's import
+//! (`docs/api.md`, 「The store」). Each module that keeps rows asks the pool itself.
 
 use std::path::Path;
 use std::str::FromStr;

@@ -1,8 +1,9 @@
 # Mail
 
-The mail service and its screen: the mailboxes the accounts file names, read, written and watched
-through this service's routes, through the MCP server a coding harness takes it by, and through the
-console screen its plugin bundle carries, laid out the way Gmail lays out its web client. This document
+The mail service and its screen: each login account's own mailboxes, added from the screen, read,
+written and watched through this service's routes, through the MCP server a coding harness takes it by,
+and through the console screen its plugin bundle carries, laid out the way Gmail lays out its web client.
+This document
 is the canonical statement of what the service and the screen do, where each piece of state lives and
 what belongs to the mail server rather than to this repository. How the service is asked — its routes,
 events, client, harness plugin, store and settings — is `docs/api.md`.
@@ -12,16 +13,17 @@ flowchart TD
   Harness[a coding harness] -->|bmo-mail mcp| Service[bmo-mail]
   Browser[browser: the mail screen] --> Console[a console: sign-in and relay]
   Console --> Service
-  Service --> IMAP[mail server: IMAP]
-  Service --> SMTP[mail server: submission]
+  Service --> Adapter[the account's adapter]
+  Adapter --> IMAP[mail server: IMAP]
+  Adapter --> SMTP[mail server: submission]
   Service --> Store[the service's store]
   Service -->|events| Console
 ```
 
 ## Scope
 
-- **Accounts:** the accounts the accounts file names (「Accounts and credentials」). The code and the
-  documents carry no address.
+- **Accounts:** each owner's own list of mail accounts, added, changed and removed from the screen
+  (「Accounts and credentials」). The code and the documents carry no address.
 - **In the screen:**
   - Views: the inbox, the sent folder, drafts, spam, trash, starred, one view per label, any other
     folder the mailbox holds, and search.
@@ -56,7 +58,7 @@ flowchart TD
 
 ## The mail server
 
-- **What it is:** the server the accounts file names. The service is written against Postfix 3.6
+- **What it is:** the server an IMAP/SMTP account names. The service is written against Postfix 3.6
   delivering local mail straight into each user's Maildir and Dovecot 2.3 serving IMAP, with the
   accounts as system users logged in through PAM.
 - **What the service relies on:**
@@ -79,23 +81,63 @@ flowchart TD
 
 ## Accounts and credentials
 
-- **The accounts file** holds the servers and the logins, one per line, `#` lines ignored:
-  - `imap <host> <port> <tls name>` and `smtp <host> <port> <tls name>`. The TLS name is the name
-    the certificate is checked against when the host is an address; `-` means a plain connection,
-    which only a stand-in server uses.
-  - `account <address> <login> <password>`, one per account, in the order the screen lists them.
-  - An account is named in the screen's addresses and the routes by its address's local part.
-- **Which file:** the one the setting `accounts.file` names (`docs/api.md`, 「Settings」). The
-  repository's own settings name none, so an instance run from source reaches no real mailbox
-  because the setting was forgotten; a deployment names the data root's `env/mail-accounts` in its
-  local settings.
-- **A service with no accounts file** answers every route as having no accounts and watches nothing;
-  the screen shows its empty state.
-- **The file is read again** when it changed, so writing it takes effect without a restart. A file
-  that exists but does not read is said in the service's log once per change, naming the line and
-  never repeating it, since the line may hold a password.
-- **The file is a secret:** it never enters the repository, a log line or a response. Only the
-  address of each account ever reaches the browser.
+- **An account belongs to an owner.** The owner is named by an opaque owner key the caller passes
+  with every request (`docs/api.md`, 「Who checks what」); the service never reads the console's login
+  accounts and checks nothing of the key but that it is given. Each owner has a list of their own, in
+  the order they put it. One owner key never sees, reads or changes another's account: every route
+  under an account answers an owner who does not hold it as if the account did not stand.
+- **An account is of a kind,** the name of the adapter that reaches its mailbox. Each adapter declares
+  its kind: how an account of it signs in, and the fields a person writes to add one. The screen, the
+  routes and the tools know no adapter: they read the kinds the service declares, and the service
+  finds an account's adapter by its kind alone.
+  - `imap-smtp`: a mail server reached over IMAP and submission, signed in with a login and a
+    password. Its fields are the IMAP host and port, the submission host and port, the name each
+    certificate is checked against (the host where none is written; `-` for a plain connection, which
+    only a stand-in server uses), the login (the address where none is written) and the password.
+  - `gmail` (the Gmail API) and `graph` (Microsoft Graph): a provider signed in through its own
+    authorization page, the service keeping the tokens it hands back. Their contract stands in
+    `docs/api.md`, 「Accounts」; until an adapter of the kind is built into the service, the service
+    does not declare the kind and no account of it can be added.
+- **Adding an account signs in first.** The service checks the account against its servers — for
+  `imap-smtp` a login to IMAP and to submission — and keeps it only when they took it; an account
+  whose sign-in failed is refused, and nothing of it is kept. Changing an account's address, settings
+  or password signs in again the same way.
+- **An account's name** is the local part of its address unless the person gives it another. It is
+  unique among one owner's accounts and matched without regard to case; the routes and the screen's
+  addresses name the account by it.
+- **What is secret:** a password, and a provider's tokens. They are kept in the store encrypted with
+  AES-256-GCM, a fresh nonce for each sealing and the account's id bound into it, under a key the
+  service reads at start from the key file the setting `secrets.key_file` names: 32 random bytes
+  written as base64 on one line. The key file is the deployment's, the data root's
+  `env/mail-secrets.key`, and never enters the repository. A secret is never answered, never written
+  into a log line and never reaches the browser: of an account only its name, kind, address and the
+  settings that are not secret are answered.
+- **Without a key file** the service keeps no account: the list is empty and adding one is refused as
+  not ready. A key file named but missing or unreadable, a key that does not open the accounts kept, or
+  a store holding accounts while no key file is named, stops the service at start rather than leave
+  accounts it cannot open.
+- **Removing an account** forgets it and everything the store holds for it — its labels, rules,
+  settings, spam senders, the watcher's mark and the known addresses — takes back its sends still
+  waiting, and lets its connections go. Its mailbox on the server is untouched.
+
+### The accounts file, imported once
+
+- **A deployment that read its mailboxes from an accounts file moves them into the store once.** At
+  start, while no import has been made, the service reads the file the setting `accounts.file` names
+  and keeps each account it names as an `imap-smtp` account of the administrator's owner key, in the
+  file's order, its password encrypted. What the store already kept for each account's address —
+  labels, rules, settings, spam senders, the watcher's mark, the known addresses and the event window
+  — stays that account's, so nothing it had is lost. The import is recorded, and from then on the file
+  is not read again.
+- **The file's lines** are the service's own syntax: `imap <host> <port> <tls name>` and
+  `smtp <host> <port> <tls name>`, `-` as the TLS name for a plain connection, then
+  `account <address> <login> <password>`, one per account; blank lines and `#` lines are passed over.
+  A file that does not read is said in the log naming its line and never repeating it, since the line
+  may hold a password, and nothing is imported.
+- **The administrator's owner key** is read from the setting `accounts.administrator`. The imported
+  accounts are that key's; a change of the setting carries the accounts the earlier key held to the
+  new one at the next start. With no administrator key or no key file, the import waits, said in the
+  log, and the file stays unread.
 
 ## Where each piece of state lives
 
@@ -107,7 +149,9 @@ flowchart TD
   - Spam reported and un-reported set `$Junk` or `$NotJunk`, the keywords a learning filter reads.
   - A read receipt answered, sent or declined, sets `$MDNSent`, so it is asked once.
   - Drafts are messages in the drafts folder; sent mail is a copy in the sent folder.
-- **In the service's store** (`docs/api.md`, 「The store」), per account:
+- **In the service's store** (`docs/api.md`, 「The store」), the accounts themselves: each one's owner
+  key, name, kind, address, place in its owner's list and settings, and its secrets sealed
+  (「Accounts and credentials」). Then, per account:
   - Labels: the keyword, the name, the colour, the order.
   - Filter rules: an ordered list of conditions and actions, each rule on or off.
   - Settings: the signature as the markup it is written in, whether read receipts are asked by
@@ -130,7 +174,7 @@ flowchart TD
 
 ## Connections and the watcher
 
-- **Two connections per account,** held by the service:
+- **Two connections per `imap-smtp` account,** held by its adapter:
   - The watch connection stands in `IDLE` on the inbox.
   - The work connection answers the routes, one folder lock at a time. Each piece of work first
     brings the folder up to date, since the server takes mail that arrived since into a
@@ -157,8 +201,8 @@ flowchart TD
 - **On start** the watcher handles whatever arrived while the service was down the same way, so a
   rule is never skipped. A first start with no mark, or a mark taken under another UID validity — a
   folder the server rebuilt — sets it at the newest message and handles nothing older.
-- **The accounts file is read again every minute;** when it changed, the watchers stop and start
-  again on what it now says.
+- **An account added, changed or removed** starts, restarts or stops its watcher at once; the
+  watchers also follow the store every minute.
 - A flag or an expunge the server reports on the inbox only says that the inbox changed, as
   `folder.changed`.
 
@@ -390,16 +434,15 @@ flowchart TD
   the address's local part and a view is a folder role, `starred`, `label/<id>`, `folder/<name>` or
   `search?q=`. Opening a thread is a history step, so a shared link opens the same thread.
 - **Desktop (1440px):** three regions side by side behind Splitters, each scrolling on its own:
-  1. **Mail nav** — the account switch (each account with its unread mark), compose, the folder
-     roles, starred, the labels with their colours, the other folders, and the settings button. It
-     folds to icons; folded, the unread mark is drawn over its row's icon rather than beside it, so
-     every row's icon stands on one centre whether it carries a mark or not. An account stands as
-     its own avatar rather than as an account icon — the first letter of its local part on the
-     colour that address carries everywhere in the console — because the accounts are identities and
-     folded they would otherwise be one icon repeated. The domain's logo is never that avatar:
-     accounts of one domain would all wear it. An address is longer than the panel is wide, so the
-     row cuts it and names it on hover at every width rather than folded alone; nothing in the nav
-     moves.
+  1. **Mail nav** — the account switch (each account with its unread mark), compose, the folder roles,
+     starred, the labels with their colours, the other folders, and the accounts and settings buttons. It
+     folds to icons; folded, the unread mark is drawn over its row's icon rather than beside it, so every
+     row's icon stands on one centre whether it carries a mark or not. An account stands as its own
+     avatar rather than as an account icon — the first letter of its local part on the colour that
+     address carries everywhere in the console — because the accounts are identities and folded they
+     would otherwise be one icon repeated. The domain's logo is never that avatar: accounts of one domain
+     would all wear it. An address is longer than the panel is wide, so the row cuts it and names it on
+     hover at every width rather than folded alone; nothing in the nav moves.
   2. **List** — the search box on top, the toolbar under it, then the conversations.
   3. **Thread** — the subject on a row of its own; under it the labels on the left and reply,
      reply all and forward on the right, which answer the newest message; then the messages, the
@@ -478,6 +521,18 @@ flowchart TD
   - Compose is a button fixed at the bottom right, and the list keeps room at its foot for it, so
     the last row is never under it however far down the list is read. The composer is a full-height
     bottom drawer, and Enter in its body makes a new line.
+- **The accounts** are one modal, opened from the mail nav's accounts button and, where the owner has
+  no account yet, from the empty state; on a phone it is a bottom drawer. It lists the owner's own
+  accounts, each with its kind and address and a remove action that asks first, and adds one:
+  - The kinds offered are the ones the service declares; the screen names a kind and each of its
+    fields by the words its pack holds under that name, and knows nothing else of any kind.
+  - A kind that signs in with a password draws a form from its declared fields: the address, a name
+    that may be left empty, then each field — a secret one in a password box, a port as a number, an
+    optional one marked so and given its default where it declares one.
+  - A kind that signs in by authorization offers one button, which opens the provider's page; the
+    browser comes back to the mail screen, which finishes the adding with what the provider answered.
+  - Adding signs in before anything is kept; a refused sign-in, a name taken or a kind not offered is
+    said in the form by its refusal's words, and an account added opens.
 - **The settings** — signature, images, read receipts, filters, labels, spam senders — are one modal
   with a section each, opened from the mail nav; on a phone it is a bottom drawer. Signature, images
   and read receipts are a form, saved together by the one save at the foot, and closing with changes
@@ -500,15 +555,16 @@ flowchart TD
   folders, with example accounts on the reserved `standin.example` domain, and an SMTP stand-in that
   hands mail for those addresses to the container and relays nothing anywhere.
 - **The stand-in is deferred with the tests** (`docs/inventory.md`). It is written again here when the
-  tests are. Until then a development instance runs with no accounts file, or with one naming a mail
+  tests are. Until then a development instance runs with no account, or with accounts added for a mail
   server set up for it.
 
 ## Outside this repository
 
 What the mail server's operator does by hand, in this order:
 
-1. Write the accounts file the deployment's `accounts.file` names: the IMAP and submission hosts
-   with the certificate's name as the TLS name, and the logins with their passwords.
+1. Write the key file the deployment's `secrets.key_file` names — 32 random bytes as base64, readable
+   by the service's user alone — and name the administrator's owner key in `accounts.administrator`.
+   Keep the key file beside the store's backups: a store without its key opens no account.
 2. Confirm the IMAP server's per-user connection limit leaves room for two connections per account
    from the service besides the account's other clients.
 3. Put a content spam filter at delivery — Postfix delivering through Dovecot's LDA or LMTP with

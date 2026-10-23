@@ -10,10 +10,11 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::wire::{
-  Account, Address, AddressQuery, Draft, DraftPatch, Event, EventQuery, Folder, FolderPatch, Health, Label,
-  LabelPatch, ListQuery, Message, MessagePatch, MessageQuery, NewAttachment, NewDraft, NewLabel,
-  NewReceipt, NewRule, NewRuleRun, NewSend, Page, Receipt, Rule, RulePatch, RuleRun, Send, Settings,
-  SettingsPatch, SpamSender, Summary, Thread, ThreadQuery, WireError,
+  Account, AccountKind, AccountPatch, Address, AddressQuery, Authorization, Draft, DraftPatch, Event,
+  EventQuery, Folder, FolderPatch, Health, Label, LabelPatch, ListQuery, Message, MessagePatch,
+  MessageQuery, NewAccount, NewAttachment, NewAuthorization, NewDraft, NewLabel, NewReceipt, NewRule,
+  NewRuleRun, NewSend, Page, Receipt, Rule, RulePatch, RuleRun, Send, Settings, SettingsPatch, SpamSender,
+  Summary, Thread, ThreadQuery, WireError,
 };
 
 /// How long one call waits for its answer.
@@ -62,29 +63,43 @@ pub fn segment(key: &str) -> String {
   utf8_percent_encode(key, SEGMENT).to_string()
 }
 
-/// The client of one service: its address and its bearer token.
+/// The client of one service: its address, its bearer token, and the owner key it acts for.
 #[derive(Clone)]
 pub struct MailClient {
   address: String,
   token: String,
+  owner: Option<String>,
   http: reqwest::Client,
 }
 
 impl MailClient {
+  /// A client acting for no owner: it reaches the routes that read no account alone.
   pub fn new(address: impl Into<String>, token: impl Into<String>) -> Self {
     Self {
       address: address.into().trim_end_matches('/').to_owned(),
       token: token.into(),
+      owner: None,
       http: reqwest::Client::builder().timeout(PATIENCE).build().unwrap_or_default(),
     }
   }
 
-  fn request(&self, method: Method, path: &str) -> RequestBuilder {
+  /// The same client acting for an owner key, sent as `Owner-Key` on every call.
+  pub fn acting_for(mut self, owner: impl Into<String>) -> Self {
+    self.owner = Some(owner.into());
     self
+  }
+
+  fn request(&self, method: Method, path: &str) -> RequestBuilder {
+    let request = self
       .http
       .request(method, format!("{}{path}", self.address))
       .bearer_auth(&self.token)
-      .header(reqwest::header::ACCEPT, "application/json")
+      .header(reqwest::header::ACCEPT, "application/json");
+
+    match &self.owner {
+      Some(owner) => request.header("owner-key", owner),
+      None => request,
+    }
   }
 
   /// Sends a call and answers the body of a success.
@@ -167,9 +182,39 @@ impl MailClient {
     self.get("/events", query).await
   }
 
+  /// `GET /account-kinds`.
+  pub async fn account_kinds(&self) -> Called<Page<AccountKind>> {
+    self.get("/account-kinds", &()).await
+  }
+
   /// `GET /accounts`.
   pub async fn accounts(&self, query: &ListQuery) -> Called<Page<Account>> {
     self.get("/accounts", query).await
+  }
+
+  /// `POST /accounts`.
+  pub async fn create_account(&self, account: &NewAccount) -> Called<Account> {
+    self.with_body(Method::POST, "/accounts", account).await
+  }
+
+  /// `GET /accounts/{accountName}`.
+  pub async fn account_of(&self, account: &str) -> Called<Account> {
+    self.get(&Self::account(account), &()).await
+  }
+
+  /// `PATCH /accounts/{accountName}`.
+  pub async fn change_account(&self, account: &str, patch: &AccountPatch) -> Called<Account> {
+    self.with_body(Method::PATCH, &Self::account(account), patch).await
+  }
+
+  /// `DELETE /accounts/{accountName}`.
+  pub async fn delete_account(&self, account: &str) -> Called<()> {
+    self.delete(&Self::account(account)).await
+  }
+
+  /// `POST /authorizations`.
+  pub async fn create_authorization(&self, authorization: &NewAuthorization) -> Called<Authorization> {
+    self.with_body(Method::POST, "/authorizations", authorization).await
   }
 
   /// `GET /summary`.

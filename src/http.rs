@@ -18,10 +18,12 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use crate::accounts::AccountsFile;
+use crate::accounts::Accounts;
+use crate::accounts::authorizations::Authorizations;
+use crate::adapters::{Context, Mailboxes};
 use crate::avatars::Avatars;
 use crate::events::Events;
-use crate::imap::session::Sessions;
+use crate::secrets::Secrets;
 use crate::settings::Settings;
 use crate::store::Store;
 use crate::wording::Wording;
@@ -71,6 +73,8 @@ pub struct Operation {
   pub answer: Answer,
   /// The codes of its own, beside the token's, the shape's and the failures every route can answer.
   pub codes: &'static [&'static str],
+  /// Whether it acts for the owner key the request carries (`docs/api.md`, 「Who checks what」).
+  pub owned: bool,
 }
 
 /// One route the service answers, registered beside its answer with `bmo_mail::route!`.
@@ -156,6 +160,12 @@ pub const GONE: &str = "gone";
 pub const TOO_LARGE: &str = "too-large";
 pub const FAILED: &str = "failed";
 pub const UPSTREAM_FAILED: &str = "upstream-failed";
+pub const NOT_READY: &str = "not-ready";
+
+/// The header the caller names the owner key it acts for in.
+pub const OWNER_KEY: &str = "owner-key";
+/// The longest an owner key may be.
+const OWNER_KEY_LONGEST: usize = 200;
 
 /// A refusal: a status, and a body of the kebab-case code a caller matches on and the English sentence for a
 /// log (`docs/api.md`, 「Refusals」).
@@ -204,10 +214,12 @@ pub struct Standing {
   pub settings: Settings,
   /// The store, open and migrated.
   pub store: Store,
-  /// The accounts file, read again when it changed.
-  pub accounts: AccountsFile,
-  /// Each account's work connection.
-  pub sessions: Sessions,
+  /// The accounts, each an owner's.
+  pub accounts: Accounts,
+  /// Each account's open mailbox.
+  pub mailboxes: Mailboxes,
+  /// The authorizations waiting for the browser to come back.
+  pub authorizations: Authorizations,
   /// The event stream and its window.
   pub events: Events,
   /// The service's own words.
@@ -219,19 +231,29 @@ pub struct Standing {
 }
 
 impl Standing {
-  pub fn new(settings: Settings, store: Store, wording: Wording) -> Self {
-    let accounts = AccountsFile::new(settings.accounts.file.clone());
+  /// What the service stands on, its accounts' secrets sealed with `secrets` where it has a key.
+  pub fn new(settings: Settings, store: Store, wording: Wording, secrets: Option<Secrets>) -> Self {
+    let accounts = Accounts::new(store.pool().clone(), secrets);
     let events = Events::new(store.pool().clone());
 
     Self {
       settings,
       store,
       accounts,
-      sessions: Sessions::default(),
+      mailboxes: Mailboxes::default(),
+      authorizations: Authorizations::default(),
       events,
       wording,
       sends: Sends::default(),
       avatars: Avatars::default(),
+    }
+  }
+
+  /// What a mailbox stands on beside its account.
+  pub fn context(&self) -> Context {
+    Context {
+      pool: self.store.pool().clone(),
+      staging: self.settings.staging.dir.clone(),
     }
   }
 }
@@ -269,6 +291,23 @@ impl Call {
       .find(|(key, _)| *key == name)
       .map(|(_, value)| value.to_owned())
       .ok_or_else(|| Refused::failed(format!("the route's path names no {name}")))
+  }
+
+  /// The owner key the request acts for: the `Owner-Key` header, 1 to 200 characters taken as they stand;
+  /// a request without one is refused 400.
+  pub fn owner(&self) -> Result<String, Refused> {
+    let key = self
+      .request
+      .headers()
+      .get(OWNER_KEY)
+      .and_then(|value| value.to_str().ok())
+      .unwrap_or_default();
+
+    if key.is_empty() || key.chars().count() > OWNER_KEY_LONGEST {
+      return Err(Refused::bad_request("the request names no owner key of 1 to 200 characters"));
+    }
+
+    Ok(key.to_owned())
   }
 
   /// The query read as the route's type; a query not of its shape is refused 400.

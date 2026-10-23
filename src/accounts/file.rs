@@ -1,41 +1,29 @@
-//! The mail accounts file (`docs/mail.md`, 「Accounts and credentials」): the IMAP and submission servers
-//! and one login per account. It is a secret, so nothing read from it but an account's address ever leaves
-//! this module's callers for a log line or an answer.
+//! The mail accounts file (`docs/mail.md`, 「The accounts file, imported once」): the IMAP and submission
+//! servers and one login per account, read once at start until its accounts are imported. It is a secret, so
+//! nothing read from it but an account's address ever leaves this module's callers for a log line or an
+//! answer.
 //!
 //! Its line syntax is this service's own: `imap <host> <port> <tls name>`, `smtp <host> <port> <tls name>`
 //! and `account <address> <login> <password>`, with blank lines and `#` lines passed over.
 
 use std::fmt;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
 
-/// A server the accounts file names.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MailEndpoint {
-  pub host: String,
-  pub port: u16,
-  /// The name the server's certificate is checked against, or none for a plain connection, which only a
-  /// stand-in server uses.
-  pub tls_name: Option<String>,
-}
+use crate::adapters::imap_smtp::{MailAccount, MailEndpoint};
 
-/// One account of the accounts file.
+/// One account of the accounts file: its login, and the address's local part, the name it is kept under.
 #[derive(Clone, PartialEq, Eq)]
-pub struct MailAccount {
-  pub address: String,
-  /// The address's local part: the account's name, which the routes name it by.
+pub struct FileAccount {
+  /// The address's local part.
   pub key: String,
-  pub login: String,
-  pub password: String,
+  pub account: MailAccount,
 }
 
 // An account written into a log names its address alone.
-impl fmt::Debug for MailAccount {
+impl fmt::Debug for FileAccount {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     formatter
-      .debug_struct("MailAccount")
-      .field("address", &self.address)
+      .debug_struct("FileAccount")
+      .field("address", &self.account.address)
       .finish_non_exhaustive()
   }
 }
@@ -45,16 +33,7 @@ impl fmt::Debug for MailAccount {
 pub struct MailConfig {
   pub imap: MailEndpoint,
   pub smtp: MailEndpoint,
-  pub accounts: Vec<MailAccount>,
-}
-
-impl MailConfig {
-  /// The account a name names, matched without regard to case.
-  pub fn find_account(&self, key: &str) -> Option<&MailAccount> {
-    let key = key.to_lowercase();
-
-    self.accounts.iter().find(|account| account.key == key)
-  }
+  pub accounts: Vec<FileAccount>,
 }
 
 /// Why the accounts file does not read. The fault names its line and never repeats it, which may hold a
@@ -93,7 +72,7 @@ fn local_part(address: &str) -> Option<&str> {
 pub fn parse_accounts_file(text: &str) -> Result<MailConfig, MailAccountsError> {
   let mut imap = None;
   let mut smtp = None;
-  let mut accounts: Vec<MailAccount> = Vec::new();
+  let mut accounts: Vec<FileAccount> = Vec::new();
 
   for (index, raw) in text.split('\n').enumerate() {
     let line = raw.trim();
@@ -119,11 +98,13 @@ pub fn parse_accounts_file(text: &str) -> Result<MailConfig, MailAccountsError> 
           return Err(fault(number, format!("a second account named {key}")));
         }
 
-        accounts.push(MailAccount {
-          address: address.to_lowercase(),
+        accounts.push(FileAccount {
           key,
-          login: (*login).to_owned(),
-          password: (*password).to_owned(),
+          account: MailAccount {
+            address: address.to_lowercase(),
+            login: (*login).to_owned(),
+            password: (*password).to_owned(),
+          },
         });
       }
       _ => return Err(fault(number, "unknown line kind")),
@@ -145,63 +126,11 @@ pub fn parse_accounts_file(text: &str) -> Result<MailConfig, MailAccountsError> 
   })
 }
 
-/// The file as last read: when it was changed, and what it said.
-#[derive(Debug)]
-struct Read {
-  changed: Option<SystemTime>,
-  config: Option<Arc<MailConfig>>,
-}
-
-/// The accounts file the settings name, read again only when it changed, so writing it takes effect
-/// without a restart.
-#[derive(Debug)]
-pub struct AccountsFile {
-  path: Option<PathBuf>,
-  last: Mutex<Option<Read>>,
-}
-
-impl AccountsFile {
-  pub fn new(path: Option<PathBuf>) -> Self {
-    Self {
-      path,
-      last: Mutex::new(None),
-    }
-  }
-
-  /// The accounts the service reads, or none where no file is named, or the named one is missing or does
-  /// not read. A file that exists but does not read is said in the log once per change of the file.
-  pub fn read(&self) -> Option<Arc<MailConfig>> {
-    let path = self.path.as_ref()?;
-    let mut last = self.last.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let Ok(changed) = std::fs::metadata(path).map(|meta| meta.modified().ok()) else {
-      *last = None;
-
-      return None;
-    };
-
-    if let Some(read) = last.as_ref().filter(|read| read.changed.is_some() && read.changed == changed) {
-      return read.config.clone();
-    }
-
-    let config = match std::fs::read_to_string(path) {
-      Ok(text) => match parse_accounts_file(&text) {
-        Ok(config) => Some(Arc::new(config)),
-        Err(why) => {
-          eprintln!("{why}");
-          None
-        }
-      },
-      Err(_) => {
-        eprintln!("mail accounts file: {} could not be read", path.display());
-        None
-      }
-    };
-
-    *last = Some(Read {
-      changed,
-      config: config.clone(),
-    });
-
-    config
+/// The file at `path`, read: none where it does not stand, and why it does not read where it does not.
+pub fn read_accounts_file(path: &std::path::Path) -> Result<Option<MailConfig>, MailAccountsError> {
+  match std::fs::read_to_string(path) {
+    Ok(text) => parse_accounts_file(&text).map(Some),
+    Err(why) if why.kind() == std::io::ErrorKind::NotFound => Ok(None),
+    Err(_) => Err(MailAccountsError(format!(" {} could not be read", path.display()))),
   }
 }

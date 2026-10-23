@@ -2,6 +2,8 @@
 //! epoch milliseconds, a list as a page and a failure as its code and sentence. Each carries its JSON Schema,
 //! which the OpenAPI document, the client and the MCP server's tools are written from.
 
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -89,19 +91,139 @@ pub struct ListQuery {
   pub limit: Option<u32>,
 }
 
-/// An account of the accounts file, as much of it as is answered.
+/// A kind's or an account's fields, by name, each a string.
+pub type Fields = BTreeMap<String, String>;
+
+/// How an account of a kind signs in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SignIn {
+  /// From the fields a person writes, a secret among them.
+  Password,
+  /// Through the provider's own page, which hands back the tokens kept as the account's secrets.
+  Authorization,
+}
+
+/// What a field of a kind holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum FieldKind {
+  Text,
+  /// A port, 1 to 65535.
+  Port,
+  /// Kept encrypted and never answered.
+  Secret,
+}
+
+/// One field a person writes to add an account of a kind.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct KindField {
+  /// The key it stands under in an account's `settings`, or its `secrets` where it is secret.
+  pub name: String,
+  pub kind: FieldKind,
+  pub required: bool,
+  /// The value a form starts from; null where it starts empty.
+  pub default: Option<String>,
+}
+
+/// A kind of account: the adapter that reaches its mailbox, as that adapter declares it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountKind {
+  /// The adapter's name, which an account names its kind by.
+  pub name: String,
+  pub sign_in: SignIn,
+  /// What a person writes to add an account of it, in the order a form shows them.
+  pub fields: Vec<KindField>,
+}
+
+/// An account of the owner, as much of it as is answered: never its secrets.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
-  /// The address's local part: the account's key.
+  /// Unique among the owner's accounts: the key the routes name it by.
   pub name: String,
+  /// The adapter's name.
+  pub kind: String,
   pub address: String,
-  /// Its place in the accounts file, from 1.
+  /// Its place in its owner's list, from 1.
   pub position: i64,
+  /// Its fields that are not secret.
+  pub settings: Fields,
   /// The unread messages of its inbox.
   pub unread_count: u32,
   /// Whether its server answered; where it did not, the count is 0.
   pub reachable: bool,
+}
+
+/// The answer of a provider's page, which finishes adding an account by authorization.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AuthorizationAnswer {
+  /// The authorization's id.
+  pub id: String,
+  /// The query the provider sent the browser back with.
+  pub answer: Fields,
+}
+
+/// An account to add: by password from its fields, or by an authorization's answer.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewAccount {
+  pub kind: String,
+  /// The address's local part where none is given.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub name: Option<String>,
+  /// Required for a kind that signs in by password.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub address: Option<String>,
+  /// Its fields that are not secret, by name.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub settings: Option<Fields>,
+  /// Its secret fields, by name.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub secrets: Option<Fields>,
+  /// For a kind that signs in by authorization: the authorization and what the provider answered.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub authorization: Option<AuthorizationAnswer>,
+}
+
+/// An account's change.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AccountPatch {
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub name: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub position: Option<i64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub address: Option<String>,
+  /// Its fields that are not secret, replaced whole.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub settings: Option<Fields>,
+  /// The secret fields to replace; the others are kept.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub secrets: Option<Fields>,
+}
+
+/// An authorization to start.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewAuthorization {
+  pub kind: String,
+  /// Where the provider sends the browser back to.
+  pub return_to: String,
+}
+
+/// An authorization started: where to send the browser.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Authorization {
+  pub id: String,
+  pub kind: String,
+  /// The provider's page.
+  pub url: String,
+  pub expires_at: i64,
 }
 
 /// Unread counts across the accounts.

@@ -7,6 +7,11 @@ import type { components } from "./openapi";
 type Schemas = components["schemas"];
 
 export type MailAccount = Schemas["Account"];
+export type MailAccountKind = Schemas["AccountKind"];
+export type MailKindField = Schemas["KindField"];
+export type NewMailAccount = Schemas["NewAccount"];
+export type MailAccountPatch = Schemas["AccountPatch"];
+export type MailAuthorization = Schemas["Authorization"];
 export type MailSummary = Schemas["Summary"];
 export type MailFolder = Schemas["Folder"];
 export type FolderRole = Schemas["FolderRole"];

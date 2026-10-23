@@ -6,7 +6,10 @@
 use schemars::generate::SchemaGenerator;
 use serde_json::{Map, Value, json};
 
-use crate::announcements::{FOLDER_CHANGED, MESSAGE_CHANGED, MESSAGE_CREATED, MESSAGE_DELETED};
+use crate::announcements::{
+  ACCOUNT_CHANGED, ACCOUNT_CREATED, ACCOUNT_DELETED, FOLDER_CHANGED, MESSAGE_CHANGED, MESSAGE_CREATED,
+  MESSAGE_DELETED,
+};
 use crate::http::{Answer, Operation, routes};
 use crate::mcp::{ENTRY, MCP, PLUGIN, generator, tools};
 use crate::wire::WireError;
@@ -15,9 +18,11 @@ use crate::writing::send::SEND_CHANGED;
 /// Where the schemas the routes refer to stand in the document.
 const SCHEMAS: &str = "/components/schemas";
 
-const DESCRIPTION: &str = "Mailboxes read, written and watched over IMAP and submission behind one API: \
-  accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings. A \
-  mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch \
+const DESCRIPTION: &str = "Mailboxes read, written and watched behind one API, each account an owner's and \
+  of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, \
+  rules, spam senders and settings. A route that reads or changes an account acts for the opaque owner key the \
+  caller passes in `Owner-Key`, and reaches that owner's accounts alone. A mailbox's members nest under its \
+  account. Bodies are JSON with camelCase keys; times are integers of epoch \
   milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and \
   the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every \
   failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one \
@@ -29,7 +34,7 @@ const CODES: &[(&str, u16, &str)] = &[
   ("unauthorized", 401, "the bearer token is missing or wrong"),
   ("no-route", 404, "no route answers this method and path"),
   ("not-found", 404, "nothing stands at the key the path names"),
-  ("conflict", 409, "a label's name is taken, or a send has already gone"),
+  ("conflict", 409, "an account's or a label's name is taken, or a send has already gone"),
   ("gone", 410, "the events after the number asked for are no longer kept"),
   ("too-large", 413, "a file or a message is past the size the submission server takes"),
   ("too-many-labels", 422, "the account holds the most labels it may"),
@@ -42,8 +47,21 @@ const CODES: &[(&str, u16, &str)] = &[
   ("send-too-late", 422, "a send's sendAt is past the undo span from now"),
   ("no-receipt-asked", 422, "the message asks for no read receipt"),
   ("draft-not-placed", 422, "the server did not say where it put a saved draft"),
+  ("unknown-kind", 422, "a body names a kind of account the service does not declare"),
+  ("sign-in-failed", 422, "the account's servers did not take its sign-in"),
+  (
+    "no-authorization",
+    422,
+    "an authorization is asked for a kind that signs in by password",
+  ),
+  (
+    "unknown-authorization",
+    422,
+    "a body names an authorization that is not the owner's, has run out or was used",
+  ),
   ("failed", 500, "the service failed"),
   ("upstream-failed", 502, "the mail server did not answer, or failed"),
+  ("not-ready", 503, "the service has no key file to seal an account's secrets with"),
 ];
 
 /// The parameters of a query's schema, each property one.
@@ -79,6 +97,16 @@ fn operation_of(operation: Operation, generator: &mut SchemaGenerator) -> Value 
       json!({ "name": name, "in": "path", "required": true, "description": description, "schema": { "type": "string" } })
     })
     .collect();
+
+  if operation.owned {
+    parameters.push(json!({
+      "name": "Owner-Key",
+      "in": "header",
+      "required": true,
+      "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+      "schema": { "type": "string", "minLength": 1, "maxLength": 200 },
+    }));
+  }
 
   if let Some(query) = operation.query {
     parameters.extend(query_parameters(&query(generator).to_value()));
@@ -205,7 +233,16 @@ pub fn openapi() -> Value {
         },
       },
     },
-    "x-events": [MESSAGE_CREATED, MESSAGE_CHANGED, MESSAGE_DELETED, SEND_CHANGED, FOLDER_CHANGED],
+    "x-events": [
+      MESSAGE_CREATED,
+      MESSAGE_CHANGED,
+      MESSAGE_DELETED,
+      SEND_CHANGED,
+      FOLDER_CHANGED,
+      ACCOUNT_CREATED,
+      ACCOUNT_CHANGED,
+      ACCOUNT_DELETED,
+    ],
     "x-tools": x_tools,
   })
 }

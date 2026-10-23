@@ -7,11 +7,12 @@ use crate::mail::MailAddress;
 use crate::routes::requests::MailFault;
 use crate::wire::Address;
 
-/// Records each address as used now: its name kept where one is given, its use counted. The account's own
-/// address is never recorded.
+/// Records each address as used now under the account's key: its name kept where one is given, its use
+/// counted. The account's own address, `own`, is never recorded.
 pub async fn record_addresses(
   pool: &SqlitePool,
   account: &str,
+  own: &str,
   addresses: &[MailAddress],
   at: i64,
 ) -> Result<(), MailFault> {
@@ -20,7 +21,7 @@ pub async fn record_addresses(
   for one in addresses {
     let address = one.address.trim().to_lowercase();
 
-    if address.is_empty() || address == account {
+    if address.is_empty() || address == own.to_lowercase() {
       continue;
     }
 

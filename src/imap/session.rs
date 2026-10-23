@@ -2,9 +2,8 @@
 //! routes go through, one folder at a time. It is opened when first needed and opened again when it has
 //! dropped; the watcher's connection is a separate one of its own.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use async_imap::extensions::idle::IdleResponse;
@@ -18,11 +17,11 @@ use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 
-use crate::accounts::{MailAccount, MailEndpoint};
+use crate::adapters::imap_smtp::{MailAccount, MailEndpoint};
 use crate::imap::wire_name;
 use crate::routes::requests::MailFault;
 
-/// What a connection runs over: TLS, or a plain stream where the accounts file says `-`.
+/// What a connection runs over: TLS, or a plain stream where the account's TLS name is `-`.
 pub trait MailStream: AsyncRead + AsyncWrite + Unpin + Send + Debug {}
 
 impl<T: AsyncRead + AsyncWrite + Unpin + Send + Debug> MailStream for T {}
@@ -293,7 +292,8 @@ impl Debug for MailSession {
 }
 
 impl MailSession {
-  fn new(endpoint: MailEndpoint, account: MailAccount) -> Self {
+  /// The work connection of an account, opened when it is first needed.
+  pub fn new(endpoint: MailEndpoint, account: MailAccount) -> Self {
     Self {
       endpoint,
       account,
@@ -338,45 +338,5 @@ impl MailSession {
     if let Some(mut open) = open {
       let _ = open.session.logout().await;
     }
-  }
-}
-
-/// Every account's work connection, kept for as long as the service runs.
-#[derive(Debug, Default)]
-pub struct Sessions {
-  by_address: Mutex<HashMap<String, Arc<MailSession>>>,
-}
-
-impl Sessions {
-  /// The session of one account. A changed accounts file — a new password, another server — makes a new
-  /// session rather than reusing one opened with the old words.
-  pub fn session(&self, endpoint: &MailEndpoint, account: &MailAccount) -> Arc<MailSession> {
-    let mut by_address = self.by_address.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-
-    if let Some(known) = by_address.get(&account.address)
-      && known.endpoint == *endpoint
-      && known.account == *account
-    {
-      return Arc::clone(known);
-    }
-
-    let session = Arc::new(MailSession::new(endpoint.clone(), account.clone()));
-
-    if let Some(stale) = by_address.insert(account.address.clone(), Arc::clone(&session)) {
-      tokio::spawn(async move { stale.close().await });
-    }
-
-    session
-  }
-
-  /// Logs every session out, as the service stops.
-  pub async fn close_all(&self) {
-    let all: Vec<Arc<MailSession>> = {
-      let mut by_address = self.by_address.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-
-      by_address.drain().map(|(_, session)| session).collect()
-    };
-
-    futures::future::join_all(all.iter().map(|session| session.close())).await;
   }
 }

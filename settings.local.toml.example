@@ -9,9 +9,14 @@ token = "mail-token"
 path = "/srv/bmo-mail/mail.db"
 
 [accounts]
-# The accounts file of the mail server this instance reads. A development instance names one of its own,
-# never a deployment's.
+# The accounts file this instance imports once, and the administrator's owner key the imported accounts
+# stand under. A development instance names its own, never a deployment's.
 file = "/srv/bmo-mail/env/mail-accounts"
+administrator = "administrator"
+
+[secrets]
+# The key file the accounts' secrets are sealed with: 32 random bytes as base64 on one line.
+key_file = "/srv/bmo-mail/env/mail-secrets.key"
 
 [staging]
 dir = "/srv/bmo-mail/mail-staging"

@@ -6,18 +6,17 @@ use axum::response::Response;
 
 use crate::account_settings::{MOST_UNDO_SEND_MS, read_settings, write_settings};
 use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
-use crate::imap::folders::folders_of;
 use crate::members::{rule, settings};
 use crate::routes::requests::{Asked, with_account};
 use crate::rules::{
   add_spam_sender, checked_rule, create_rule, delete_rule, list_rules, list_spam_senders,
-  remove_spam_sender, run_rules_over_folder, update_rule,
+  remove_spam_sender, update_rule,
 };
 use crate::wire::{
   ListQuery, NewRule, NewRuleRun, Page, Rule, RulePatch, RuleRun, Settings, SettingsPatch, SpamSender,
 };
 
-const ACCOUNT: (&str, &str) = ("accountName", "The account's name: its address's local part.");
+const ACCOUNT: (&str, &str) = ("accountName", "The account's name, unique among its owner's accounts.");
 const RULE: (&str, &str) = ("ruleId", "The rule's id.");
 const ADDRESS: (&str, &str) = ("address", "The sender's address.");
 
@@ -45,13 +44,14 @@ impl Route for Rules {
     status: 200,
     answer: Answer::Json(schema::<Page<Rule>>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let query: ListQuery = call.query()?;
 
     with_account(&mut call, |mail| async move {
-      let rules: Vec<Rule> = list_rules(mail.standing.store.pool(), &mail.account.address)
+      let rules: Vec<Rule> = list_rules(mail.standing.store.pool(), &mail.key())
         .await?
         .into_iter()
         .map(rule)
@@ -81,6 +81,7 @@ impl Route for CreateRule {
     status: 201,
     answer: Answer::Json(schema::<Rule>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -88,7 +89,7 @@ impl Route for CreateRule {
 
     with_account(&mut call, |mail| async move {
       let draft = checked_rule(&new.matching, &new.actions, new.on)?;
-      let made = create_rule(mail.standing.store.pool(), &mail.account.address, draft).await?;
+      let made = create_rule(mail.standing.store.pool(), &mail.key(), draft).await?;
 
       Ok(answer(StatusCode::CREATED, &rule(made)))
     })
@@ -114,6 +115,7 @@ impl Route for ChangeRule {
     status: 200,
     answer: Answer::Json(schema::<Rule>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -121,8 +123,7 @@ impl Route for ChangeRule {
     let patch: RulePatch = call.body().await?;
 
     with_account(&mut call, |mail| async move {
-      let changed =
-        update_rule(mail.standing.store.pool(), &mail.account.address, rule_id(&id)?, &patch).await?;
+      let changed = update_rule(mail.standing.store.pool(), &mail.key(), rule_id(&id)?, &patch).await?;
 
       Ok(answer(StatusCode::OK, &rule(changed)))
     })
@@ -148,13 +149,14 @@ impl Route for DeleteRule {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let id = call.key("ruleId").await?;
 
     with_account(&mut call, |mail| async move {
-      delete_rule(mail.standing.store.pool(), &mail.account.address, rule_id(&id)?).await?;
+      delete_rule(mail.standing.store.pool(), &mail.key(), rule_id(&id)?).await?;
 
       Ok(nothing())
     })
@@ -180,18 +182,18 @@ impl Route for CreateRuleRun {
     status: 201,
     answer: Answer::Json(schema::<RuleRun>),
     codes: &["not-found", "unknown-folder"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let new: NewRuleRun = call.body().await?;
 
     with_account(&mut call, |mail| async move {
-      if !folders_of(&mail.session).await?.iter().any(|folder| folder.path == new.folder_name) {
+      if !mail.mailbox.folders().await?.iter().any(|folder| folder.path == new.folder_name) {
         return Err(Asked::rule("unknown-folder", "the mailbox holds no folder of that name").into());
       }
 
-      let pool = mail.standing.store.pool();
-      let run = run_rules_over_folder(pool, &mail.session, &mail.account.address, &new.folder_name).await?;
+      let run = mail.mailbox.run_rules(&new.folder_name).await?;
       let made = RuleRun {
         folder_name: new.folder_name,
         moved_count: run.moved,
@@ -222,14 +224,14 @@ impl Route for PutSpamSender {
     status: 200,
     answer: Answer::Json(schema::<SpamSender>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let address = call.key("address").await?;
 
     with_account(&mut call, |mail| async move {
-      let (address, added) =
-        add_spam_sender(mail.standing.store.pool(), &mail.account.address, &address).await?;
+      let (address, added) = add_spam_sender(mail.standing.store.pool(), &mail.key(), &address).await?;
       let status = if added { StatusCode::CREATED } else { StatusCode::OK };
 
       Ok(answer(status, &SpamSender { address }))
@@ -256,13 +258,14 @@ impl Route for DeleteSpamSender {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let address = call.key("address").await?;
 
     with_account(&mut call, |mail| async move {
-      remove_spam_sender(mail.standing.store.pool(), &mail.account.address, &address).await?;
+      remove_spam_sender(mail.standing.store.pool(), &mail.key(), &address).await?;
 
       Ok(nothing())
     })
@@ -288,12 +291,13 @@ impl Route for ReadSettings {
     status: 200,
     answer: Answer::Json(schema::<Settings>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     with_account(&mut call, |mail| async move {
       let pool = mail.standing.store.pool();
-      let address = &mail.account.address;
+      let address = &mail.key();
       let kept = read_settings(pool, address).await?;
 
       Ok(answer(StatusCode::OK, &settings(kept, list_spam_senders(pool, address).await?)))
@@ -320,6 +324,7 @@ impl Route for ChangeSettings {
     status: 200,
     answer: Answer::Json(schema::<Settings>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -327,7 +332,7 @@ impl Route for ChangeSettings {
 
     with_account(&mut call, |mail| async move {
       let pool = mail.standing.store.pool();
-      let address = &mail.account.address;
+      let address = &mail.key();
       let mut kept = read_settings(pool, address).await?;
 
       if let Some(signature) = patch.signature {

@@ -8,6 +8,9 @@ import type {
   DraftPatch,
   FolderRole,
   MailAccount,
+  MailAccountKind,
+  MailAccountPatch,
+  MailAuthorization,
   MailAddress,
   MailFolder,
   MailLabel,
@@ -19,6 +22,7 @@ import type {
   MailSettingsPatch,
   MailSummary,
   MailThread,
+  NewMailAccount,
   NewRule,
   RulePatch,
 } from "../../shared/mail";
@@ -51,6 +55,28 @@ export async function mailAccounts(): Promise<MailAccount[]> {
 
 export async function mailSummary(): Promise<MailSummary> {
   return $fetch<MailSummary>(mailAddress("/summary"));
+}
+
+// The owner's own accounts (docs/api.md, 「Accounts」): the kinds the service declares, and an account
+// added, changed or removed. Which owner the calls act for is the console's to say, never the screen's.
+export async function mailAccountKinds(): Promise<MailAccountKind[]> {
+  return (await $fetch<Page<MailAccountKind>>(mailAddress("/account-kinds"))).items;
+}
+
+export function addMailAccount(account: NewMailAccount): Promise<MailAccount> {
+  return $fetch<MailAccount>(mailAddress("/accounts"), { method: "POST", body: account });
+}
+
+export function changeMailAccount(name: string, patch: MailAccountPatch): Promise<MailAccount> {
+  return $fetch<MailAccount>(mailAddress(`/accounts/${segment(name)}`), { method: "PATCH", body: patch });
+}
+
+export async function removeMailAccount(name: string): Promise<void> {
+  await $fetch(mailAddress(`/accounts/${segment(name)}`), { method: "DELETE" });
+}
+
+export function startAuthorization(kind: string, returnTo: string): Promise<MailAuthorization> {
+  return $fetch<MailAuthorization>(mailAddress("/authorizations"), { method: "POST", body: { kind, returnTo } });
 }
 
 // What a change of messages asks for: flags set and taken off, labels added and taken away, a folder to

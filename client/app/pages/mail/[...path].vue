@@ -9,7 +9,10 @@
     </template>
 
     <template #body>
-      <p v-if="accounts !== null && accounts.length === 0" class="p-6 text-center text-sm text-muted">{{ $t("mail.status.no_accounts") }}</p>
+      <div v-if="accounts !== null && accounts.length === 0" class="flex flex-col items-center gap-3 p-6">
+        <p class="text-center text-sm text-muted">{{ $t("mail.status.no_accounts") }}</p>
+        <UButton icon="i-material-symbols-add" :label="$t('mail.action.account_add')" @click="accountsOpen = true" />
+      </div>
 
       <!-- The screen's frame stands while the accounts are read, the list keeping its own place
            inside it: what waits for the accounts is the nav's rows and the list's rows, and each
@@ -85,6 +88,7 @@
                 :folded="false"
                 :foldable="false"
                 @compose="navDrawer = false; compose()"
+                @accounts="navDrawer = false; accountsOpen = true"
                 @settings="navDrawer = false; settingsOpen = true"
                 @navigated="navDrawer = false"
               />
@@ -122,6 +126,7 @@
                 :folded="navFolded"
                 :foldable="true"
                 @compose="compose"
+                @accounts="accountsOpen = true"
                 @settings="settingsOpen = true"
                 @fold="foldNav"
               />
@@ -208,6 +213,24 @@
           </template>
         </UModal>
       </template>
+
+      <!-- One's own accounts stand apart from the frame, so the empty state of a screen with no
+           account opens them as well as the nav. -->
+      <UDrawer v-if="narrow" v-model:open="accountsOpen" :title="$t('mail.title.accounts')" :ui="FULL_SHEET">
+        <template #body>
+          <MailAccounts :accounts="accounts ?? []" @added="onAccountAdded" @removed="onAccountRemoved" />
+        </template>
+      </UDrawer>
+      <UModal
+        v-else
+        v-model:open="accountsOpen"
+        :title="$t('mail.title.accounts')"
+        :ui="{ content: 'sm:max-w-2xl h-[85dvh] flex flex-col', body: 'flex min-h-0 flex-1 flex-col p-0 sm:p-0' }"
+      >
+        <template #body>
+          <MailAccounts :accounts="accounts ?? []" @added="onAccountAdded" @removed="onAccountRemoved" />
+        </template>
+      </UModal>
     </template>
   </UDashboardPanel>
 </template>
@@ -220,6 +243,7 @@ import { usePainted } from "bmo-ui/app/domain/loading";
 import { useBackClose } from "bmo-ui/app/domain/layers";
 import { mailPath, messagesOf, PAGE_MESSAGES, parseMailPath, ROLE_ICONS, ROLE_LABELS, selectBy, shortcutOf, viewFolder, viewRole, viewTitle } from "../../domain/mail";
 import { mailAccounts, mailApi, pageQuery, roleFolder } from "../../domain/mail-api";
+import { finishAuthorization } from "../../domain/mail-authorization";
 import { loadMailEditor } from "../../domain/mail-editor-load";
 import { useMailStream } from "../../domain/mail-stream";
 import { useMailSummary } from "../../domain/mail-summary";
@@ -273,6 +297,7 @@ const focused = ref(-1);
 const choosing = ref(false);
 const navDrawer = ref(false);
 const navFolded = ref(false);
+const accountsOpen = ref(false);
 const settingsOpen = ref(false);
 const settingsDirty = ref(false);
 const settingsGuard = useCloseGuard(settingsOpen, () => settingsDirty.value, t);
@@ -516,6 +541,12 @@ function onEvent(event: MailEvent): void {
 
   if (event.kind === "folder.changed") void refreshSummary();
 
+  if (event.kind.startsWith("account.")) {
+    void loadAccounts();
+    void refreshSummary();
+    return;
+  }
+
   if (account !== place.value?.account || event.kind === "send.changed") return;
 
   if (gathering !== null) clearTimeout(gathering);
@@ -537,7 +568,42 @@ onNuxtReady(() => {
   void loadMailEditor().catch(() => undefined);
 });
 
+// An account added opens; one removed leaves the screen on the first account that stands.
+async function onAccountAdded(name: string): Promise<void> {
+  accountsOpen.value = false;
+  await loadAccounts();
+  void refreshSummary();
+  await router.push(mailPath({ account: name, view: "inbox", thread: null }));
+}
+
+async function onAccountRemoved(): Promise<void> {
+  await loadAccounts();
+  void refreshSummary();
+
+  const first = accounts.value?.[0]?.name;
+
+  if (first !== undefined && !accounts.value?.some((one) => one.name === place.value?.account)) {
+    await router.replace(mailPath({ account: first, view: "inbox", thread: null }));
+  }
+}
+
+// The browser back from a provider's page finishes the adding this tab started there, and leaves the
+// provider's answer out of the address.
+async function finishPendingAuthorization(): Promise<void> {
+  const query = Object.fromEntries(Object.entries(route.query).filter((pair): pair is [string, string] => typeof pair[1] === "string"));
+
+  try {
+    const added = await finishAuthorization(query);
+
+    if (added !== null) await onAccountAdded(added.name);
+  } catch (error) {
+    island.fail(error, t("mail.error.account_add_failed"));
+    await router.replace({ query: {} });
+  }
+}
+
 onMounted(async () => {
+  await finishPendingAuthorization();
   await loadAccounts();
 
   if (place.value !== null && segments.value.length === 0) {

@@ -25,7 +25,27 @@
     }
   },
   "mail": {
+    "account_field": {
+      "imapHost": "IMAP 서버",
+      "imapPort": "IMAP 포트",
+      "imapTlsName": "IMAP 인증서 이름",
+      "smtpHost": "SMTP 서버",
+      "smtpPort": "SMTP 포트",
+      "smtpTlsName": "SMTP 인증서 이름",
+      "login": "로그인 아이디",
+      "password": "비밀번호"
+    },
+    "account_kind": {
+      "imap-smtp": "IMAP/SMTP",
+      "gmail": "Gmail",
+      "graph": "Microsoft 365"
+    },
     "action": {
+      "account_add": "계정 추가",
+      "account_remove": "계정 삭제",
+      "account_remove_confirm": "삭제",
+      "account_sign_in": "{kind} 로그인",
+      "accounts": "메일 계정",
       "add_label_named": "라벨 지정: {name}",
       "apply_inbox": "받은편지함에 적용",
       "attach_file": "파일 첨부",
@@ -104,6 +124,8 @@
       "unread": "안읽은 메일 있음"
     },
     "error": {
+      "account_add_failed": "계정을 추가하지 못했습니다.",
+      "account_remove_failed": "계정을 삭제하지 못했습니다.",
       "accounts_failed": "메일 계정을 불러오지 못했습니다.",
       "address_add_failed": "주소를 추가하지 못했습니다.",
       "address_remove_failed": "주소를 삭제하지 못했습니다.",
@@ -124,6 +146,7 @@
       "image_only": "사진만 삽입할 수 있습니다.",
       "image_too_large": "사진이 너무 큽니다. {mb}MB까지 삽입할 수 있습니다.",
       "image_unreadable": "사진을 읽지 못했습니다.",
+      "kinds_failed": "계정 종류를 불러오지 못했습니다.",
       "label_color_failed": "라벨 색을 바꾸지 못했습니다.",
       "label_create_failed": "라벨을 만들지 못했습니다.",
       "label_delete_failed": "라벨을 삭제하지 못했습니다.",
@@ -135,11 +158,13 @@
       "message_failed": "메일을 불러오지 못했습니다.",
       "move_failed": "옮기지 못했습니다.",
       "no_role_folder": "이 계정에는 해당 편지함이 없습니다.",
+      "no-authorization": "이 계정 종류는 비밀번호로 로그인합니다.",
       "no-receipt-asked": "읽음 확인을 요청하지 않은 메일입니다.",
       "no-recipients": "받는 사람이 한 명 이상 있어야 합니다.",
       "no-route": "메일 서비스가 처리하지 않는 요청입니다.",
       "not_spam_failed": "받은편지함으로 옮기지 못했습니다.",
       "not-found": "찾을 수 없습니다.",
+      "not-ready": "메일 서비스가 아직 계정을 저장할 수 없습니다.",
       "outside-trash": "영구 삭제는 스팸과 휴지통에서만 할 수 있습니다.",
       "picture_insert_failed": "사진을 삽입하지 못했습니다.",
       "receipt_failed": "읽음 확인에 응답하지 못했습니다.",
@@ -152,6 +177,7 @@
       "send_failed": "보내지 못했습니다",
       "send-too-late": "보내기 취소 시간보다 늦게 보낼 수 없습니다.",
       "settings_read_failed": "설정을 불러오지 못했습니다.",
+      "sign-in-failed": "메일 서버에 로그인하지 못했습니다. 주소, 서버와 비밀번호를 확인하세요.",
       "spam_failed": "스팸으로 신고하지 못했습니다.",
       "star_change_failed": "별표를 바꾸지 못했습니다.",
       "star_failed": "별표하지 못했습니다.",
@@ -159,13 +185,18 @@
       "too-many-labels": "라벨을 더 만들 수 없습니다.",
       "trash_failed": "휴지통으로 옮기지 못했습니다.",
       "unauthorized": "메일 서비스에 접근할 수 없습니다.",
+      "unknown-authorization": "로그인 시간이 지났습니다. 다시 시도하세요.",
       "unknown-folder": "편지함을 찾을 수 없습니다.",
+      "unknown-kind": "지원하지 않는 계정 종류입니다.",
       "unknown-label": "라벨을 찾을 수 없습니다.",
       "unknown-message": "메일을 찾을 수 없습니다.",
       "unstar_failed": "별표를 해제하지 못했습니다.",
       "upstream-failed": "메일 서버가 응답하지 않습니다."
     },
     "label": {
+      "account_address": "메일 주소",
+      "account_kind": "종류",
+      "account_name": "이름",
       "align": "정렬",
       "align_center": "가운데",
       "align_justify": "양쪽",
@@ -220,6 +251,7 @@
       "no_sender_mark": "(보낸이 없음)",
       "no_subject": "(제목 없음)",
       "none_mark": "(없음)",
+      "optional": "선택",
       "ordered_list": "번호 목록",
       "paragraph": "본문",
       "picture": "사진",
@@ -257,6 +289,7 @@
       "view_starred": "별표"
     },
     "message": {
+      "account_remove_warning": "이 계정의 라벨, 필터와 설정도 함께 지워집니다. 메일 서버의 메일은 그대로 남습니다.",
       "attachments_left": "옮기지 못한 첨부 파일은 다시 첨부해 주세요.",
       "choose_mail": "메일을 선택하세요.",
       "deleted": "영구 삭제했습니다.",
@@ -297,6 +330,7 @@
       "already_sent": "이미 보냈습니다.",
       "draft_saved": "임시보관함에 저장됨",
       "editor_loading": "편집기 불러오는 중…",
+      "kinds_loading": "계정 종류 불러오는 중…",
       "loading": "메일 불러오는 중…",
       "no_accounts": "메일 계정 없음",
       "no_rules": "규칙 없음",
@@ -310,6 +344,7 @@
       "uploading": "업로드 중"
     },
     "title": {
+      "accounts": "메일 계정",
       "filters": "필터",
       "images": "이미지",
       "new_mail": "새 메일",

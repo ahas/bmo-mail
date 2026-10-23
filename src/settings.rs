@@ -29,6 +29,7 @@ pub struct Settings {
   pub server: Server,
   pub store: Store,
   pub accounts: Accounts,
+  pub secrets: Secrets,
   pub staging: Staging,
   pub wording: Wording,
 }
@@ -49,12 +50,24 @@ pub struct Store {
   pub path: PathBuf,
 }
 
-/// The accounts file (`docs/mail.md`, 「Accounts and credentials」).
+/// The accounts file imported once, and the administrator's owner key (`docs/mail.md`, 「The accounts file,
+/// imported once」).
 #[derive(Clone, Debug, Deserialize)]
 pub struct Accounts {
-  /// The file; an empty one is none, and the service then reads no account.
+  /// The file; an empty one is none, and nothing is imported.
   #[serde(default)]
   pub file: Option<PathBuf>,
+  /// The administrator's owner key; empty where none is named.
+  #[serde(default)]
+  pub administrator: String,
+}
+
+/// The key file an account's secrets are sealed with (`docs/mail.md`, 「Accounts and credentials」).
+#[derive(Clone, Debug, Deserialize)]
+pub struct Secrets {
+  /// The file; an empty one is none, and the service then keeps no account.
+  #[serde(default)]
+  pub key_file: Option<PathBuf>,
 }
 
 /// The folder uploads wait in until the message carrying them is saved or sent.
@@ -100,6 +113,11 @@ impl Settings {
     settings.accounts.file = settings
       .accounts
       .file
+      .filter(|file| !file.as_os_str().is_empty())
+      .map(|file| dir.join(file));
+    settings.secrets.key_file = settings
+      .secrets
+      .key_file
       .filter(|file| !file.as_os_str().is_empty())
       .map(|file| dir.join(file));
 

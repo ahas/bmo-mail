@@ -1,19 +1,20 @@
 # bmo-mail
 
-Mail as one service with its own API: the mailboxes an accounts file names, read, written and watched over
-IMAP and submission. It threads and pages lists itself, runs filter rules as mail arrives, finds sender
-logos, holds a sent message for the account's undo span so it can be taken back, and says on its own event
-stream what came and what changed. It calls no other service. A coding harness takes it through its MCP
-server, `bmo-mail mcp`, and the `bmo-mail` skill; a console takes its screen through the bundle in `client/`,
-as `docs/api.md` states.
+Mail as one service with its own API: each login account's own mailboxes, added from the screen, read, written
+and watched through an adapter for each kind of account, IMAP and submission first. It threads and pages lists
+itself, runs filter rules as mail arrives, finds sender logos, holds a sent message for the account's undo
+span so it can be taken back, and says on its own event stream what came and what changed. It calls no other
+service. A coding harness takes it through its MCP server, `bmo-mail mcp`, and the `bmo-mail` skill; a console
+takes its screen through the bundle in `client/`, as `docs/api.md` states.
 
 ## Tests
 
-The repository carries one test, the repository-wide personal-data check in `tests/personal_data.rs`
-(`PERSONAL-DATA.md`), and runs it with `cargo test --test personal_data`. The behaviour tests are deferred:
-they are written and run here once the minimal services stand on the new repositories, and `docs/inventory.md`
-lists what the old behaviour was held to. Until they stand, the build check is `cargo check --all-targets` and
-the bundle's typecheck.
+The repository carries the repository-wide personal-data check in `tests/personal_data.rs`
+(`PERSONAL-DATA.md`), the old archive's import in `tests/import.rs`, and the accounts in `tests/accounts.rs`:
+their routes, one owner key never reaching another's, the sealing of their secrets and the accounts file's
+import. `cargo test` runs them all. The other behaviour tests are deferred: they are written and run here once
+the minimal services stand on the new repositories, and `docs/inventory.md` lists what the old behaviour was
+held to. The build check is `cargo check --all-targets` and the bundle's typecheck.
 
 ## Layout
 
@@ -27,7 +28,7 @@ the bundle's typecheck.
 | `client/` | The console plugin bundle: the mail screen, a project of its own |
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
-| `tests/` | The repository-wide personal-data check, `personal_data.rs` |
+| `tests/` | The repository-wide personal-data check, `personal_data.rs`, and the behaviour tests that stand |
 | `.graph/` | The code graph: its settings and its nodes, one feature to a node |
 
 At the root stand the Cargo manifest, `VERSION`, `LICENSE`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,

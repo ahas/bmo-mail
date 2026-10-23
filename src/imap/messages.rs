@@ -23,6 +23,7 @@ use crate::imap::{
 use crate::labels::label_id_of;
 use crate::mail::{
   FolderRole, MailAddress, MailFolder, MailFolderState, MailListMessage, MailMessage, MailPart, MailRef,
+  OpenedPart,
 };
 use crate::routes::requests::{Asked, MailFault};
 
@@ -585,13 +586,6 @@ fn leaves(fetch: &Fetch) -> Vec<MailPart> {
     .chain(parts.attachments)
     .chain(parts.inline)
     .collect()
-}
-
-/// A part of a message, its transfer encoding undone, with its type and its name.
-pub struct OpenedPart {
-  pub bytes: Vec<u8>,
-  pub kind: Option<String>,
-  pub filename: Option<String>,
 }
 
 /// A part of a message as it comes from the server, whole; none where the message or the part is not there.

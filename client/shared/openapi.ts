@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/account-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The kinds of account the service declares, one for each adapter built into it. */
+        get: operations["listAccountKinds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -11,14 +28,34 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The mail accounts. */
+        /** The owner's mail accounts, in their order. */
         get: operations["listAccounts"];
         put?: never;
-        post?: never;
+        /** Add an account of the owner, once it signed in. */
+        post: operations["createAccounts"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountName}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One account of the owner. */
+        get: operations["readAccountsByAccountName"];
+        put?: never;
+        post?: never;
+        /** Remove an account of the owner; its mailbox on the server is untouched. */
+        delete: operations["deleteAccountsByAccountName"];
+        options?: never;
+        head?: never;
+        /** Rename or move an account, or change its address, settings or secrets. */
+        patch: operations["changeAccountsByAccountName"];
         trace?: never;
     };
     "/accounts/{accountName}/addresses": {
@@ -372,6 +409,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Begin adding an account through its provider's page. */
+        post: operations["createAuthorizations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/avatars/{address}": {
         parameters: {
             query?: never;
@@ -430,7 +484,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Unread counts across the accounts. */
+        /** Unread counts across the owner's accounts. */
         get: operations["listSummary"];
         put?: never;
         post?: never;
@@ -445,21 +499,54 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @description A page of a list. */
+        AccountKindPage: {
+            items: components["schemas"]["AccountKind"][];
+            /** @description Whether anything stands past the last item. */
+            more: boolean;
+        };
+        /** @description A kind of account: the adapter that reaches its mailbox, as that adapter declares it. */
+        AccountKind: {
+            /** @description The adapter's name, which an account names its kind by. */
+            name: string;
+            signIn: components["schemas"]["SignIn"];
+            /** @description What a person writes to add an account of it, in the order a form shows them. */
+            fields: components["schemas"]["KindField"][];
+        };
+        /** @description How an account of a kind signs in. */
+        SignIn: "password" | "authorization";
+        /** @description One field a person writes to add an account of a kind. */
+        KindField: {
+            /** @description The key it stands under in an account's `settings`, or its `secrets` where it is secret. */
+            name: string;
+            kind: components["schemas"]["FieldKind"];
+            required: boolean;
+            /** @description The value a form starts from; null where it starts empty. */
+            default?: string | null;
+        };
+        /** @description What a field of a kind holds. */
+        FieldKind: "text" | "port" | "secret";
+        /** @description A page of a list. */
         AccountPage: {
             items: components["schemas"]["Account"][];
             /** @description Whether anything stands past the last item. */
             more: boolean;
         };
-        /** @description An account of the accounts file, as much of it as is answered. */
+        /** @description An account of the owner, as much of it as is answered: never its secrets. */
         Account: {
-            /** @description The address's local part: the account's key. */
+            /** @description Unique among the owner's accounts: the key the routes name it by. */
             name: string;
+            /** @description The adapter's name. */
+            kind: string;
             address: string;
             /**
              * Format: int64
-             * @description Its place in the accounts file, from 1.
+             * @description Its place in its owner's list, from 1.
              */
             position: number;
+            /** @description Its fields that are not secret. */
+            settings: {
+                [key: string]: string;
+            };
             /**
              * Format: uint32
              * @description The unread messages of its inbox.
@@ -467,6 +554,48 @@ export interface components {
             unreadCount: number;
             /** @description Whether its server answered; where it did not, the count is 0. */
             reachable: boolean;
+        };
+        /** @description An account to add: by password from its fields, or by an authorization's answer. */
+        NewAccount: {
+            kind: string;
+            /** @description The address's local part where none is given. */
+            name?: string | null;
+            /** @description Required for a kind that signs in by password. */
+            address?: string | null;
+            /** @description Its fields that are not secret, by name. */
+            settings?: {
+                [key: string]: string;
+            } | null;
+            /** @description Its secret fields, by name. */
+            secrets?: {
+                [key: string]: string;
+            } | null;
+            /** @description For a kind that signs in by authorization: the authorization and what the provider answered. */
+            authorization?: components["schemas"]["AuthorizationAnswer"] | null;
+        };
+        /** @description The answer of a provider's page, which finishes adding an account by authorization. */
+        AuthorizationAnswer: {
+            /** @description The authorization's id. */
+            id: string;
+            /** @description The query the provider sent the browser back with. */
+            answer: {
+                [key: string]: string;
+            };
+        };
+        /** @description An account's change. */
+        AccountPatch: {
+            name?: string | null;
+            /** Format: int64 */
+            position?: number | null;
+            address?: string | null;
+            /** @description Its fields that are not secret, replaced whole. */
+            settings?: {
+                [key: string]: string;
+            } | null;
+            /** @description The secret fields to replace; the others are kept. */
+            secrets?: {
+                [key: string]: string;
+            } | null;
         };
         /** @description A page of a list. */
         AddressPage: {
@@ -872,6 +1001,21 @@ export interface components {
             /** @description Oldest first, each with its bodies. */
             messages: components["schemas"]["Message"][];
         };
+        /** @description An authorization started: where to send the browser. */
+        Authorization: {
+            id: string;
+            kind: string;
+            /** @description The provider's page. */
+            url: string;
+            /** Format: int64 */
+            expiresAt: number;
+        };
+        /** @description An authorization to start. */
+        NewAuthorization: {
+            kind: string;
+            /** @description Where the provider sends the browser back to. */
+            returnTo: string;
+        };
         /** @description A page of a list. */
         EventPage: {
             items: components["schemas"]["Event"][];
@@ -923,7 +1067,7 @@ export interface components {
          *     - `unauthorized` (401): the bearer token is missing or wrong
          *     - `no-route` (404): no route answers this method and path
          *     - `not-found` (404): nothing stands at the key the path names
-         *     - `conflict` (409): a label's name is taken, or a send has already gone
+         *     - `conflict` (409): an account's or a label's name is taken, or a send has already gone
          *     - `gone` (410): the events after the number asked for are no longer kept
          *     - `too-large` (413): a file or a message is past the size the submission server takes
          *     - `too-many-labels` (422): the account holds the most labels it may
@@ -936,8 +1080,13 @@ export interface components {
          *     - `send-too-late` (422): a send's sendAt is past the undo span from now
          *     - `no-receipt-asked` (422): the message asks for no read receipt
          *     - `draft-not-placed` (422): the server did not say where it put a saved draft
+         *     - `unknown-kind` (422): a body names a kind of account the service does not declare
+         *     - `sign-in-failed` (422): the account's servers did not take its sign-in
+         *     - `no-authorization` (422): an authorization is asked for a kind that signs in by password
+         *     - `unknown-authorization` (422): a body names an authorization that is not the owner's, has run out or was used
          *     - `failed` (500): the service failed
          *     - `upstream-failed` (502): the mail server did not answer, or failed
+         *     - `not-ready` (503): the service has no key file to seal an account's secrets with
          */
         Error: {
             headers: {
@@ -955,6 +1104,27 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAccountKinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The kinds of account the service declares, one for each adapter built into it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountKindPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listAccounts: {
         parameters: {
             query?: {
@@ -963,19 +1133,133 @@ export interface operations {
                 /** @description The most items the page holds; the whole list where none is given. */
                 limit?: number | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The mail accounts. */
+            /** @description The owner's mail accounts, in their order. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["AccountPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createAccounts: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewAccount"];
+            };
+        };
+        responses: {
+            /** @description Add an account of the owner, once it signed in. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    readAccountsByAccountName: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path: {
+                /** @description The account's name, unique among its owner's accounts. */
+                accountName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One account of the owner. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteAccountsByAccountName: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path: {
+                /** @description The account's name, unique among its owner's accounts. */
+                accountName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remove an account of the owner; its mailbox on the server is untouched. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    changeAccountsByAccountName: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path: {
+                /** @description The account's name, unique among its owner's accounts. */
+                accountName: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountPatch"];
+            };
+        };
+        responses: {
+            /** @description Rename or move an account, or change its address, settings or secrets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
                 };
             };
             default: components["responses"]["Error"];
@@ -990,9 +1274,12 @@ export interface operations {
                 /** @description The most items the page holds; 10 where none is given. */
                 limit?: number | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1014,9 +1301,12 @@ export interface operations {
     createAccountsDraftsByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1042,9 +1332,12 @@ export interface operations {
     readAccountsDraftsByAccountNameDraftId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The draft's id: the Message-ID it is saved under, without angle brackets. */
                 draftId: string;
@@ -1068,9 +1361,12 @@ export interface operations {
     deleteAccountsDraftsByAccountNameDraftId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The draft's id: the Message-ID it is saved under, without angle brackets. */
                 draftId: string;
@@ -1092,9 +1388,12 @@ export interface operations {
     changeAccountsDraftsByAccountNameDraftId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The draft's id: the Message-ID it is saved under, without angle brackets. */
                 draftId: string;
@@ -1122,9 +1421,12 @@ export interface operations {
     createAccountsDraftsAttachmentsByAccountNameDraftId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The draft's id: the Message-ID it is saved under, without angle brackets. */
                 draftId: string;
@@ -1157,9 +1459,12 @@ export interface operations {
                 /** @description The most items the page holds; the whole list where none is given. */
                 limit?: number | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1181,9 +1486,12 @@ export interface operations {
     changeAccountsFoldersByAccountNameFolderName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The folder's full name, percent-encoded. */
                 folderName: string;
@@ -1216,9 +1524,12 @@ export interface operations {
                 /** @description The most items the page holds; the whole list where none is given. */
                 limit?: number | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1240,9 +1551,12 @@ export interface operations {
     createAccountsLabelsByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1268,9 +1582,12 @@ export interface operations {
     deleteAccountsLabelsByAccountNameLabelId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The label's id. */
                 labelId: string;
@@ -1292,9 +1609,12 @@ export interface operations {
     changeAccountsLabelsByAccountNameLabelId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The label's id. */
                 labelId: string;
@@ -1335,9 +1655,12 @@ export interface operations {
                 /** @description 1 to 100; 50 where none is given. */
                 limit?: number | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1359,9 +1682,12 @@ export interface operations {
     readAccountsMessagesByAccountNameMessageId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The message's id, opaque. */
                 messageId: string;
@@ -1385,9 +1711,12 @@ export interface operations {
     deleteAccountsMessagesByAccountNameMessageId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The message's id, opaque. */
                 messageId: string;
@@ -1409,9 +1738,12 @@ export interface operations {
     changeAccountsMessagesByAccountNameMessageId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The message's id, opaque. */
                 messageId: string;
@@ -1439,9 +1771,12 @@ export interface operations {
     listAccountsMessagesPartsContentByAccountNameMessageIdPartId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The message's id, opaque. */
                 messageId: string;
@@ -1467,9 +1802,12 @@ export interface operations {
     createAccountsReceiptsByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1495,9 +1833,12 @@ export interface operations {
     createAccountsRuleRunsByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1528,9 +1869,12 @@ export interface operations {
                 /** @description The most items the page holds; the whole list where none is given. */
                 limit?: number | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1552,9 +1896,12 @@ export interface operations {
     createAccountsRulesByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1580,9 +1927,12 @@ export interface operations {
     deleteAccountsRulesByAccountNameRuleId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The rule's id. */
                 ruleId: string;
@@ -1604,9 +1954,12 @@ export interface operations {
     changeAccountsRulesByAccountNameRuleId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The rule's id. */
                 ruleId: string;
@@ -1634,9 +1987,12 @@ export interface operations {
     createAccountsSendsByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1662,9 +2018,12 @@ export interface operations {
     readAccountsSendsByAccountNameSendId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The send's id. */
                 sendId: string;
@@ -1688,9 +2047,12 @@ export interface operations {
     deleteAccountsSendsByAccountNameSendId: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The send's id. */
                 sendId: string;
@@ -1712,9 +2074,12 @@ export interface operations {
     listAccountsSettingsByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1736,9 +2101,12 @@ export interface operations {
     changeAccountsSettingsByAccountName: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
             };
             cookie?: never;
@@ -1764,9 +2132,12 @@ export interface operations {
     putAccountsSpamSendersByAccountNameAddress: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The sender's address. */
                 address: string;
@@ -1790,9 +2161,12 @@ export interface operations {
     deleteAccountsSpamSendersByAccountNameAddress: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The sender's address. */
                 address: string;
@@ -1817,9 +2191,12 @@ export interface operations {
                 /** @description The folder the thread was opened from. */
                 folderName?: string | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
-                /** @description The account's name: its address's local part. */
+                /** @description The account's name, unique among its owner's accounts. */
                 accountName: string;
                 /** @description The conversation's id, opaque. */
                 threadId: string;
@@ -1835,6 +2212,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createAuthorizations: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewAuthorization"];
+            };
+        };
+        responses: {
+            /** @description Begin adding an account through its provider's page. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Authorization"];
                 };
             };
             default: components["responses"]["Error"];
@@ -1876,7 +2281,10 @@ export interface operations {
                 /** @description One account's events. */
                 accountName?: string | null;
             };
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1919,13 +2327,16 @@ export interface operations {
     listSummary: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Unread counts across the accounts. */
+            /** @description Unread counts across the owner's accounts. */
             200: {
                 headers: {
                     [name: string]: unknown;

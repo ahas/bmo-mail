@@ -1,6 +1,6 @@
-//! What every mail route stands on (`docs/api.md`, 「Keys」, 「Refusals」): the account the path names, and
-//! the faults a route's work comes to. A fault of the request is refused under its status and code; anything
-//! else is the mail server not answering.
+//! What every mail route stands on (`docs/api.md`, 「Keys」, 「Refusals」): the owner's account the path names
+//! and its mailbox, and the faults a route's work comes to. A fault of the request is refused under its status
+//! and code; anything else is the mail server not answering.
 
 use std::fmt::Display;
 use std::future::Future;
@@ -9,9 +9,9 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 use axum::response::Response;
 
-use crate::accounts::{MailAccount, MailConfig};
+use crate::accounts::Account;
+use crate::adapters::Mailbox;
 use crate::http::{CONFLICT, Call, NOT_FOUND, Refused, Standing, TOO_LARGE, UPSTREAM_FAILED};
-use crate::imap::session::MailSession;
 use crate::keys::message_ref;
 use crate::mail::MailRef;
 
@@ -56,6 +56,15 @@ impl Asked {
     Self {
       status: StatusCode::CONFLICT,
       code: CONFLICT,
+      error: error.into(),
+    }
+  }
+
+  /// The service cannot do this yet: it has no key file to seal secrets with.
+  pub fn not_ready(error: impl Into<String>) -> Self {
+    Self {
+      status: StatusCode::SERVICE_UNAVAILABLE,
+      code: crate::http::NOT_READY,
       error: error.into(),
     }
   }
@@ -125,41 +134,53 @@ impl From<Refused> for MailFault {
 pub struct MailContext {
   /// What the service stands on.
   pub standing: Arc<Standing>,
-  pub config: Arc<MailConfig>,
-  pub account: MailAccount,
-  pub session: Arc<MailSession>,
+  pub account: Account,
+  /// The account's mailbox, which its adapter opened.
+  pub mailbox: Arc<dyn Mailbox>,
 }
 
 impl MailContext {
   /// The account's name, as every member under it carries it.
   pub fn name(&self) -> &str {
-    &self.account.key
+    &self.account.name
+  }
+
+  /// The key the store holds the account's rows under.
+  pub fn key(&self) -> String {
+    self.account.store_key()
   }
 }
 
-/// The route's work on the account its path's `accountName` names. An account that does not stand, a service
-/// with no accounts file among them, is 404; a fault of the request is refused under its code and a fault
-/// of the mail server is a 502.
+/// The owner's account the path's `accountName` names. An account that does not stand, or is another
+/// owner's, is 404.
+pub async fn owned_account(call: &mut Call) -> Result<Account, Refused> {
+  let owner = call.owner()?;
+  let name = call.key("accountName").await?;
+
+  call
+    .standing()
+    .accounts
+    .find(&owner, &name)
+    .await?
+    .ok_or_else(|| Refused::not_found("no account has that name"))
+}
+
+/// The route's work on the owner's account its path's `accountName` names, through the account's mailbox. An
+/// account that does not stand, or is another owner's, is 404; a fault of the request is refused under its
+/// code and a fault of the mail server is a 502.
 pub async fn with_account<Work, Done>(call: &mut Call, work: Work) -> Result<Response, Refused>
 where
   Work: FnOnce(MailContext) -> Done,
   Done: Future<Output = Result<Response, MailFault>>,
 {
-  let key = call.key("accountName").await?;
+  let account = owned_account(call).await?;
   let standing = Arc::clone(call.standing());
-  let Some(config) = standing.accounts.read() else {
-    return Err(Refused::not_found("no account has that name"));
-  };
-  let Some(account) = config.find_account(&key).cloned() else {
-    return Err(Refused::not_found("no account has that name"));
-  };
-  let session = standing.sessions.session(&config.imap, &account);
+  let mailbox = standing.mailboxes.of(&account, &standing.context())?;
 
   work(MailContext {
     standing,
-    config,
     account,
-    session,
+    mailbox,
   })
   .await
   .map_err(Refused::from)

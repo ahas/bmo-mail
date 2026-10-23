@@ -173,17 +173,9 @@ pub async fn update_label(
   Ok(labels.swap_remove(place))
 }
 
-/// Deletes the label and takes its keyword off every message of every folder that carries it.
-pub async fn delete_label(
-  pool: &SqlitePool,
-  session: &MailSession,
-  account: &str,
-  id: &str,
-) -> Result<(), MailFault> {
-  if !list_labels(pool, account).await?.iter().any(|label| label.id == id) {
-    return Err(Asked::not_found("no label of the account has that id").into());
-  }
-
+/// Takes a label's keyword off every message of every folder that carries it: the IMAP/SMTP adapter's half of
+/// a label's deletion.
+pub async fn strip_label(session: &MailSession, id: &str) -> Result<(), MailFault> {
   let keyword = label_keyword(id);
   let folders = folders_of(session).await?;
 
@@ -197,6 +189,15 @@ pub async fn delete_label(
     .await;
 
     connection.settle(done)?;
+  }
+
+  Ok(())
+}
+
+/// Deletes the label from the store; a label the account does not hold is a 404.
+pub async fn forget_label(pool: &SqlitePool, account: &str, id: &str) -> Result<(), MailFault> {
+  if !list_labels(pool, account).await?.iter().any(|label| label.id == id) {
+    return Err(Asked::not_found("no label of the account has that id").into());
   }
 
   sqlx::query("DELETE FROM labels WHERE account = ? AND id = ?")

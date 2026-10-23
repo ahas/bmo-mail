@@ -1,8 +1,9 @@
 <template>
   <!-- The mail nav (docs/mail.md, 「The screen」): the accounts, the compose button, the folder roles
        with the Starred role after the inbox, the labels with their colours, the other folders, and
-       the settings. An entry carries its title and a mark for unread mail, never a count. Folded,
-       only the icons stand, each named on hover, with the unread mark on the icon's own corner.
+       the accounts and settings buttons. An entry carries its title and a mark for unread mail,
+       never a count. Folded, only the icons stand, each named on hover, with the unread mark on the
+       icon's own corner.
 
        An account stands as its own avatar rather than as the account icon: the accounts are a list
        of identities, and folded they would otherwise be one icon repeated with nothing left to tell
@@ -88,6 +89,9 @@
     </div>
 
     <div class="flex shrink-0 items-center gap-1 border-t border-default p-2" :class="props.folded ? 'flex-col' : 'justify-end'">
+      <UTooltip :text="$t('mail.action.accounts')">
+        <UButton color="neutral" variant="ghost" square icon="i-material-symbols-manage-accounts-outline" :aria-label="$t('mail.action.accounts')" @click="emit('accounts')" />
+      </UTooltip>
       <UTooltip :text="$t('mail.action.settings')">
         <UButton color="neutral" variant="ghost" square icon="i-material-symbols-settings-outline" :aria-label="$t('mail.action.settings')" @click="emit('settings')" />
       </UTooltip>
@@ -125,6 +129,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   compose: [];
+  accounts: [];
   settings: [];
   fold: [folded: boolean];
   // A choice was made, which a nav standing in a drawer answers by closing.

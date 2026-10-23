@@ -10,6 +10,7 @@ pub mod search;
 pub mod session;
 pub mod structure;
 pub mod views;
+pub mod watcher;
 
 use async_imap::imap_proto::rfc4315::UidSetMember;
 use async_imap::imap_proto::{Response, ResponseCode, Status};

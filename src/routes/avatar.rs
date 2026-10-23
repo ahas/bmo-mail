@@ -34,6 +34,7 @@ impl Route for Avatar {
     status: 200,
     answer: Answer::Bytes,
     codes: &["not-found"],
+    owned: false,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {

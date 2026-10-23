@@ -6,20 +6,14 @@ use axum::response::Response;
 
 use crate::announcements::{MESSAGE_CHANGED, folder_now, message_gone};
 use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
-use crate::imap::folders::folders_of;
-use crate::imap::messages::{
-  delete_forever, find_part_by_cid, move_message, open_part, read_message, read_row_of, read_thread,
-  set_flags,
-};
-use crate::imap::views::page_of;
 use crate::keys::thread_key;
 use crate::labels::{label_id_of, label_keyword, list_labels};
 use crate::members::message;
-use crate::routes::downloads::{Disposition, part_answer};
+use crate::routes::downloads::part_answer;
 use crate::routes::requests::{Asked, message_at, with_account};
 use crate::wire::{Message, MessagePatch, MessageQuery, Page, Thread, ThreadQuery};
 
-const ACCOUNT: (&str, &str) = ("accountName", "The account's name: its address's local part.");
+const ACCOUNT: (&str, &str) = ("accountName", "The account's name, unique among its owner's accounts.");
 const MESSAGE: (&str, &str) = ("messageId", "The message's id, opaque.");
 
 /// `GET /accounts/{accountName}/messages`.
@@ -38,14 +32,14 @@ impl Route for Messages {
     status: 200,
     answer: Answer::Json(schema::<Page<Message>>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let query: MessageQuery = call.query()?;
 
     with_account(&mut call, |mail| async move {
-      let pool = mail.standing.store.pool();
-      let (read, more) = page_of(pool, &mail.session, &mail.account.address, &query).await?;
+      let (read, more) = mail.mailbox.page(&query).await?;
       let items = read.into_iter().map(|one| message(mail.name(), one)).collect();
 
       Ok(answer(StatusCode::OK, &Page { items, more }))
@@ -72,6 +66,7 @@ impl Route for ReadMessage {
     status: 200,
     answer: Answer::Json(schema::<Message>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -79,7 +74,7 @@ impl Route for ReadMessage {
 
     with_account(&mut call, |mail| async move {
       let at = message_at(&id)?;
-      let Some(read) = read_message(&mail.session, &at).await? else {
+      let Some(read) = mail.mailbox.message(&at).await? else {
         return Err(Asked::not_found("no message has that id").into());
       };
 
@@ -108,6 +103,7 @@ impl Route for ChangeMessage {
     status: 200,
     answer: Answer::Json(schema::<Message>),
     codes: &["not-found", "flag-not-settable", "unknown-label", "unknown-folder"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -116,7 +112,7 @@ impl Route for ChangeMessage {
 
     with_account(&mut call, |mail| async move {
       let at = message_at(&id)?;
-      let labels = list_labels(mail.standing.store.pool(), &mail.account.address).await?;
+      let labels = list_labels(mail.standing.store.pool(), &mail.key()).await?;
 
       if let Some(unknown) = patch.label_ids.iter().find(|id| !labels.iter().any(|label| &label.id == *id))
       {
@@ -131,39 +127,41 @@ impl Route for ChangeMessage {
       let destination = patch.folder_name.filter(|folder| *folder != at.folder);
 
       if let Some(folder) = &destination
-        && !folders_of(&mail.session).await?.iter().any(|one| &one.path == folder)
+        && !mail.mailbox.folders().await?.iter().any(|one| &one.path == folder)
       {
         return Err(Asked::rule("unknown-folder", "the mailbox holds no folder of that name").into());
       }
 
-      if !set_flags(&mail.session, &at, &wanted).await? {
+      if !mail.mailbox.set_flags(&at, &wanted).await? {
         return Err(Asked::not_found("no message has that id").into());
       }
 
       let now = match &destination {
         None => Some(at.clone()),
         Some(folder) => {
-          let read = read_row_of(&mail.session, &at).await?;
+          let read = mail.mailbox.row(&at).await?;
           let header_id = read.as_ref().and_then(|read| read.listed.message_id.clone());
-          let landed = move_message(&mail.session, &at, header_id.as_deref(), folder).await?;
+          let landed = mail.mailbox.move_message(&at, header_id.as_deref(), folder).await?;
 
-          message_gone(&mail.standing, mail.name(), &at).await;
-          folder_now(&mail.standing, &mail.session, mail.name(), folder).await;
+          message_gone(&mail.standing, &mail.account, &at).await;
+          folder_now(&mail.standing, &*mail.mailbox, &mail.account, folder).await;
           landed
         }
       };
 
-      folder_now(&mail.standing, &mail.session, mail.name(), &at.folder).await;
+      folder_now(&mail.standing, &*mail.mailbox, &mail.account, &at.folder).await;
 
       let Some(now) = now else {
         return Ok(nothing());
       };
-      let Some(read) = read_row_of(&mail.session, &now).await? else {
+      let Some(read) = mail.mailbox.row(&now).await? else {
         return Ok(nothing());
       };
       let changed = message(mail.name(), read);
 
-      mail.standing.events.publish(MESSAGE_CHANGED, Some(mail.name()), &changed).await;
+      let owner = &mail.account.owner;
+
+      mail.standing.events.publish(MESSAGE_CHANGED, owner, Some(mail.name()), &changed).await;
 
       Ok(answer(StatusCode::OK, &changed))
     })
@@ -189,6 +187,7 @@ impl Route for DeleteMessage {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found", "outside-trash"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -197,9 +196,9 @@ impl Route for DeleteMessage {
     with_account(&mut call, |mail| async move {
       let at = message_at(&id)?;
 
-      delete_forever(&mail.session, &at).await?;
-      message_gone(&mail.standing, mail.name(), &at).await;
-      folder_now(&mail.standing, &mail.session, mail.name(), &at.folder).await;
+      mail.mailbox.delete_forever(&at).await?;
+      message_gone(&mail.standing, &mail.account, &at).await;
+      folder_now(&mail.standing, &*mail.mailbox, &mail.account, &at.folder).await;
 
       Ok(nothing())
     })
@@ -226,6 +225,7 @@ impl Route for PartContent {
     status: 200,
     answer: Answer::Bytes,
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -234,16 +234,7 @@ impl Route for PartContent {
 
     with_account(&mut call, |mail| async move {
       let at = message_at(&id)?;
-      let (number, disposition) = if crate::imap::part_number(&part) {
-        (part, Disposition::Attachment)
-      } else {
-        let Some(found) = find_part_by_cid(&mail.session, &at, &part).await? else {
-          return Err(Asked::not_found("no part of the message has that id").into());
-        };
-
-        (found.part, Disposition::Inline)
-      };
-      let Some(opened) = open_part(&mail.session, &at, &number).await? else {
+      let Some((opened, disposition)) = mail.mailbox.part(&at, &part).await? else {
         return Err(Asked::not_found("no part of the message has that id").into());
       };
 
@@ -276,6 +267,7 @@ impl Route for ReadThread {
     status: 200,
     answer: Answer::Json(schema::<Thread>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -286,7 +278,7 @@ impl Route for ReadThread {
       let Some(key) = thread_key(&id) else {
         return Err(Asked::not_found("no thread has that id").into());
       };
-      let read = read_thread(&mail.session, &key, query.folder_name.as_deref()).await?;
+      let read = mail.mailbox.thread(&key, query.folder_name.as_deref()).await?;
       let Some(first) = read.first() else {
         return Err(Asked::not_found("no thread has that id").into());
       };

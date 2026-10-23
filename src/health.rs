@@ -26,6 +26,7 @@ impl Route for HealthRoute {
     status: 200,
     answer: Answer::Json(schema::<Health>),
     codes: &[],
+    owned: false,
   };
 
   async fn answer(&self, _call: Call) -> Result<Response, Refused> {

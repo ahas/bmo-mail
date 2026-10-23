@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-mail",
-    "version": "0.1.0-rev.1",
-    "description": "Mailboxes read, written and watched over IMAP and submission behind one API: accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings. A mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`."
+    "version": "0.1.0-rev.2",
+    "description": "Mailboxes read, written and watched behind one API, each account an owner's and of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings. A route that reads or changes an account acts for the opaque owner key the caller passes in `Owner-Key`, and reaches that owner's accounts alone. A mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`."
   },
   "servers": [
     {
@@ -42,16 +42,44 @@
     }
   ],
   "paths": {
+    "/account-kinds": {
+      "get": {
+        "operationId": "listAccountKinds",
+        "tags": [
+          "accounts"
+        ],
+        "summary": "The kinds of account the service declares, one for each adapter built into it.",
+        "responses": {
+          "200": {
+            "description": "The kinds of account the service declares, one for each adapter built into it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountKindPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "failed"
+        ]
+      }
+    },
     "/accounts": {
       "get": {
         "operationId": "listAccounts",
         "tags": [
           "accounts"
         ],
-        "summary": "The mail accounts.",
+        "summary": "The owner's mail accounts, in their order.",
         "responses": {
           "200": {
-            "description": "The mail accounts.",
+            "description": "The owner's mail accounts, in their order.",
             "content": {
               "application/json": {
                 "schema": {
@@ -70,6 +98,17 @@
           "failed"
         ],
         "parameters": [
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
           {
             "name": "after",
             "in": "query",
@@ -100,6 +139,222 @@
             "description": "The most items the page holds; the whole list where none is given."
           }
         ]
+      },
+      "post": {
+        "operationId": "createAccounts",
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Add an account of the owner, once it signed in.",
+        "responses": {
+          "201": {
+            "description": "Add an account of the owner, once it signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "conflict",
+          "unknown-kind",
+          "sign-in-failed",
+          "unknown-authorization",
+          "not-ready",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewAccount"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/{accountName}": {
+      "delete": {
+        "operationId": "deleteAccountsByAccountName",
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove an account of the owner; its mailbox on the server is untouched.",
+        "responses": {
+          "204": {
+            "description": "Remove an account of the owner; its mailbox on the server is untouched."
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "not-found",
+          "failed",
+          "upstream-failed"
+        ],
+        "parameters": [
+          {
+            "name": "accountName",
+            "in": "path",
+            "required": true,
+            "description": "The account's name, unique among its owner's accounts.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ]
+      },
+      "get": {
+        "operationId": "readAccountsByAccountName",
+        "tags": [
+          "accounts"
+        ],
+        "summary": "One account of the owner.",
+        "responses": {
+          "200": {
+            "description": "One account of the owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "not-found",
+          "failed",
+          "upstream-failed"
+        ],
+        "parameters": [
+          {
+            "name": "accountName",
+            "in": "path",
+            "required": true,
+            "description": "The account's name, unique among its owner's accounts.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "changeAccountsByAccountName",
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Rename or move an account, or change its address, settings or secrets.",
+        "responses": {
+          "200": {
+            "description": "Rename or move an account, or change its address, settings or secrets.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "not-found",
+          "conflict",
+          "sign-in-failed",
+          "not-ready",
+          "failed",
+          "upstream-failed"
+        ],
+        "parameters": [
+          {
+            "name": "accountName",
+            "in": "path",
+            "required": true,
+            "description": "The account's name, unique among its owner's accounts.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountPatch"
+              }
+            }
+          }
+        }
       }
     },
     "/accounts/{accountName}/addresses": {
@@ -136,9 +391,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           },
           {
@@ -220,9 +486,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -265,7 +542,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -277,6 +554,17 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -314,7 +602,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -326,6 +614,17 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -364,7 +663,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -376,6 +675,17 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -427,7 +737,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -439,6 +749,17 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -488,9 +809,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           },
           {
@@ -559,7 +891,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -571,6 +903,17 @@
             "description": "The folder's full name, percent-encoded.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -620,9 +963,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           },
           {
@@ -691,9 +1045,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -736,7 +1101,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -748,6 +1113,17 @@
             "description": "The label's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -786,7 +1162,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -798,6 +1174,17 @@
             "description": "The label's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -847,9 +1234,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           },
           {
@@ -965,7 +1363,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -977,6 +1375,17 @@
             "description": "The message's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1014,7 +1423,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1026,6 +1435,17 @@
             "description": "The message's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1066,7 +1486,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1078,6 +1498,17 @@
             "description": "The message's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -1128,7 +1559,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1149,6 +1580,17 @@
             "description": "The part's number in the message, or its content id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1189,9 +1631,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -1242,9 +1695,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -1294,9 +1758,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           },
           {
@@ -1363,9 +1838,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -1408,7 +1894,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1420,6 +1906,17 @@
             "description": "The rule's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1457,7 +1954,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1469,6 +1966,17 @@
             "description": "The rule's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -1520,9 +2028,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -1566,7 +2085,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1578,6 +2097,17 @@
             "description": "The send's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1615,7 +2145,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1627,6 +2157,17 @@
             "description": "The send's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1666,9 +2207,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1706,9 +2258,20 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -1751,7 +2314,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1763,6 +2326,17 @@
             "description": "The sender's address.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1800,7 +2374,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1812,6 +2386,17 @@
             "description": "The sender's address.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ]
@@ -1851,7 +2436,7 @@
             "name": "accountName",
             "in": "path",
             "required": true,
-            "description": "The account's name: its address's local part.",
+            "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
             }
@@ -1863,6 +2448,17 @@
             "description": "The conversation's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           },
           {
@@ -1879,6 +2475,60 @@
             "description": "The folder the thread was opened from."
           }
         ]
+      }
+    },
+    "/authorizations": {
+      "post": {
+        "operationId": "createAuthorizations",
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Begin adding an account through its provider's page.",
+        "responses": {
+          "201": {
+            "description": "Begin adding an account through its provider's page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Authorization"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "unknown-kind",
+          "no-authorization",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewAuthorization"
+              }
+            }
+          }
+        }
       }
     },
     "/avatars/{address}": {
@@ -1958,6 +2608,17 @@
           "failed"
         ],
         "parameters": [
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
           {
             "name": "kinds",
             "in": "query",
@@ -2050,10 +2711,10 @@
         "tags": [
           "summary"
         ],
-        "summary": "Unread counts across the accounts.",
+        "summary": "Unread counts across the owner's accounts.",
         "responses": {
           "200": {
-            "description": "Unread counts across the accounts.",
+            "description": "Unread counts across the owner's accounts.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2068,13 +2729,136 @@
         },
         "x-codes": [
           "unauthorized",
+          "bad-request",
           "failed"
+        ],
+        "parameters": [
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
         ]
       }
     }
   },
   "components": {
     "schemas": {
+      "AccountKindPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountKind"
+            }
+          },
+          "more": {
+            "type": "boolean",
+            "description": "Whether anything stands past the last item."
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "description": "A page of a list."
+      },
+      "AccountKind": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The adapter's name, which an account names its kind by."
+          },
+          "signIn": {
+            "$ref": "#/components/schemas/SignIn"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KindField"
+            },
+            "description": "What a person writes to add an account of it, in the order a form shows them."
+          }
+        },
+        "required": [
+          "name",
+          "signIn",
+          "fields"
+        ],
+        "description": "A kind of account: the adapter that reaches its mailbox, as that adapter declares it."
+      },
+      "SignIn": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "password",
+            "description": "From the fields a person writes, a secret among them."
+          },
+          {
+            "type": "string",
+            "const": "authorization",
+            "description": "Through the provider's own page, which hands back the tokens kept as the account's secrets."
+          }
+        ],
+        "description": "How an account of a kind signs in."
+      },
+      "KindField": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The key it stands under in an account's `settings`, or its `secrets` where it is secret."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FieldKind"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The value a form starts from; null where it starts empty."
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "required"
+        ],
+        "description": "One field a person writes to add an account of a kind."
+      },
+      "FieldKind": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "text"
+            ]
+          },
+          {
+            "type": "string",
+            "const": "port",
+            "description": "A port, 1 to 65535."
+          },
+          {
+            "type": "string",
+            "const": "secret",
+            "description": "Kept encrypted and never answered."
+          }
+        ],
+        "description": "What a field of a kind holds."
+      },
       "AccountPage": {
         "type": "object",
         "properties": {
@@ -2100,7 +2884,11 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The address's local part: the account's key."
+            "description": "Unique among the owner's accounts: the key the routes name it by."
+          },
+          "kind": {
+            "type": "string",
+            "description": "The adapter's name."
           },
           "address": {
             "type": "string"
@@ -2108,7 +2896,14 @@
           "position": {
             "type": "integer",
             "format": "int64",
-            "description": "Its place in the accounts file, from 1."
+            "description": "Its place in its owner's list, from 1."
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Its fields that are not secret."
           },
           "unreadCount": {
             "type": "integer",
@@ -2123,12 +2918,140 @@
         },
         "required": [
           "name",
+          "kind",
           "address",
           "position",
+          "settings",
           "unreadCount",
           "reachable"
         ],
-        "description": "An account of the accounts file, as much of it as is answered."
+        "description": "An account of the owner, as much of it as is answered: never its secrets."
+      },
+      "NewAccount": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The address's local part where none is given."
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Required for a kind that signs in by password."
+          },
+          "settings": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Its fields that are not secret, by name."
+          },
+          "secrets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Its secret fields, by name."
+          },
+          "authorization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuthorizationAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a kind that signs in by authorization: the authorization and what the provider answered."
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "description": "An account to add: by password from its fields, or by an authorization's answer."
+      },
+      "AuthorizationAnswer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The authorization's id."
+          },
+          "answer": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The query the provider sent the browser back with."
+          }
+        },
+        "required": [
+          "id",
+          "answer"
+        ],
+        "description": "The answer of a provider's page, which finishes adding an account by authorization."
+      },
+      "AccountPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "settings": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Its fields that are not secret, replaced whole."
+          },
+          "secrets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The secret fields to replace; the others are kept."
+          }
+        },
+        "description": "An account's change."
       },
       "AddressPage": {
         "type": "object",
@@ -3406,6 +4329,50 @@
         ],
         "description": "A conversation and its messages."
       },
+      "Authorization": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "The provider's page."
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "url",
+          "expiresAt"
+        ],
+        "description": "An authorization started: where to send the browser."
+      },
+      "NewAuthorization": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "returnTo": {
+            "type": "string",
+            "description": "Where the provider sends the browser back to."
+          }
+        },
+        "required": [
+          "kind",
+          "returnTo"
+        ],
+        "description": "An authorization to start."
+      },
       "EventPage": {
         "type": "object",
         "properties": {
@@ -3520,7 +4487,7 @@
     },
     "responses": {
       "Error": {
-        "description": "A failure, in the common error shape. The codes:\n- `bad-request` (400): the body, the query or the path is not the shape the route takes\n- `unauthorized` (401): the bearer token is missing or wrong\n- `no-route` (404): no route answers this method and path\n- `not-found` (404): nothing stands at the key the path names\n- `conflict` (409): a label's name is taken, or a send has already gone\n- `gone` (410): the events after the number asked for are no longer kept\n- `too-large` (413): a file or a message is past the size the submission server takes\n- `too-many-labels` (422): the account holds the most labels it may\n- `flag-not-settable` (422): a flag is not one a request may set\n- `unknown-label` (422): a body names a label the account does not hold\n- `unknown-folder` (422): a body names a folder the mailbox does not hold\n- `unknown-message` (422): a body names a message the account does not hold\n- `outside-trash` (422): a message to delete is not in spam or trash\n- `no-recipients` (422): a draft to send has no recipient\n- `send-too-late` (422): a send's sendAt is past the undo span from now\n- `no-receipt-asked` (422): the message asks for no read receipt\n- `draft-not-placed` (422): the server did not say where it put a saved draft\n- `failed` (500): the service failed\n- `upstream-failed` (502): the mail server did not answer, or failed",
+        "description": "A failure, in the common error shape. The codes:\n- `bad-request` (400): the body, the query or the path is not the shape the route takes\n- `unauthorized` (401): the bearer token is missing or wrong\n- `no-route` (404): no route answers this method and path\n- `not-found` (404): nothing stands at the key the path names\n- `conflict` (409): an account's or a label's name is taken, or a send has already gone\n- `gone` (410): the events after the number asked for are no longer kept\n- `too-large` (413): a file or a message is past the size the submission server takes\n- `too-many-labels` (422): the account holds the most labels it may\n- `flag-not-settable` (422): a flag is not one a request may set\n- `unknown-label` (422): a body names a label the account does not hold\n- `unknown-folder` (422): a body names a folder the mailbox does not hold\n- `unknown-message` (422): a body names a message the account does not hold\n- `outside-trash` (422): a message to delete is not in spam or trash\n- `no-recipients` (422): a draft to send has no recipient\n- `send-too-late` (422): a send's sendAt is past the undo span from now\n- `no-receipt-asked` (422): the message asks for no read receipt\n- `draft-not-placed` (422): the server did not say where it put a saved draft\n- `unknown-kind` (422): a body names a kind of account the service does not declare\n- `sign-in-failed` (422): the account's servers did not take its sign-in\n- `no-authorization` (422): an authorization is asked for a kind that signs in by password\n- `unknown-authorization` (422): a body names an authorization that is not the owner's, has run out or was used\n- `failed` (500): the service failed\n- `upstream-failed` (502): the mail server did not answer, or failed\n- `not-ready` (503): the service has no key file to seal an account's secrets with",
         "content": {
           "application/json": {
             "schema": {
@@ -3543,7 +4510,10 @@
     "message.changed",
     "message.deleted",
     "send.changed",
-    "folder.changed"
+    "folder.changed",
+    "account.created",
+    "account.changed",
+    "account.deleted"
   ],
   "x-tools": [
     {

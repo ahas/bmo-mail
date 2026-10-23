@@ -29,6 +29,9 @@ enum Word {
     /// The service's bearer token; the settings' `server.token` where none is given.
     #[arg(long, env = "BMO_MAIL_TOKEN")]
     token: Option<String>,
+    /// The owner key the tools act for; the settings' `accounts.administrator` where none is given.
+    #[arg(long, env = "BMO_MAIL_OWNER")]
+    owner: Option<String>,
   },
   /// The nouns this command carries for a host to dispatch, one a line: none.
   Nouns,
@@ -95,11 +98,16 @@ async fn main() -> ExitCode {
   let done = match command.word {
     Word::Serve => bmo_mail::serve(settings).await,
     Word::Health => bmo_mail::health::ask(&settings).await,
-    Word::Mcp { address, token } => {
+    Word::Mcp {
+      address,
+      token,
+      owner,
+    } => {
       let address = address.unwrap_or_else(|| format!("http://{}", settings.server.listen));
       let token = token.unwrap_or_else(|| settings.server.token.clone());
+      let owner = owner.unwrap_or_else(|| settings.accounts.administrator.clone());
 
-      bmo_mail::mcp::serve(MailClient::new(address, token)).await
+      bmo_mail::mcp::serve(MailClient::new(address, token).acting_for(owner)).await
     }
     Word::Nouns => Ok(()),
     Word::Import { .. } => unreachable!("the import is answered before the settings are read"),

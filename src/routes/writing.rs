@@ -10,7 +10,6 @@ use base64::engine::general_purpose::STANDARD;
 
 use crate::account_settings::read_settings;
 use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
-use crate::imap::messages::read_message;
 use crate::mail::{AttachmentRef, MailAddress};
 use crate::members::address_of;
 use crate::routes::requests::{
@@ -22,12 +21,11 @@ use crate::wire::{
 };
 use crate::writing::addresses::suggest_addresses;
 use crate::writing::compose::{forward_draft, new_draft, reply_draft};
-use crate::writing::drafts::{discard_draft, draft_named, find_draft, member, save_and_open};
-use crate::writing::receipts::send_receipt;
+use crate::writing::drafts::member;
 use crate::writing::send::{SEND_CHANGED, forget_later, queue_send};
 use crate::writing::staging::{attachments_fit, stage_file};
 
-const ACCOUNT: (&str, &str) = ("accountName", "The account's name: its address's local part.");
+const ACCOUNT: (&str, &str) = ("accountName", "The account's name, unique among its owner's accounts.");
 const DRAFT: (&str, &str) =
   ("draftId", "The draft's id: the Message-ID it is saved under, without angle brackets.");
 const SEND: (&str, &str) = ("sendId", "The send's id.");
@@ -51,6 +49,7 @@ impl Route for Addresses {
     status: 200,
     answer: Answer::Json(schema::<Page<Address>>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -60,8 +59,7 @@ impl Route for Addresses {
       let limit = query.limit.unwrap_or(SUGGESTED).max(1);
       let typed = query.q.unwrap_or_default();
       let pool = mail.standing.store.pool();
-      let mut items =
-        suggest_addresses(pool, &mail.account.address, &typed, query.after.unwrap_or(0), limit).await?;
+      let mut items = suggest_addresses(pool, &mail.key(), &typed, query.after.unwrap_or(0), limit).await?;
       let more = items.len() > limit as usize;
 
       items.truncate(limit as usize);
@@ -95,7 +93,7 @@ async fn original(mail: &MailContext, id: &str) -> Result<crate::mail::MailMessa
   let unknown = || Asked::rule("unknown-message", "the account holds no message of that id");
   let at = message_at(id).map_err(|_| unknown())?;
 
-  read_message(&mail.session, &at).await?.ok_or_else(|| unknown().into())
+  mail.mailbox.message(&at).await?.ok_or_else(|| unknown().into())
 }
 
 /// `POST /accounts/{accountName}/drafts`: a draft started, saved in the drafts folder at once.
@@ -114,6 +112,7 @@ impl Route for CreateDraft {
     status: 201,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found", "unknown-message", "draft-not-placed"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -122,7 +121,7 @@ impl Route for CreateDraft {
     with_account(&mut call, |mail| async move {
       let standing = &mail.standing;
       let from = &mail.account.address;
-      let settings = read_settings(standing.store.pool(), from).await?;
+      let settings = read_settings(standing.store.pool(), &mail.key()).await?;
       let draft = match (&new.reply_to, &new.forward) {
         (Some(_), Some(_)) => {
           return Err(Asked::bad_request("a draft answers a message or carries one, not both").into());
@@ -133,7 +132,7 @@ impl Route for CreateDraft {
         (None, Some(id)) => forward_draft(&original(&mail, id).await?, from, &settings, &standing.wording),
         (None, None) => new_draft(from, &settings),
       };
-      let saved = save_and_open(&mail.session, &standing.settings.staging.dir, &draft).await?;
+      let saved = mail.mailbox.save_draft(&draft).await?;
 
       Ok(answer(StatusCode::CREATED, &member(mail.name(), &saved)))
     })
@@ -159,13 +158,14 @@ impl Route for ReadDraft {
     status: 200,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let id = call.key("draftId").await?;
 
     with_account(&mut call, |mail| async move {
-      let draft = draft_named(&mail.session, &id).await?;
+      let draft = mail.mailbox.draft(&id).await?;
 
       Ok(answer(StatusCode::OK, &member(mail.name(), &draft)))
     })
@@ -192,6 +192,7 @@ impl Route for ChangeDraft {
     status: 200,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found", "draft-not-placed"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -199,7 +200,7 @@ impl Route for ChangeDraft {
     let patch: DraftPatch = call.body().await?;
 
     with_account(&mut call, |mail| async move {
-      let mut draft = draft_named(&mail.session, &id).await?;
+      let mut draft = mail.mailbox.draft(&id).await?;
 
       if let Some(to) = &patch.to {
         draft.to = recipients(to)?;
@@ -232,7 +233,7 @@ impl Route for ChangeDraft {
         draft.receipt = receipt;
       }
 
-      let saved = save_and_open(&mail.session, &mail.standing.settings.staging.dir, &draft).await?;
+      let saved = mail.mailbox.save_draft(&draft).await?;
 
       Ok(answer(StatusCode::OK, &member(mail.name(), &saved)))
     })
@@ -258,17 +259,14 @@ impl Route for DeleteDraft {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let id = call.key("draftId").await?;
 
     with_account(&mut call, |mail| async move {
-      let Some(at) = find_draft(&mail.session, &id).await? else {
-        return Err(Asked::not_found("no draft has that id").into());
-      };
-
-      discard_draft(&mail.session, &at).await?;
+      mail.mailbox.discard_draft(&id).await?;
 
       Ok(nothing())
     })
@@ -295,6 +293,7 @@ impl Route for CreateAttachment {
     status: 201,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found", "too-large", "draft-not-placed"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -305,7 +304,7 @@ impl Route for CreateAttachment {
       let bytes = STANDARD
         .decode(file.content.trim())
         .map_err(|why| Asked::bad_request(format!("the content is not base64: {why}")))?;
-      let mut draft = draft_named(&mail.session, &id).await?;
+      let mut draft = mail.mailbox.draft(&id).await?;
       let mut sizes: Vec<u64> = draft
         .attachments
         .iter()
@@ -316,7 +315,7 @@ impl Route for CreateAttachment {
 
       sizes.push(bytes.len() as u64);
 
-      let limit = mail.standing.sends.submission_limit(&mail.config.smtp).await;
+      let limit = mail.mailbox.sending_limit().await;
 
       if !attachments_fit(&sizes, limit) {
         return Err(
@@ -335,7 +334,7 @@ impl Route for CreateAttachment {
         size: staged.size,
       });
 
-      let saved = save_and_open(&mail.session, staging, &draft).await?;
+      let saved = mail.mailbox.save_draft(&draft).await?;
 
       Ok(answer(StatusCode::CREATED, &member(mail.name(), &saved)))
     })
@@ -362,6 +361,7 @@ impl Route for CreateSend {
     status: 201,
     answer: Answer::Json(schema::<Send>),
     codes: &["not-found", "no-recipients", "send-too-late"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -369,7 +369,7 @@ impl Route for CreateSend {
 
     with_account(&mut call, |mail| async move {
       let standing = Arc::clone(&mail.standing);
-      let settings = read_settings(standing.store.pool(), &mail.account.address).await?;
+      let settings = read_settings(standing.store.pool(), &mail.key()).await?;
       let now = chrono::Utc::now().timestamp_millis();
       let latest = now + settings.undo_send_ms;
       let send_at = match new.send_at {
@@ -380,12 +380,11 @@ impl Route for CreateSend {
         }
         Some(at) => at,
       };
-      let session = Arc::clone(&mail.session);
       let send =
-        queue_send(standing, session, mail.config.smtp.clone(), mail.name(), &new.draft_id, send_at)
-          .await?;
+        queue_send(standing, Arc::clone(&mail.mailbox), &mail.account, &new.draft_id, send_at).await?;
+      let owner = &mail.account.owner;
 
-      mail.standing.events.publish(SEND_CHANGED, Some(mail.name()), &send).await;
+      mail.standing.events.publish(SEND_CHANGED, owner, Some(mail.name()), &send).await;
 
       Ok(answer(StatusCode::CREATED, &send))
     })
@@ -411,13 +410,14 @@ impl Route for ReadSend {
     status: 200,
     answer: Answer::Json(schema::<Send>),
     codes: &["not-found"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let id = call.key("sendId").await?;
 
     with_account(&mut call, |mail| async move {
-      let Some(send) = mail.standing.sends.send(mail.name(), &id) else {
+      let Some(send) = mail.standing.sends.send(mail.account.id, &id) else {
         return Err(Asked::not_found("no send has that id").into());
       };
 
@@ -445,18 +445,20 @@ impl Route for CancelSend {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found", "conflict"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
     let id = call.key("sendId").await?;
 
     with_account(&mut call, |mail| async move {
-      let Some(cancelled) = mail.standing.sends.cancel(mail.name(), &id) else {
+      let Some(cancelled) = mail.standing.sends.cancel(mail.account.id, &id) else {
         return Err(Asked::not_found("no send has that id").into());
       };
       let send = cancelled?;
+      let owner = &mail.account.owner;
 
-      mail.standing.events.publish(SEND_CHANGED, Some(mail.name()), &send).await;
+      mail.standing.events.publish(SEND_CHANGED, owner, Some(mail.name()), &send).await;
       forget_later(Arc::clone(&mail.standing), id);
 
       Ok(nothing())
@@ -483,6 +485,7 @@ impl Route for CreateReceipt {
     status: 201,
     answer: Answer::Json(schema::<Receipt>),
     codes: &["not-found", "no-receipt-asked"],
+    owned: true,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -491,7 +494,7 @@ impl Route for CreateReceipt {
     with_account(&mut call, |mail| async move {
       let at = message_at(&new.message_id)?;
 
-      send_receipt(&mail.session, &mail.config.smtp, &mail.standing.wording, &at).await?;
+      mail.mailbox.send_receipt(&at, &mail.standing.wording).await?;
 
       Ok(answer(
         StatusCode::CREATED,

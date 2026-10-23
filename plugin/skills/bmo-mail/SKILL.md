@@ -5,7 +5,7 @@ description: Read, write and send mail through the bmo-mail MCP server - list an
 
 # bmo-mail
 
-The mail service holds the mailboxes its accounts file names and serves them over one API: accounts, folders,
+The mail service holds each owner's own mailboxes and serves them over one API: accounts, folders,
 messages and conversations, drafts and sends, labels, rules and settings. The `bmo-mail` MCP server gives a
 harness one tool for each route a reader and a writer need, each a thin call through the service's client.
 
@@ -19,7 +19,9 @@ bmo-mail mcp
 
 It reaches the service at the address `--address` or `BMO_MAIL_ADDRESS` names, else at `http://` and the
 service's own `server.listen` setting, with the bearer token `--token` or `BMO_MAIL_TOKEN` gives, else the
-service's `server.token` setting. A wrong token answers every tool with a 401 `unauthorized` error.
+service's `server.token` setting. A wrong token answers every tool with a 401 `unauthorized` error. It acts for
+the owner key `--owner` or `BMO_MAIL_OWNER` gives, else the service's `accounts.administrator` setting, and
+sees that owner's accounts alone.
 
 ## Reading
 

@@ -6,14 +6,14 @@ use mail_builder::headers::address::Address;
 use mail_builder::headers::content_type::ContentType;
 use mail_builder::mime::{BodyPart, MimePart};
 
-use crate::accounts::MailEndpoint;
+use crate::adapters::imap_smtp::MailEndpoint;
 use crate::imap::messages::{change_flags, read_message};
 use crate::imap::session::MailSession;
 use crate::mail::{MailMessage, MailRef};
 use crate::routes::requests::{Asked, MailFault};
 use crate::wording::{Wording, fill};
 use crate::writing::compose::new_message_id;
-use crate::writing::send::submit;
+use crate::writing::submission::submit;
 
 /// What the report names the service as.
 const REPORTING_AGENT: &str = "bmo-mail";

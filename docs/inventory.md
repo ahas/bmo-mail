@@ -88,7 +88,7 @@ That is 2 + 7 + 3 + 3 + 10 + 10 + 1 = 36.
 
 | Old file | Lines | Here |
 |---|---|---|
-| `client/server/plugins/mail.ts` | 97 | `src/watcher/mod.rs`: the watchers started with the service, the accounts file read again every minute, the staging sweep every hour, everything closed on stop; the console's event word and push ring become the event stream (`docs/api.md`, 「The event stream」) |
+| `client/server/plugins/mail.ts` | 97 | `src/watcher/mod.rs`: the watchers started with the service, following the stored accounts, the staging sweep every hour, everything closed on stop; the console's event word and push ring become the event stream (`docs/api.md`, 「The event stream」) |
 | `client/shared/mail.ts` | 233 | `src/wire.rs`, the shapes the routes answer; and copied as `client/shared/mail.ts` for the screen |
 
 ## The console screen: 25 files, 4,835 lines, carried
@@ -190,7 +190,7 @@ console and stays bmo-web's; the stand-in lines of `docs/worker-bench.md` stay w
 
 | What | Old place | Here |
 |---|---|---|
-| the accounts file | `BMO_MAIL_ACCOUNTS_FILE`, else the data root's `env/mail-accounts` for a built console | the setting `accounts.file`, which a deployment names; the account addresses, hosts and logins stand only in that file |
+| the accounts file | `BMO_MAIL_ACCOUNTS_FILE`, else the data root's `env/mail-accounts` for a built console | the accounts in the store, each owner's own, their secrets sealed under the key file `secrets.key_file` names; the setting `accounts.file` names the file imported into them once |
 | the staging folder | `mail-staging` beside the archive file | the setting `staging.dir` |
 | the language of the words the server wrote and of a list's order | Korean, fixed in the code | the setting `wording.language` |
 | the time zone dates were written in | fixed in the code | the setting `wording.time_zone` |
