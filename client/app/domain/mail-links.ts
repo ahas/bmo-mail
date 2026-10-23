@@ -1,7 +1,7 @@
-import { webAddresses } from "bmo-markup/web-address";
+import { webAddresses } from "bmo-text/web-address";
 
 // The web addresses a plain-text body's words carry, read by the one rule every place that finds them
-// shares (bmo-markup's web-address): a bare address ends where the sentence takes over.
+// shares (bmo-text's web-address): a bare address ends where the sentence takes over.
 
 export interface LinkPart {
   text: string;

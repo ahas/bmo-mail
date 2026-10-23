@@ -121,7 +121,7 @@ and `side-parts`, and its components.
 | `client/shared/types.ts` | `PushPayload` | not carried: the console words a notice from the bundle's pack |
 | `client/shared/config.ts` | `MAIL_PUSH` | the bundle's declared notice kind, `message.created` |
 | `client/shared/paths.ts` | `mailThreadPath` | not carried: a notice's address is the console's |
-| `client/shared/links.ts` | `linkParts`, which the screen's frame reads | the bundle, on bmo-markup's `web-address` |
+| `client/shared/links.ts` | `linkParts`, which the screen's frame reads | the bundle, on bmo-text's `web-address` |
 | `client/app/domain/settings.ts` | `useMailColumns`, the list's column widths kept in the browser | the bundle's own domain module, `mail-columns` |
 | `client/app/domain/avatars.ts` | `identityMark` and the tones and initial it draws with, the letter an address wears without a logo | the bundle's own domain module, `mail-avatars` |
 | `client/app/domain/urls.ts` | `appUrl`, a path under the console's base path, which a part's, an inline picture's and a logo's addresses are written with | the bundle's own domain module, `mail-urls` |
@@ -204,7 +204,7 @@ console and stays bmo-web's; the stand-in lines of `docs/worker-bench.md` stay w
 ## Crates and packages
 
 - **No crate or package of the old workspace is depended on,** and no `bmo-*` package of another unit. The
-  screen depends on bmo-ui and bmo-markup among the base libraries.
+  screen depends on bmo-ui and bmo-text among the base libraries.
 - **What the old server's libraries become:** `imapflow` an IMAP crate, `nodemailer` and its composer and
   connection a submission crate and a message builder, `libmime` and `postal-mime` a MIME parser,
   `htmlparser2` and `domhandler` an HTML parser, and `node:dns` a DNS resolver; each crate is named in the

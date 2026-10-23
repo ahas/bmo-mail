@@ -34,7 +34,7 @@ structure (archive document #301, 「원칙」).
 - **A client of another service is one module named for that service** under `src/clients/`, holding only
   the calls this repository makes, so it can be swapped for that service's own client.
 - **Dependencies:** crates from the registry pinned in `Cargo.toml`, and among other repositories only the
-  base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-markup`.
+  base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text`.
 - **The plumbing knows no route.** A route registers itself beside its own answer; adding one changes no
   file but its own.
 - **The accounts file is a secret.** Nothing read from it but an account's address reaches a log line or an

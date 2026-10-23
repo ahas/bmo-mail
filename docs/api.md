@@ -374,9 +374,9 @@ notice kind `message.created`.
   `bmo-mail-client-<version>.tgz`. A host depends on the packed bundle, on bmo-ui at the version the bundle's
   peer names, and extends the bundle in its Nuxt configuration, which brings bmo-ui's layer with it; it
   attaches the bundle by its declaration and owes it what bmo-ui's contract says a console owes a bundle.
-- **What it depends on beside bmo-ui:** bmo-markup's `web-address`, for the links a plain-text body shows, and
+- **What it depends on beside bmo-ui:** bmo-text's `web-address`, for the links a plain-text body shows, and
   the TipTap editor packages its editor is built on. For the bundle's own install and typecheck a packed copy
-  of bmo-ui stands in `client/vendor/`, and bmo-markup's TypeScript package is read from the base library's own
+  of bmo-ui stands in `client/vendor/`, and bmo-text's TypeScript package is read from the base library's own
   folder.
 - **Wording:** every word the screen shows is the bundle's language pack, `client/i18n/locales/ko.json`, one
   JSON file to a locale in the folder its declaration names, under the bundle's namespace: the screen's name

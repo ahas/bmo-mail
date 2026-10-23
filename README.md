@@ -38,7 +38,7 @@ local settings a deployment gives.
 
 `client/` holds the mail screen as a console bundle on bmo-ui, packed as `bmo-mail-client`, declared in
 `client/console-bundle.json` by bmo-ui's console plugin contract, with a packed copy of bmo-ui under
-`client/vendor/` for its own install and typecheck and bmo-markup's TypeScript package read from the base
+`client/vendor/` for its own install and typecheck and bmo-text's TypeScript package read from the base
 library. Its bodies are typed by `client/shared/openapi.ts`, which `bun run openapi` generates from
 `docs/openapi.json`. The bundle's check is `bun install --frozen-lockfile && bun run typecheck` inside
 `client/`.

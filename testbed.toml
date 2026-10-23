@@ -24,7 +24,7 @@ check_script = "typecheck"
 # does not name being allowed none: the service's own Korean words stand there.
 quick = ["korean", "layout", "dependencies"]
 korean_ledger = "korean-ledger.json"
-base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-markup"]
+base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-text"]
 
 [[check.step]]
 id = "check"
