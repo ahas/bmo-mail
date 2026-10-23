@@ -32,6 +32,7 @@ pub struct Settings {
   pub secrets: Secrets,
   pub staging: Staging,
   pub wording: Wording,
+  pub console: Console,
 }
 
 /// The HTTP server.
@@ -76,6 +77,13 @@ pub struct Staging {
   pub dir: PathBuf,
 }
 
+/// The built console bundle the service serves (`docs/api.md`, 「The console plugin bundle」).
+#[derive(Clone, Debug, Deserialize)]
+pub struct Console {
+  /// The folder its module, its stylesheet and its words stand in.
+  pub dir: PathBuf,
+}
+
 /// The service's own words (`docs/api.md`, 「The service's own words」).
 #[derive(Clone, Debug, Deserialize)]
 pub struct Wording {
@@ -110,6 +118,7 @@ impl Settings {
     settings.folder = dir.to_path_buf();
     settings.store.path = dir.join(&settings.store.path);
     settings.staging.dir = dir.join(&settings.staging.dir);
+    settings.console.dir = dir.join(&settings.console.dir);
     settings.accounts.file = settings
       .accounts
       .file

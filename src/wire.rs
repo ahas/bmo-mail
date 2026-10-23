@@ -49,6 +49,71 @@ pub struct Health {
   pub version: String,
 }
 
+/// A role a reader holds, as bmo-ui's console plugin contract names it: an administrator holds every role a
+/// member holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+  Administrator,
+  Member,
+}
+
+impl Role {
+  /// The role as the `Owner-Role` header and the manifest write it.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Administrator => "administrator",
+      Self::Member => "member",
+    }
+  }
+
+  /// The role a header names, or none where it names neither.
+  pub fn named(name: &str) -> Option<Self> {
+    [Self::Administrator, Self::Member].into_iter().find(|role| role.as_str() == name)
+  }
+
+  /// Whether a reader holding this role may open what needs `needed`.
+  pub fn allows(self, needed: Self) -> bool {
+    self == Self::Administrator || self == needed
+  }
+}
+
+/// The console bundle's manifest, as bmo-ui's `console-manifest` module states its shape (`docs/api.md`, 「The
+/// console plugin bundle」).
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsoleManifest {
+  /// The bundle's name, in kebab-case: its words' namespace.
+  pub name: String,
+  /// The key, in the bundle's words, the console's menu names the screen by.
+  pub title: String,
+  /// The icon drawn beside that name.
+  pub icon: String,
+  /// The path the bundle's screens stand under.
+  pub screen_path: String,
+  /// The service's name, which a console relays it under.
+  pub service_name: String,
+  /// The path the module is answered at.
+  pub bundle: String,
+  /// The path the stylesheet is answered at, where the bundle has one.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub stylesheet: Option<String>,
+  /// The path the words are answered at.
+  pub words: String,
+  /// The path every call the screens make stands under.
+  pub api_prefix: String,
+  /// The least role a reader holds to open the screen.
+  pub role: Role,
+  /// Whether every call the screens make needs the reader's owner key.
+  pub owner_key: bool,
+  /// Whether the screens read the event stream through the console.
+  pub events: bool,
+  /// Whether the screens open a WebSocket through the console.
+  pub websocket: bool,
+  /// The event kinds a console may raise as a notice to a reader not on the screen.
+  pub push_kinds: Vec<String>,
+}
+
 /// One event of the stream.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Event {

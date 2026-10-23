@@ -5,7 +5,7 @@ use axum::http::{Method, StatusCode};
 use axum::response::Response;
 
 use crate::account_settings::{MOST_UNDO_SEND_MS, read_settings, write_settings};
-use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
+use crate::http::{Answer, Call, Guard, Operation, Refused, Route, answer, inline, nothing, schema};
 use crate::members::{rule, settings};
 use crate::routes::requests::{Asked, with_account};
 use crate::rules::{
@@ -44,7 +44,7 @@ impl Route for Rules {
     status: 200,
     answer: Answer::Json(schema::<Page<Rule>>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -81,7 +81,7 @@ impl Route for CreateRule {
     status: 201,
     answer: Answer::Json(schema::<Rule>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -115,7 +115,7 @@ impl Route for ChangeRule {
     status: 200,
     answer: Answer::Json(schema::<Rule>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -149,7 +149,7 @@ impl Route for DeleteRule {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -182,7 +182,7 @@ impl Route for CreateRuleRun {
     status: 201,
     answer: Answer::Json(schema::<RuleRun>),
     codes: &["not-found", "unknown-folder"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -224,7 +224,7 @@ impl Route for PutSpamSender {
     status: 200,
     answer: Answer::Json(schema::<SpamSender>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -258,7 +258,7 @@ impl Route for DeleteSpamSender {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -291,7 +291,7 @@ impl Route for ReadSettings {
     status: 200,
     answer: Answer::Json(schema::<Settings>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -324,7 +324,7 @@ impl Route for ChangeSettings {
     status: 200,
     answer: Answer::Json(schema::<Settings>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {

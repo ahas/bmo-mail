@@ -3,7 +3,7 @@
 use axum::http::{Method, StatusCode};
 use axum::response::Response;
 
-use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
+use crate::http::{Answer, Call, Guard, Operation, Refused, Route, answer, inline, nothing, schema};
 use crate::labels::{create_label, forget_label, list_labels, update_label};
 use crate::routes::requests::{Asked, colour_of, with_account};
 use crate::wire::{Label, LabelPatch, ListQuery, NewLabel, Page};
@@ -27,7 +27,7 @@ impl Route for Labels {
     status: 200,
     answer: Answer::Json(schema::<Page<Label>>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -60,7 +60,7 @@ impl Route for CreateLabel {
     status: 201,
     answer: Answer::Json(schema::<Label>),
     codes: &["not-found", "conflict", "too-many-labels"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -94,7 +94,7 @@ impl Route for ChangeLabel {
     status: 200,
     answer: Answer::Json(schema::<Label>),
     codes: &["not-found", "conflict"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -131,7 +131,7 @@ impl Route for DeleteLabel {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {

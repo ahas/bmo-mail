@@ -5,7 +5,7 @@ use std::time::Duration;
 use axum::http::{Method, StatusCode};
 use axum::response::Response;
 
-use crate::http::{Answer, Call, Operation, Refused, Route, answer, schema};
+use crate::http::{Answer, Call, Guard, Operation, Refused, Route, answer, schema};
 use crate::settings::Settings;
 use crate::wire::Health;
 
@@ -26,7 +26,7 @@ impl Route for HealthRoute {
     status: 200,
     answer: Answer::Json(schema::<Health>),
     codes: &[],
-    owned: false,
+    guard: Guard::Token,
   };
 
   async fn answer(&self, _call: Call) -> Result<Response, Refused> {

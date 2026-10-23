@@ -4,7 +4,7 @@ use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 use crate::avatars::avatar_domain;
-use crate::http::{Answer, Call, NOT_FOUND, Operation, Refused, Route};
+use crate::http::{Answer, Call, Guard, NOT_FOUND, Operation, Refused, Route};
 
 /// `GET /avatars/{address}`: the logo a sender's domain publishes (`docs/mail.md`, 「Sender avatars」),
 /// fetched by the service and never by a browser. A domain that publishes none is a 404, which a reader keeps
@@ -34,7 +34,7 @@ impl Route for Avatar {
     status: 200,
     answer: Answer::Bytes,
     codes: &["not-found"],
-    owned: false,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {

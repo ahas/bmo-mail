@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "bmo-mail"
-version = "0.1.0-rev.2"
+version = "0.1.0-rev.3"
 dependencies = [
  "async-imap",
  "axum",

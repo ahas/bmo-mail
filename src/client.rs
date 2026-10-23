@@ -9,12 +9,13 @@ use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::console::ConsoleWords;
 use crate::wire::{
-  Account, AccountKind, AccountPatch, Address, AddressQuery, Authorization, Draft, DraftPatch, Event,
-  EventQuery, Folder, FolderPatch, Health, Label, LabelPatch, ListQuery, Message, MessagePatch,
-  MessageQuery, NewAccount, NewAttachment, NewAuthorization, NewDraft, NewLabel, NewReceipt, NewRule,
-  NewRuleRun, NewSend, Page, Receipt, Rule, RulePatch, RuleRun, Send, Settings, SettingsPatch, SpamSender,
-  Summary, Thread, ThreadQuery, WireError,
+  Account, AccountKind, AccountPatch, Address, AddressQuery, Authorization, ConsoleManifest, Draft,
+  DraftPatch, Event, EventQuery, Folder, FolderPatch, Health, Label, LabelPatch, ListQuery, Message,
+  MessagePatch, MessageQuery, NewAccount, NewAttachment, NewAuthorization, NewDraft, NewLabel, NewReceipt,
+  NewRule, NewRuleRun, NewSend, Page, Receipt, Role, Rule, RulePatch, RuleRun, Send, Settings,
+  SettingsPatch, SpamSender, Summary, Thread, ThreadQuery, WireError,
 };
 
 /// How long one call waits for its answer.
@@ -63,17 +64,19 @@ pub fn segment(key: &str) -> String {
   utf8_percent_encode(key, SEGMENT).to_string()
 }
 
-/// The client of one service: its address, its bearer token, and the owner key it acts for.
+/// The client of one service: its address, its bearer token, and the owner key it acts for with the role it
+/// holds.
 #[derive(Clone)]
 pub struct MailClient {
   address: String,
   token: String,
-  owner: Option<String>,
+  owner: Option<(String, Role)>,
   http: reqwest::Client,
 }
 
 impl MailClient {
-  /// A client acting for no owner: it reaches the routes that read no account alone.
+  /// A client acting for no owner: it reaches the routes the screen does not use alone: the health, the
+  /// console bundle's manifest and its words.
   pub fn new(address: impl Into<String>, token: impl Into<String>) -> Self {
     Self {
       address: address.into().trim_end_matches('/').to_owned(),
@@ -83,9 +86,10 @@ impl MailClient {
     }
   }
 
-  /// The same client acting for an owner key, sent as `Owner-Key` on every call.
-  pub fn acting_for(mut self, owner: impl Into<String>) -> Self {
-    self.owner = Some(owner.into());
+  /// The same client acting for an owner key, holding a role, sent as `Owner-Key` and `Owner-Role` on every
+  /// call.
+  pub fn acting_for(mut self, owner: impl Into<String>, role: Role) -> Self {
+    self.owner = Some((owner.into(), role));
     self
   }
 
@@ -97,7 +101,7 @@ impl MailClient {
       .header(reqwest::header::ACCEPT, "application/json");
 
     match &self.owner {
-      Some(owner) => request.header("owner-key", owner),
+      Some((owner, role)) => request.header("owner-key", owner).header("owner-role", role.as_str()),
       None => request,
     }
   }
@@ -427,5 +431,20 @@ impl MailClient {
   /// `GET /avatars/{address}`: the logo's bytes.
   pub async fn avatar(&self, address: &str) -> Called<Vec<u8>> {
     self.bytes(&format!("/avatars/{}", segment(address))).await
+  }
+
+  /// `GET /console-manifest`.
+  pub async fn console_manifest(&self) -> Called<ConsoleManifest> {
+    self.get("/console-manifest", &()).await
+  }
+
+  /// `GET /console-words`.
+  pub async fn console_words(&self) -> Called<ConsoleWords> {
+    self.get("/console-words", &()).await
+  }
+
+  /// `GET /console-bundle/{file}`: the module's or the stylesheet's bytes, by the path the manifest names.
+  pub async fn console_file(&self, path: &str) -> Called<Vec<u8>> {
+    self.bytes(path).await
   }
 }

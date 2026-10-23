@@ -30,6 +30,12 @@ key_file = ""
 # The folder uploaded attachments wait in until the message carrying them is saved or sent.
 dir = "mail-staging"
 
+[console]
+# The folder the built console bundle stands in: its module, its stylesheet and its words, which the service
+# serves beside its manifest (docs/api.md, 「The console plugin bundle」). A deployment builds it into its
+# release's console/; an instance run from source without it offers no bundle.
+dir = "console"
+
 [wording]
 # The language of the service's own words, under wording/, and of a list's order.
 language = "ko"

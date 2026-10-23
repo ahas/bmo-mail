@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use bmo_mail::NOUNS;
 use bmo_mail::client::MailClient;
 use bmo_mail::settings::Settings;
+use bmo_mail::wire::Role;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -32,6 +33,9 @@ enum Word {
     /// The owner key the tools act for; the settings' `accounts.administrator` where none is given.
     #[arg(long, env = "BMO_MAIL_OWNER")]
     owner: Option<String>,
+    /// The role the tools hold, `administrator` or `member`.
+    #[arg(long, env = "BMO_MAIL_ROLE", default_value = "administrator", value_parser = role)]
+    role: Role,
   },
   /// The nouns this command carries for a host to dispatch, one a line: none.
   Nouns,
@@ -47,6 +51,11 @@ enum Word {
     #[arg(long)]
     dry_run: bool,
   },
+}
+
+/// A role as the command line names it.
+fn role(name: &str) -> Result<Role, String> {
+  Role::named(name).ok_or_else(|| format!("{name} is no role: administrator or member"))
 }
 
 #[tokio::main]
@@ -102,12 +111,13 @@ async fn main() -> ExitCode {
       address,
       token,
       owner,
+      role,
     } => {
       let address = address.unwrap_or_else(|| format!("http://{}", settings.server.listen));
       let token = token.unwrap_or_else(|| settings.server.token.clone());
       let owner = owner.unwrap_or_else(|| settings.accounts.administrator.clone());
 
-      bmo_mail::mcp::serve(MailClient::new(address, token).acting_for(owner)).await
+      bmo_mail::mcp::serve(MailClient::new(address, token).acting_for(owner, role)).await
     }
     Word::Nouns => Ok(()),
     Word::Import { .. } => unreachable!("the import is answered before the settings are read"),

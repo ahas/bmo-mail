@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-mail",
-    "version": "0.1.0-rev.2",
-    "description": "Mailboxes read, written and watched behind one API, each account an owner's and of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings. A route that reads or changes an account acts for the opaque owner key the caller passes in `Owner-Key`, and reaches that owner's accounts alone. A mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`."
+    "version": "0.1.0-rev.3",
+    "description": "Mailboxes read, written and watched behind one API, each account an owner's and of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings, and the console bundle the mail screen is. Every route the screen uses takes the role the reader holds in `Owner-Role` and the opaque owner key the caller acts for in `Owner-Key`; a route that reads or changes an account reaches that owner's accounts alone. A mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`."
   },
   "servers": [
     {
@@ -39,6 +39,9 @@
     },
     {
       "name": "avatars"
+    },
+    {
+      "name": "console"
     }
   ],
   "paths": {
@@ -66,7 +69,35 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
+          "bad-request",
           "failed"
+        ],
+        "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
         ]
       }
     },
@@ -94,10 +125,24 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "failed"
         ],
         "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
           {
             "name": "Owner-Key",
             "in": "header",
@@ -163,6 +208,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "conflict",
           "unknown-kind",
@@ -172,6 +218,19 @@
           "failed"
         ],
         "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
           {
             "name": "Owner-Key",
             "in": "header",
@@ -213,6 +272,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -226,6 +286,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -264,6 +337,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -277,6 +351,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -315,6 +402,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "conflict",
@@ -331,6 +419,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -381,6 +482,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -394,6 +496,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -474,6 +589,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "unknown-message",
@@ -489,6 +605,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -532,6 +661,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -554,6 +684,19 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -592,6 +735,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -614,6 +758,19 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -652,6 +809,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "draft-not-placed",
@@ -675,6 +833,19 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -725,6 +896,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "too-large",
@@ -749,6 +921,19 @@
             "description": "The draft's id: the Message-ID it is saved under, without angle brackets.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -799,6 +984,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -812,6 +998,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -881,6 +1080,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -903,6 +1103,19 @@
             "description": "The folder's full name, percent-encoded.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -953,6 +1166,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -966,6 +1180,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1033,6 +1260,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "conflict",
@@ -1048,6 +1276,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1091,6 +1332,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1113,6 +1355,19 @@
             "description": "The label's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1151,6 +1406,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "conflict",
@@ -1174,6 +1430,19 @@
             "description": "The label's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1224,6 +1493,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1237,6 +1507,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1352,6 +1635,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "outside-trash",
@@ -1375,6 +1659,19 @@
             "description": "The message's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1413,6 +1710,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1435,6 +1733,19 @@
             "description": "The message's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1473,6 +1784,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "flag-not-settable",
@@ -1498,6 +1810,19 @@
             "description": "The message's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1549,6 +1874,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1580,6 +1906,19 @@
             "description": "The part's number in the message, or its content id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1620,6 +1959,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "no-receipt-asked",
@@ -1634,6 +1974,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1684,6 +2037,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "unknown-folder",
@@ -1698,6 +2052,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1748,6 +2115,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1761,6 +2129,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1828,6 +2209,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1841,6 +2223,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1884,6 +2279,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1906,6 +2302,19 @@
             "description": "The rule's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -1944,6 +2353,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -1966,6 +2376,19 @@
             "description": "The rule's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2016,6 +2439,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "no-recipients",
@@ -2031,6 +2455,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2074,6 +2511,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "conflict",
@@ -2097,6 +2535,19 @@
             "description": "The send's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2135,6 +2586,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -2157,6 +2609,19 @@
             "description": "The send's id.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2197,6 +2662,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -2210,6 +2676,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2248,6 +2727,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -2261,6 +2741,19 @@
             "description": "The account's name, unique among its owner's accounts.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2304,6 +2797,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -2326,6 +2820,19 @@
             "description": "The sender's address.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2364,6 +2871,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -2386,6 +2894,19 @@
             "description": "The sender's address.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2426,6 +2947,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed",
@@ -2448,6 +2970,19 @@
             "description": "The conversation's id, opaque.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
             }
           },
           {
@@ -2501,12 +3036,26 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "unknown-kind",
           "no-authorization",
           "failed"
         ],
         "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
           {
             "name": "Owner-Key",
             "in": "header",
@@ -2556,6 +3105,7 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "not-found",
           "failed"
@@ -2569,7 +3119,157 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
+        ]
+      }
+    },
+    "/console-bundle/{file}": {
+      "get": {
+        "operationId": "readConsoleBundleByFile",
+        "tags": [
+          "console"
+        ],
+        "summary": "The console bundle's module or stylesheet.",
+        "responses": {
+          "200": {
+            "description": "The console bundle's module or stylesheet.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentEncoding": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "not-found",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "file",
+            "in": "path",
+            "required": true,
+            "description": "The module's or the stylesheet's name, as the manifest gives it.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ]
+      }
+    },
+    "/console-manifest": {
+      "get": {
+        "operationId": "readConsoleManifest",
+        "tags": [
+          "console"
+        ],
+        "summary": "The console bundle's manifest.",
+        "responses": {
+          "200": {
+            "description": "The console bundle's manifest.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsoleManifest"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found",
+          "failed"
+        ]
+      }
+    },
+    "/console-words": {
+      "get": {
+        "operationId": "readConsoleWords",
+        "tags": [
+          "console"
+        ],
+        "summary": "The console bundle's words, each locale's tree under the locale's code.",
+        "responses": {
+          "200": {
+            "description": "The console bundle's words, each locale's tree under the locale's code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found",
+          "failed"
         ]
       }
     },
@@ -2603,11 +3303,25 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "gone",
           "failed"
         ],
         "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
           {
             "name": "Owner-Key",
             "in": "header",
@@ -2729,10 +3443,24 @@
         },
         "x-codes": [
           "unauthorized",
+          "forbidden",
           "bad-request",
           "failed"
         ],
         "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
           {
             "name": "Owner-Key",
             "in": "header",
@@ -4373,6 +5101,97 @@
         ],
         "description": "An authorization to start."
       },
+      "ConsoleManifest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The bundle's name, in kebab-case: its words' namespace."
+          },
+          "title": {
+            "type": "string",
+            "description": "The key, in the bundle's words, the console's menu names the screen by."
+          },
+          "icon": {
+            "type": "string",
+            "description": "The icon drawn beside that name."
+          },
+          "screenPath": {
+            "type": "string",
+            "description": "The path the bundle's screens stand under."
+          },
+          "serviceName": {
+            "type": "string",
+            "description": "The service's name, which a console relays it under."
+          },
+          "bundle": {
+            "type": "string",
+            "description": "The path the module is answered at."
+          },
+          "stylesheet": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The path the stylesheet is answered at, where the bundle has one."
+          },
+          "words": {
+            "type": "string",
+            "description": "The path the words are answered at."
+          },
+          "apiPrefix": {
+            "type": "string",
+            "description": "The path every call the screens make stands under."
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role",
+            "description": "The least role a reader holds to open the screen."
+          },
+          "ownerKey": {
+            "type": "boolean",
+            "description": "Whether every call the screens make needs the reader's owner key."
+          },
+          "events": {
+            "type": "boolean",
+            "description": "Whether the screens read the event stream through the console."
+          },
+          "websocket": {
+            "type": "boolean",
+            "description": "Whether the screens open a WebSocket through the console."
+          },
+          "pushKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The event kinds a console may raise as a notice to a reader not on the screen."
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "icon",
+          "screenPath",
+          "serviceName",
+          "bundle",
+          "words",
+          "apiPrefix",
+          "role",
+          "ownerKey",
+          "events",
+          "websocket",
+          "pushKinds"
+        ],
+        "description": "The console bundle's manifest, as bmo-ui's `console-manifest` module states its shape (`docs/api.md`, 「The\nconsole plugin bundle」)."
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "administrator",
+          "member"
+        ],
+        "description": "A role a reader holds, as bmo-ui's console plugin contract names it: an administrator holds every role a\nmember holds."
+      },
       "EventPage": {
         "type": "object",
         "properties": {
@@ -4487,7 +5306,7 @@
     },
     "responses": {
       "Error": {
-        "description": "A failure, in the common error shape. The codes:\n- `bad-request` (400): the body, the query or the path is not the shape the route takes\n- `unauthorized` (401): the bearer token is missing or wrong\n- `no-route` (404): no route answers this method and path\n- `not-found` (404): nothing stands at the key the path names\n- `conflict` (409): an account's or a label's name is taken, or a send has already gone\n- `gone` (410): the events after the number asked for are no longer kept\n- `too-large` (413): a file or a message is past the size the submission server takes\n- `too-many-labels` (422): the account holds the most labels it may\n- `flag-not-settable` (422): a flag is not one a request may set\n- `unknown-label` (422): a body names a label the account does not hold\n- `unknown-folder` (422): a body names a folder the mailbox does not hold\n- `unknown-message` (422): a body names a message the account does not hold\n- `outside-trash` (422): a message to delete is not in spam or trash\n- `no-recipients` (422): a draft to send has no recipient\n- `send-too-late` (422): a send's sendAt is past the undo span from now\n- `no-receipt-asked` (422): the message asks for no read receipt\n- `draft-not-placed` (422): the server did not say where it put a saved draft\n- `unknown-kind` (422): a body names a kind of account the service does not declare\n- `sign-in-failed` (422): the account's servers did not take its sign-in\n- `no-authorization` (422): an authorization is asked for a kind that signs in by password\n- `unknown-authorization` (422): a body names an authorization that is not the owner's, has run out or was used\n- `failed` (500): the service failed\n- `upstream-failed` (502): the mail server did not answer, or failed\n- `not-ready` (503): the service has no key file to seal an account's secrets with",
+        "description": "A failure, in the common error shape. The codes:\n- `bad-request` (400): the body, the query or the path is not the shape the route takes\n- `unauthorized` (401): the bearer token is missing or wrong\n- `forbidden` (403): the role is missing or does not allow the screen's, or the owner key is missing\n- `no-route` (404): no route answers this method and path\n- `not-found` (404): nothing stands at the key the path names\n- `conflict` (409): an account's or a label's name is taken, or a send has already gone\n- `gone` (410): the events after the number asked for are no longer kept\n- `too-large` (413): a file or a message is past the size the submission server takes\n- `too-many-labels` (422): the account holds the most labels it may\n- `flag-not-settable` (422): a flag is not one a request may set\n- `unknown-label` (422): a body names a label the account does not hold\n- `unknown-folder` (422): a body names a folder the mailbox does not hold\n- `unknown-message` (422): a body names a message the account does not hold\n- `outside-trash` (422): a message to delete is not in spam or trash\n- `no-recipients` (422): a draft to send has no recipient\n- `send-too-late` (422): a send's sendAt is past the undo span from now\n- `no-receipt-asked` (422): the message asks for no read receipt\n- `draft-not-placed` (422): the server did not say where it put a saved draft\n- `unknown-kind` (422): a body names a kind of account the service does not declare\n- `sign-in-failed` (422): the account's servers did not take its sign-in\n- `no-authorization` (422): an authorization is asked for a kind that signs in by password\n- `unknown-authorization` (422): a body names an authorization that is not the owner's, has run out or was used\n- `failed` (500): the service failed\n- `upstream-failed` (502): the mail server did not answer, or failed\n- `not-ready` (503): the service has no key file to seal an account's secrets with",
         "content": {
           "application/json": {
             "schema": {

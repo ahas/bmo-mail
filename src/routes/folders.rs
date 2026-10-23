@@ -5,7 +5,7 @@ use axum::http::{Method, StatusCode};
 use axum::response::Response;
 
 use crate::announcements::folder_now;
-use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, schema};
+use crate::http::{Answer, Call, Guard, Operation, Refused, Route, answer, inline, schema};
 use crate::members::folder;
 use crate::routes::requests::{Asked, with_account};
 use crate::wire::{Folder, FolderPatch, ListQuery, Page};
@@ -29,7 +29,7 @@ impl Route for Folders {
     status: 200,
     answer: Answer::Json(schema::<Page<Folder>>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -70,7 +70,7 @@ impl Route for ChangeFolder {
     status: 200,
     answer: Answer::Json(schema::<Folder>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {

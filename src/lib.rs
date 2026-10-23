@@ -8,6 +8,7 @@ pub mod adapters;
 pub mod announcements;
 pub mod avatars;
 pub mod client;
+pub mod console;
 pub mod events;
 pub mod health;
 pub mod http;

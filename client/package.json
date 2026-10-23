@@ -1,6 +1,6 @@
 {
   "name": "bmo-mail-client",
-  "version": "0.1.0-rev.2",
+  "version": "0.1.0-rev.3",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -13,9 +13,10 @@
     "i18n"
   ],
   "scripts": {
-    "prepare": "nuxi prepare",
+    "prepare": "bun x nuxi prepare",
     "openapi": "openapi-typescript ../docs/openapi.json --output shared/openapi.ts",
-    "typecheck": "nuxi prepare && vue-tsc --noEmit -p .nuxt/tsconfig.app.json",
+    "bundle": "nuxi prepare && vite build --config console/vite.config.ts",
+    "typecheck": "nuxi prepare && vue-tsc --noEmit -p .nuxt/tsconfig.app.json && tsc -p console/tsconfig.json",
     "check": "bun install --frozen-lockfile && bun run typecheck"
   },
   "dependencies": {
@@ -31,7 +32,7 @@
   },
   "peerDependencies": {
     "@nuxtjs/i18n": "^10.6.0",
-    "bmo-ui": "0.1.0-rev.3",
+    "bmo-ui": "0.1.0-rev.7",
     "nuxt": "^4.5.2",
     "vue-i18n": "^11.4.8"
   },
@@ -42,11 +43,17 @@
   },
   "devDependencies": {
     "@nuxtjs/i18n": "^10.6.0",
+    "@tailwindcss/vite": "4.3.3",
     "@types/bun": "^1.3.4",
-    "bmo-ui": "file:vendor/bmo-ui-0.1.0-rev.3.tgz",
+    "@vitejs/plugin-vue": "6.0.10",
+    "bmo-ui": "file:vendor/bmo-ui-0.1.0-rev.7.tgz",
     "nuxt": "^4.5.2",
     "openapi-typescript": "7.13.0",
+    "tailwindcss": "4.3.3",
     "typescript": "^5.9.3",
+    "unplugin-auto-import": "21.1.0",
+    "unplugin-vue-components": "32.1.0",
+    "vite": "8.3.4",
     "vue-i18n": "^11.4.8",
     "vue-tsc": "^3.2.0"
   }

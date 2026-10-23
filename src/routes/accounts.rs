@@ -14,7 +14,9 @@ use crate::accounts::authorizations::{AUTHORIZATION_SPAN, Authorizations, Waitin
 use crate::accounts::{Account, Keeping, account_name};
 use crate::adapters::{adapters, by_password, checked_fields, declared};
 use crate::announcements::{ACCOUNT_CHANGED, ACCOUNT_CREATED, ACCOUNT_DELETED};
-use crate::http::{Answer, Call, Operation, Refused, Route, Standing, answer, inline, nothing, schema};
+use crate::http::{
+  Answer, Call, Guard, Operation, Refused, Route, Standing, answer, inline, nothing, schema,
+};
 use crate::routes::requests::{Asked, MailFault, address_shaped, owned_account};
 use crate::wire::{
   AccountKind, AccountPatch, Authorization, Fields, ListQuery, NewAccount, NewAuthorization, Page, Summary,
@@ -84,7 +86,7 @@ impl Route for AccountKinds {
     status: 200,
     answer: Answer::Json(schema::<Page<AccountKind>>),
     codes: &[],
-    owned: false,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, _call: Call) -> Result<Response, Refused> {
@@ -112,7 +114,7 @@ impl Route for Accounts {
     status: 200,
     answer: Answer::Json(schema::<Page<crate::wire::Account>>),
     codes: &[],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, call: Call) -> Result<Response, Refused> {
@@ -143,7 +145,7 @@ impl Route for CreateAccount {
     status: 201,
     answer: Answer::Json(schema::<crate::wire::Account>),
     codes: &["conflict", "unknown-kind", "sign-in-failed", "unknown-authorization", "not-ready"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -238,7 +240,7 @@ impl Route for ReadAccount {
     status: 200,
     answer: Answer::Json(schema::<crate::wire::Account>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -267,7 +269,7 @@ impl Route for ChangeAccount {
     status: 200,
     answer: Answer::Json(schema::<crate::wire::Account>),
     codes: &["not-found", "conflict", "sign-in-failed", "not-ready"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -348,7 +350,7 @@ impl Route for DeleteAccount {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -385,7 +387,7 @@ impl Route for CreateAuthorization {
     status: 201,
     answer: Answer::Json(schema::<Authorization>),
     codes: &["unknown-kind", "no-authorization"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -445,7 +447,7 @@ impl Route for SummaryRoute {
     status: 200,
     answer: Answer::Json(schema::<Summary>),
     codes: &[],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, call: Call) -> Result<Response, Refused> {

@@ -13,7 +13,7 @@ use bmo_mail::http::{Standing, router};
 use bmo_mail::secrets::{Secrets, SecretsError};
 use bmo_mail::settings::Settings;
 use bmo_mail::store::Store;
-use bmo_mail::wire::{AccountPatch, EventQuery, Fields, ListQuery, NewAccount, NewAuthorization};
+use bmo_mail::wire::{AccountPatch, EventQuery, Fields, ListQuery, NewAccount, NewAuthorization, Role};
 use bmo_mail::wording::Wording;
 
 const TOKEN: &str = "test-token";
@@ -144,13 +144,13 @@ async fn the_routes_add_change_and_remove_an_owners_accounts() {
   let folder = scratch("routes");
   let (standing, address) = service(&folder, true).await;
   let anybody = MailClient::new(&address, TOKEN);
-  let one = MailClient::new(&address, TOKEN).acting_for(OWNER);
-  let kinds = anybody.account_kinds().await.expect("the kinds answer");
+  let one = MailClient::new(&address, TOKEN).acting_for(OWNER, Role::Member);
+  let kinds = one.account_kinds().await.expect("the kinds answer");
 
   assert_eq!(kinds.items.iter().map(|kind| kind.name.as_str()).collect::<Vec<_>>(), ["imap-smtp"]);
   assert_eq!(
     refused(anybody.accounts(&ListQuery::default()).await.unwrap_err()),
-    (400, "bad-request".into())
+    (403, "forbidden".into())
   );
 
   let (settings, secrets) = unanswered();
@@ -274,8 +274,8 @@ async fn the_routes_add_change_and_remove_an_owners_accounts() {
 async fn one_owner_key_never_reaches_anothers_accounts() {
   let folder = scratch("owners");
   let (standing, address) = service(&folder, true).await;
-  let one = MailClient::new(&address, TOKEN).acting_for(OWNER);
-  let other = MailClient::new(&address, TOKEN).acting_for(OTHER);
+  let one = MailClient::new(&address, TOKEN).acting_for(OWNER, Role::Member);
+  let other = MailClient::new(&address, TOKEN).acting_for(OTHER, Role::Member);
 
   keep(&standing, OWNER, "shared").await;
   keep(&standing, OTHER, "shared").await;
@@ -331,7 +331,7 @@ async fn one_owner_key_never_reaches_anothers_accounts() {
 async fn a_service_without_a_key_keeps_no_account() {
   let folder = scratch("unsealed");
   let (_standing, address) = service(&folder, false).await;
-  let one = MailClient::new(&address, TOKEN).acting_for(OWNER);
+  let one = MailClient::new(&address, TOKEN).acting_for(OWNER, Role::Member);
   let (settings, secrets) = unanswered();
   let adding = NewAccount {
     kind: "imap-smtp".to_owned(),

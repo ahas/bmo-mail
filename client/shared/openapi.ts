@@ -443,6 +443,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/console-bundle/{file}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The console bundle's module or stylesheet. */
+        get: operations["readConsoleBundleByFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/console-manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The console bundle's manifest. */
+        get: operations["readConsoleManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/console-words": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The console bundle's words, each locale's tree under the locale's code. */
+        get: operations["readConsoleWords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -1016,6 +1067,46 @@ export interface components {
             /** @description Where the provider sends the browser back to. */
             returnTo: string;
         };
+        /**
+         * @description The console bundle's manifest, as bmo-ui's `console-manifest` module states its shape (`docs/api.md`, 「The
+         *     console plugin bundle」).
+         */
+        ConsoleManifest: {
+            /** @description The bundle's name, in kebab-case: its words' namespace. */
+            name: string;
+            /** @description The key, in the bundle's words, the console's menu names the screen by. */
+            title: string;
+            /** @description The icon drawn beside that name. */
+            icon: string;
+            /** @description The path the bundle's screens stand under. */
+            screenPath: string;
+            /** @description The service's name, which a console relays it under. */
+            serviceName: string;
+            /** @description The path the module is answered at. */
+            bundle: string;
+            /** @description The path the stylesheet is answered at, where the bundle has one. */
+            stylesheet?: string | null;
+            /** @description The path the words are answered at. */
+            words: string;
+            /** @description The path every call the screens make stands under. */
+            apiPrefix: string;
+            /** @description The least role a reader holds to open the screen. */
+            role: components["schemas"]["Role"];
+            /** @description Whether every call the screens make needs the reader's owner key. */
+            ownerKey: boolean;
+            /** @description Whether the screens read the event stream through the console. */
+            events: boolean;
+            /** @description Whether the screens open a WebSocket through the console. */
+            websocket: boolean;
+            /** @description The event kinds a console may raise as a notice to a reader not on the screen. */
+            pushKinds: string[];
+        };
+        /**
+         * @description A role a reader holds, as bmo-ui's console plugin contract names it: an administrator holds every role a
+         *     member holds.
+         * @enum {string}
+         */
+        Role: "administrator" | "member";
         /** @description A page of a list. */
         EventPage: {
             items: components["schemas"]["Event"][];
@@ -1065,6 +1156,7 @@ export interface components {
          * @description A failure, in the common error shape. The codes:
          *     - `bad-request` (400): the body, the query or the path is not the shape the route takes
          *     - `unauthorized` (401): the bearer token is missing or wrong
+         *     - `forbidden` (403): the role is missing or does not allow the screen's, or the owner key is missing
          *     - `no-route` (404): no route answers this method and path
          *     - `not-found` (404): nothing stands at the key the path names
          *     - `conflict` (409): an account's or a label's name is taken, or a send has already gone
@@ -1107,7 +1199,12 @@ export interface operations {
     listAccountKinds: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1134,6 +1231,8 @@ export interface operations {
                 limit?: number | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1158,6 +1257,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1186,6 +1287,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1213,6 +1316,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1238,6 +1343,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1275,6 +1382,8 @@ export interface operations {
                 limit?: number | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1302,6 +1411,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1333,6 +1444,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1362,6 +1475,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1389,6 +1504,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1422,6 +1539,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1460,6 +1579,8 @@ export interface operations {
                 limit?: number | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1487,6 +1608,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1525,6 +1648,8 @@ export interface operations {
                 limit?: number | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1552,6 +1677,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1583,6 +1710,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1610,6 +1739,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1656,6 +1787,8 @@ export interface operations {
                 limit?: number | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1683,6 +1816,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1712,6 +1847,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1739,6 +1876,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1772,6 +1911,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1803,6 +1944,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1834,6 +1977,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1870,6 +2015,8 @@ export interface operations {
                 limit?: number | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1897,6 +2044,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1928,6 +2077,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1955,6 +2106,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -1988,6 +2141,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2019,6 +2174,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2048,6 +2205,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2075,6 +2234,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2102,6 +2263,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2133,6 +2296,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2162,6 +2327,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2192,6 +2359,8 @@ export interface operations {
                 folderName?: string | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2221,6 +2390,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2248,7 +2419,12 @@ export interface operations {
     readAvatarsByAddress: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
             path: {
                 /** @description A mail address, or its domain. */
                 address: string;
@@ -2269,6 +2445,79 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    readConsoleBundleByFile: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path: {
+                /** @description The module's or the stylesheet's name, as the manifest gives it. */
+                file: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The console bundle's module or stylesheet. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    readConsoleManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The console bundle's manifest. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsoleManifest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    readConsoleWords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The console bundle's words, each locale's tree under the locale's code. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listEvents: {
         parameters: {
             query?: {
@@ -2282,6 +2531,8 @@ export interface operations {
                 accountName?: string | null;
             };
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };
@@ -2328,6 +2579,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
                 /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
                 "Owner-Key": string;
             };

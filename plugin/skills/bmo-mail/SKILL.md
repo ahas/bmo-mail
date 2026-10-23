@@ -21,7 +21,8 @@ It reaches the service at the address `--address` or `BMO_MAIL_ADDRESS` names, e
 service's own `server.listen` setting, with the bearer token `--token` or `BMO_MAIL_TOKEN` gives, else the
 service's `server.token` setting. A wrong token answers every tool with a 401 `unauthorized` error. It acts for
 the owner key `--owner` or `BMO_MAIL_OWNER` gives, else the service's `accounts.administrator` setting, and
-sees that owner's accounts alone.
+sees that owner's accounts alone. It holds the role `--role` or `BMO_MAIL_ROLE` names, `administrator` or
+`member`, else `administrator`; either reaches every tool.
 
 ## Reading
 

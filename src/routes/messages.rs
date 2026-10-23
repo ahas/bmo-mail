@@ -5,7 +5,7 @@ use axum::http::{Method, StatusCode};
 use axum::response::Response;
 
 use crate::announcements::{MESSAGE_CHANGED, folder_now, message_gone};
-use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
+use crate::http::{Answer, Call, Guard, Operation, Refused, Route, answer, inline, nothing, schema};
 use crate::keys::thread_key;
 use crate::labels::{label_id_of, label_keyword, list_labels};
 use crate::members::message;
@@ -32,7 +32,7 @@ impl Route for Messages {
     status: 200,
     answer: Answer::Json(schema::<Page<Message>>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -66,7 +66,7 @@ impl Route for ReadMessage {
     status: 200,
     answer: Answer::Json(schema::<Message>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -103,7 +103,7 @@ impl Route for ChangeMessage {
     status: 200,
     answer: Answer::Json(schema::<Message>),
     codes: &["not-found", "flag-not-settable", "unknown-label", "unknown-folder"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -187,7 +187,7 @@ impl Route for DeleteMessage {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found", "outside-trash"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -225,7 +225,7 @@ impl Route for PartContent {
     status: 200,
     answer: Answer::Bytes,
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -267,7 +267,7 @@ impl Route for ReadThread {
     status: 200,
     answer: Answer::Json(schema::<Thread>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {

@@ -38,6 +38,8 @@
 </template>
 
 <script setup lang="ts">
+import { useDarkScheme } from "bmo-ui/app/domain/scheme";
+
 import { cidUrl } from "../domain/mail-api";
 import { bodyFitter } from "../domain/mail-fit";
 import { frameDocument, paintsItself, plainTextHtml } from "../domain/mail-frame";
@@ -58,7 +60,7 @@ const allowRemote = ref(props.showImages);
 const height = ref(120);
 const frame = useTemplateRef<HTMLIFrameElement>("frame");
 const cleaned = ref<{ html: string; blocked: boolean } | null>(null);
-const colorMode = useColorMode();
+const dark = useDarkScheme();
 
 const subject = computed(() => props.message.subject || t("mail.label.fallback_subject"));
 const plain = computed(() => plainTextHtml(props.message.text ?? ""));
@@ -82,7 +84,7 @@ async function clean(): Promise<void> {
 const document = ref("");
 
 watch(
-  [cleaned, () => colorMode.value],
+  [cleaned, dark],
   () => {
     if (cleaned.value === null) {
       return;
@@ -91,7 +93,7 @@ watch(
     document.value = frameDocument(cleaned.value.html, {
       allowRemote: allowRemote.value,
       origin: window.location.origin,
-      dark: colorMode.value === "dark",
+      dark: dark.value,
       painted: painted.value,
     });
   },

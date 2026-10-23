@@ -37,7 +37,7 @@ flowchart TD
   - A signature per account, read receipts both ways, filter rules, spam reported and un-reported,
     a sender always sent to spam, address completion from the addresses already used.
   - New mail refreshing the open list, and a notice on whatever console page is open, raised by the
-    console from the kind the bundle declares.
+    console from the kind the bundle's manifest names.
   - A small set of desktop keyboard shortcuts.
 - **Left to the mail server (its operator's work, outside this repository):**
   - Judging spam by content. The service files mail into spam by its own rules and by a spam
@@ -217,8 +217,8 @@ flowchart TD
     `folder.changed`, and shows no notice.
   - The mail nav marks each account whose inbox holds unread mail, read from the summary when the
     screen mounts and again on each `folder.changed`.
-- **Notices on any other page** are the console's: the bundle declares `message.created` among its
-  notice kinds and gives it words in its pack, and a console that raises notices raises one for each
+- **Notices on any other page** are the console's: the bundle's manifest names `message.created` among
+  its notice kinds and gives it words in its pack, and a console that raises notices raises one for each
   such event on a page other than the mail screen on that account. A message from the account itself,
   or one already read, is passed over. Pressing the notice opens the thread.
 

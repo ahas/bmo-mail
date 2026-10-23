@@ -16,7 +16,7 @@ use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::http::{Answer, Call, GONE, Operation, Refused, Route, answer, inline, schema};
+use crate::http::{Answer, Call, GONE, Guard, Operation, Refused, Route, answer, inline, schema};
 use crate::wire::{Event, EventQuery, Page};
 
 // How many live events a slow reader may fall behind before it misses the oldest of them; it resumes from the
@@ -222,7 +222,7 @@ impl Route for EventStream {
     status: 200,
     answer: Answer::Events(schema::<Page<Event>>),
     codes: &["gone"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, call: Call) -> Result<Response, Refused> {

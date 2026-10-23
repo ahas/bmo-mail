@@ -50,6 +50,22 @@ when = ["client/**"]
 [build]
 binaries = ["bmo-mail"]
 
+# The console bundle the service serves (docs/api.md, 「The console plugin bundle」), built in the build tree, where
+# its install and Nuxt's generated project stay warm between deployments, and written into the release being
+# built: the release beside the build tree, named by the first twelve hex digits of the commit (the testbed's
+# docs/deploy.md, 「The places」). Its console/ is the folder the setting console.dir names by default, read once
+# as the service starts.
+[[build.step]]
+id = "console-install"
+dir = "client"
+command = "bun install --frozen-lockfile"
+
+[[build.step]]
+id = "console-bundle"
+dir = "client"
+lane = "wide"
+command = "BMO_MAIL_CONSOLE_OUT=\"$(git rev-parse --show-toplevel)/../deploy-releases/$(git rev-parse HEAD | cut -c1-12)/console\" bun run bundle"
+
 # The service's own deploy tree, and the data root its settings stand under: the data root's env/mail.toml,
 # which each release links to as settings.local.toml, the file the service reads beside settings.toml
 # (docs/api.md, 「Settings」). It names the token, the accounts file and a store path under the data root.

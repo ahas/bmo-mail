@@ -9,7 +9,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 
 use crate::account_settings::read_settings;
-use crate::http::{Answer, Call, Operation, Refused, Route, answer, inline, nothing, schema};
+use crate::http::{Answer, Call, Guard, Operation, Refused, Route, answer, inline, nothing, schema};
 use crate::mail::{AttachmentRef, MailAddress};
 use crate::members::address_of;
 use crate::routes::requests::{
@@ -49,7 +49,7 @@ impl Route for Addresses {
     status: 200,
     answer: Answer::Json(schema::<Page<Address>>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -112,7 +112,7 @@ impl Route for CreateDraft {
     status: 201,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found", "unknown-message", "draft-not-placed"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -158,7 +158,7 @@ impl Route for ReadDraft {
     status: 200,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -192,7 +192,7 @@ impl Route for ChangeDraft {
     status: 200,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found", "draft-not-placed"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -259,7 +259,7 @@ impl Route for DeleteDraft {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -293,7 +293,7 @@ impl Route for CreateAttachment {
     status: 201,
     answer: Answer::Json(schema::<Draft>),
     codes: &["not-found", "too-large", "draft-not-placed"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -361,7 +361,7 @@ impl Route for CreateSend {
     status: 201,
     answer: Answer::Json(schema::<Send>),
     codes: &["not-found", "no-recipients", "send-too-late"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -410,7 +410,7 @@ impl Route for ReadSend {
     status: 200,
     answer: Answer::Json(schema::<Send>),
     codes: &["not-found"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -445,7 +445,7 @@ impl Route for CancelSend {
     status: 204,
     answer: Answer::Nothing,
     codes: &["not-found", "conflict"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {
@@ -485,7 +485,7 @@ impl Route for CreateReceipt {
     status: 201,
     answer: Answer::Json(schema::<Receipt>),
     codes: &["not-found", "no-receipt-asked"],
-    owned: true,
+    guard: Guard::Screen,
   };
 
   async fn answer(&self, mut call: Call) -> Result<Response, Refused> {

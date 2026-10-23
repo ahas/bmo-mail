@@ -1,5 +1,4 @@
 import { mailAddress } from "./mail-api";
-import { appUrl } from "./mail-urls";
 
 import type { MailEvent } from "../../shared/mail";
 
@@ -29,7 +28,7 @@ export function useMailStream(onEvent: (event: MailEvent) => void, onReset: () =
   }
 
   function open(): void {
-    source = new EventSource(appUrl(mailAddress("/events")));
+    source = new EventSource(mailAddress("/events"));
 
     for (const kind of MAIL_EVENT_KINDS) source.addEventListener(kind, read);
 

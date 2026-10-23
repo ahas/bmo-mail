@@ -12,7 +12,8 @@
        it has and named on hover at every width rather than set moving: a moving address shows a
        false one at every moment but two. -->
   <UTooltip :text="props.name" :disabled="!props.folded && !props.nameOnHover">
-    <NuxtLink
+    <ULink
+      raw
       :to="props.to"
       class="flex h-9 items-center gap-2 px-3 text-sm transition-colors hover:bg-elevated active:bg-accented"
       :class="[props.current ? 'bg-elevated font-semibold text-highlighted' : 'text-default', props.folded ? 'justify-center' : '']"
@@ -34,7 +35,7 @@
       <span v-if="!props.folded" class="min-w-0 flex-1 truncate" :class="{ 'font-semibold': props.unread }">{{ props.name }}</span>
 
       <UIcon v-if="props.unread && !props.folded" name="i-material-symbols-circle" class="size-2 shrink-0 text-primary" :aria-label="$t('mail.aria.unread')" />
-    </NuxtLink>
+    </ULink>
   </UTooltip>
 </template>
 

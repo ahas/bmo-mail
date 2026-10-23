@@ -1,7 +1,6 @@
 import { relayAddress } from "bmo-ui/app/domain/relay";
 
 import { FLAGGED, JUNK, NOT_JUNK, SEEN } from "../../shared/mail";
-import { appUrl } from "./mail-urls";
 
 import type {
   Draft,
@@ -34,7 +33,8 @@ import type { MailViewKey } from "./mail";
 
 const SERVICE = "mail";
 
-// The address of one of the service's routes, as `$fetch` and the browser's own requests take it.
+// The address of one of the service's routes, complete as given: `$fetch`, a picture's source, a frame and the
+// browser's own requests all take it as it stands.
 export function mailAddress(path: string): string {
   return relayAddress(SERVICE, path);
 }
@@ -231,7 +231,7 @@ export type MailApi = ReturnType<typeof mailApi>;
 // Where a part of a message downloads from, by its number, and where a picture its HTML body carries by
 // `cid:` is fetched, by its content id.
 export function partUrl(account: string, message: Pick<MailMessage, "id">, part: string): string {
-  return appUrl(mailAddress(`/accounts/${segment(account)}/messages/${segment(message.id)}/parts/${segment(part)}/content`));
+  return mailAddress(`/accounts/${segment(account)}/messages/${segment(message.id)}/parts/${segment(part)}/content`);
 }
 
 export function cidUrl(account: string, message: Pick<MailMessage, "id">, cid: string): string {
@@ -241,5 +241,5 @@ export function cidUrl(account: string, message: Pick<MailMessage, "id">, cid: s
 // Where a sender's logo is fetched from. The service looks the domain up and fetches it, so the browser
 // asks this address and never the sender's own (docs/mail.md, 「Sender avatars」).
 export function avatarUrl(address: string): string {
-  return appUrl(mailAddress(`/avatars/${segment(address)}`));
+  return mailAddress(`/avatars/${segment(address)}`);
 }

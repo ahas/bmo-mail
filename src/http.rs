@@ -22,10 +22,12 @@ use crate::accounts::Accounts;
 use crate::accounts::authorizations::Authorizations;
 use crate::adapters::{Context, Mailboxes};
 use crate::avatars::Avatars;
+use crate::console::{Bundle, SCREEN_ROLE};
 use crate::events::Events;
 use crate::secrets::Secrets;
 use crate::settings::Settings;
 use crate::store::Store;
+use crate::wire::Role;
 use crate::wording::Wording;
 use crate::writing::send::Sends;
 
@@ -73,8 +75,17 @@ pub struct Operation {
   pub answer: Answer,
   /// The codes of its own, beside the token's, the shape's and the failures every route can answer.
   pub codes: &'static [&'static str],
-  /// Whether it acts for the owner key the request carries (`docs/api.md`, 「Who checks what」).
-  pub owned: bool,
+  /// What a call needs beside the token (`docs/api.md`, 「The contract」).
+  pub guard: Guard,
+}
+
+/// What a call needs before its route answers it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Guard {
+  /// The token alone: a route the console reads for no reader.
+  Token,
+  /// The token, an `Owner-Role` allowing the screen's role and an `Owner-Key`: every route the screen uses.
+  Screen,
 }
 
 /// One route the service answers, registered beside its answer with `bmo_mail::route!`.
@@ -161,9 +172,12 @@ pub const TOO_LARGE: &str = "too-large";
 pub const FAILED: &str = "failed";
 pub const UPSTREAM_FAILED: &str = "upstream-failed";
 pub const NOT_READY: &str = "not-ready";
+pub const FORBIDDEN: &str = "forbidden";
 
 /// The header the caller names the owner key it acts for in.
 pub const OWNER_KEY: &str = "owner-key";
+/// The header the caller names the role the reader holds in.
+pub const OWNER_ROLE: &str = "owner-role";
 /// The longest an owner key may be.
 const OWNER_KEY_LONGEST: usize = 200;
 
@@ -189,6 +203,11 @@ impl Refused {
   /// A body or a query not of the route's shape.
   pub fn bad_request(error: impl Into<String>) -> Self {
     Self::new(StatusCode::BAD_REQUEST, BAD_REQUEST, error)
+  }
+
+  /// A call the guard of the screen's routes does not let through.
+  pub fn forbidden(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::FORBIDDEN, FORBIDDEN, error)
   }
 
   /// Nothing at the key the path names.
@@ -228,6 +247,8 @@ pub struct Standing {
   pub sends: Sends,
   /// The lookups of sender logos.
   pub avatars: Avatars,
+  /// The built console bundle the settings' console folder holds, read at start; none where it holds none.
+  pub console: Option<Bundle>,
 }
 
 impl Standing {
@@ -235,6 +256,10 @@ impl Standing {
   pub fn new(settings: Settings, store: Store, wording: Wording, secrets: Option<Secrets>) -> Self {
     let accounts = Accounts::new(store.pool().clone(), secrets);
     let events = Events::new(store.pool().clone());
+    let console = Bundle::read(&settings.console.dir).unwrap_or_else(|why| {
+      eprintln!("mail: the console bundle could not be read: {why}");
+      None
+    });
 
     Self {
       settings,
@@ -246,6 +271,7 @@ impl Standing {
       wording,
       sends: Sends::default(),
       avatars: Avatars::default(),
+      console,
     }
   }
 
@@ -293,18 +319,17 @@ impl Call {
       .ok_or_else(|| Refused::failed(format!("the route's path names no {name}")))
   }
 
-  /// The owner key the request acts for: the `Owner-Key` header, 1 to 200 characters taken as they stand;
-  /// a request without one is refused 400.
+  /// The owner key the request acts for: the `Owner-Key` header, 1 to 200 characters taken as they stand. A
+  /// request without one is refused 403, and one past 200 characters 400.
   pub fn owner(&self) -> Result<String, Refused> {
-    let key = self
-      .request
-      .headers()
-      .get(OWNER_KEY)
-      .and_then(|value| value.to_str().ok())
-      .unwrap_or_default();
+    let key = header_of(&self.request, OWNER_KEY);
 
-    if key.is_empty() || key.chars().count() > OWNER_KEY_LONGEST {
-      return Err(Refused::bad_request("the request names no owner key of 1 to 200 characters"));
+    if key.is_empty() {
+      return Err(Refused::forbidden("the request names no owner key"));
+    }
+
+    if key.chars().count() > OWNER_KEY_LONGEST {
+      return Err(Refused::bad_request("the owner key is longer than 200 characters"));
     }
 
     Ok(key.to_owned())
@@ -339,6 +364,30 @@ pub fn answer(status: StatusCode, body: &impl Serialize) -> Response {
 /// An answer with no body.
 pub fn nothing() -> Response {
   StatusCode::NO_CONTENT.into_response()
+}
+
+/// A header's value as text; empty where the request carries none, or none that is text.
+fn header_of<'a>(request: &'a Request, name: &str) -> &'a str {
+  request.headers().get(name).and_then(|value| value.to_str().ok()).unwrap_or_default()
+}
+
+/// Whether a call to a route the screen uses carries what the console sets for a reader who may open the
+/// screen: an `Owner-Role` allowing the screen's role, and an `Owner-Key`.
+fn screen_reader(request: &Request) -> Result<(), Refused> {
+  let allowed = Role::named(header_of(request, OWNER_ROLE)).is_some_and(|held| held.allows(SCREEN_ROLE));
+
+  if !allowed {
+    return Err(Refused::forbidden(format!(
+      "the request names no role allowing the screen's, {}",
+      SCREEN_ROLE.as_str()
+    )));
+  }
+
+  if header_of(request, OWNER_KEY).is_empty() {
+    return Err(Refused::forbidden("the request names no owner key"));
+  }
+
+  Ok(())
 }
 
 /// Whether a request carries the settings' token as its bearer; an empty token lets nobody in.
@@ -383,6 +432,12 @@ pub fn router(standing: Arc<Standing>) -> Result<Router, Vec<String>> {
       if !authorized(&standing, &request) {
         return Refused::new(StatusCode::UNAUTHORIZED, UNAUTHORIZED, "a missing or wrong token")
           .into_response();
+      }
+
+      if route.operation().guard == Guard::Screen
+        && let Err(refused) = screen_reader(&request)
+      {
+        return refused.into_response();
       }
 
       route

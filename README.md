@@ -5,14 +5,16 @@ and watched through an adapter for each kind of account, IMAP and submission fir
 itself, runs filter rules as mail arrives, finds sender logos, holds a sent message for the account's undo
 span so it can be taken back, and says on its own event stream what came and what changed. It calls no other
 service. A coding harness takes it through its MCP server, `bmo-mail mcp`, and the `bmo-mail` skill; a console
-takes its screen through the bundle in `client/`, as `docs/api.md` states.
+takes its screen through the bundle in `client/`, which the service serves with its manifest, as `docs/api.md`
+states.
 
 ## Tests
 
 The repository carries the repository-wide personal-data check in `tests/personal_data.rs`
-(`PERSONAL-DATA.md`), the old archive's import in `tests/import.rs`, and the accounts in `tests/accounts.rs`:
+(`PERSONAL-DATA.md`), the old archive's import in `tests/import.rs`, the accounts in `tests/accounts.rs`:
 their routes, one owner key never reaching another's, the sealing of their secrets and the accounts file's
-import. `cargo test` runs them all. The other behaviour tests are deferred: they are written and run here once
+import, and the console plugin bundle in `tests/console.rs`: the manifest read through bmo-ui's own reading,
+the guard of the screen's routes and the module's name following its bytes. `cargo test` runs them all. The other behaviour tests are deferred: they are written and run here once
 the minimal services stand on the new repositories, and `docs/inventory.md` lists what the old behaviour was
 held to. The build check is `cargo check --all-targets` and the bundle's typecheck.
 
@@ -37,10 +39,12 @@ local settings a deployment gives.
 
 ## The console plugin bundle
 
-`client/` holds the mail screen as a console bundle on bmo-ui, packed as `bmo-mail-client`, declared in
-`client/console-bundle.json` by bmo-ui's console plugin contract, with a packed copy of bmo-ui under
-`client/vendor/` for its own install and typecheck and bmo-text's TypeScript package read from the base
-library. Its bodies are typed by `client/shared/openapi.ts`, which `bun run openapi` generates from
+`client/` holds the mail screen as a console bundle on bmo-ui, by bmo-ui's console plugin contract: `bun run
+bundle` builds the module, the stylesheet and the words the service serves beside its manifest, from the build
+in `client/console/`, and `bun pm pack` packs the same screen as the Nuxt layer `bmo-mail-client`, declared in
+`client/console-bundle.json` for a console that builds its bundles in. A packed copy of bmo-ui stands under
+`client/vendor/` for its own install, typecheck and build, and bmo-text's TypeScript package is read from the
+base library. Its bodies are typed by `client/shared/openapi.ts`, which `bun run openapi` generates from
 `docs/openapi.json`. The bundle's check is `bun install --frozen-lockfile && bun run typecheck` inside
 `client/`.
 
