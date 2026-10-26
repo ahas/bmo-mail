@@ -10,7 +10,9 @@ const bundle: ConsoleBundleModule = {
     {
       path: "/mail/:path(.*)*",
       name: "mail-path",
-      meta: { key: () => "mail" },
+      // One instance across every place on the screen, under the console's title bar (bmo-ui's
+      // `docs/console-bundles.md`, the title bar).
+      meta: { key: () => "mail", consoleTitleBar: true },
       component: () => import("../app/pages/mail/[...path].vue")
     }
   ]

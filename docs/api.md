@@ -514,5 +514,6 @@ its stylesheet and its words; a console reads the manifest while it runs and loa
 ## Versions
 
 The repository has one version, the crate's, which the health, the OpenAPI document, the MCP server and the
-bundle answer. Until its first release it is `0.1.0` and counts revisions, `0.1.0-rev.<n>`, one revision a
-version bump, as bmo-chat's `docs/conventions.md`, 「Versions」, states.
+bundle answer. It moves only at a release the owner declares: until the first release it is `0.1.0` and
+counts revisions, `0.1.0-rev.<n>`, one revision a release, and a commit or a deploy moves none, as bmo-chat's
+`docs/conventions.md`, 「Versions」, states.

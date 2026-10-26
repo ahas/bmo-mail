@@ -4,7 +4,8 @@
        is the body, a thread stands over it, and the mail nav rises from the bottom edge. The
        place — account, view, conversation and search — is the address. -->
   <UDashboardPanel id="mail" :ui="{ body: 'p-0 sm:p-0 gap-0 sm:gap-0 overflow-y-hidden [&>*]:max-w-none' }">
-    <template #header>
+    <!-- Under a console that offers its title bar the console draws it; alone, the screen draws its own. -->
+    <template v-if="!barOffered" #header>
       <UDashboardNavbar :title="$t('mail.title.screen')" icon="i-material-symbols-mail-outline" />
     </template>
 
@@ -236,6 +237,8 @@
 </template>
 
 <script setup lang="ts">
+import { inject } from "vue";
+
 import { mailFailure } from "../../domain/mail-refusals";
 import { useCloseGuard } from "bmo-ui/app/domain/form-save";
 import { useIsland } from "bmo-ui/app/domain/island";
@@ -277,6 +280,8 @@ const GATHER_MS = 400;
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+// Whether a console offers its title bar, under the key bmo-ui's bundle contract names.
+const barOffered = inject("bmo-console-title-bar", null) !== null;
 const island = useIsland(t);
 const narrow = useNarrow();
 const painted = usePainted();

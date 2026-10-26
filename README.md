@@ -61,5 +61,6 @@ base library. Its bodies are typed by `client/shared/openapi.ts`, which `bun run
 ## Version
 
 `VERSION` holds the repository's version, the crate's own, which the health, the OpenAPI document, the MCP
-server and the bundle answer: `0.1.0` and its revisions until the first release (`docs/api.md`,
-「Versions」).
+server and the bundle answer. It moves only at a release the owner declares, as bmo-chat's
+`docs/conventions.md`, 「Versions」, states: a commit, a deploy or a contract change moves none, and a
+deployment is told apart by its commit.

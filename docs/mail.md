@@ -430,6 +430,10 @@ flowchart TD
 
 ## The screen
 
+- **Under the console's title bar.** The screen's route asks for the console's bar in its meta, so a console that
+  offers its bar (bmo-ui's `docs/console-bundles.md`, 「How a bundle mounts」, the title bar) draws it over the screen
+  under the manifest's title and icon, and the screen draws no bar of its own. Found without that offer it draws its
+  own bar, named and marked the same.
 - **Addresses:** `/mail/<account>/<view>` and `/mail/<account>/<view>/<thread>`, where the account is
   the address's local part and a view is a folder role, `starred`, `label/<id>`, `folder/<name>` or
   `search?q=`. Opening a thread is a history step, so a shared link opens the same thread.
