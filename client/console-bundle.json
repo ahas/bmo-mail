@@ -7,5 +7,6 @@
   "languagePack": "i18n/locales",
   "events": true,
   "websocket": false,
-  "pushKinds": ["message.created"]
+  "pushKinds": ["message.created"],
+  "sidebarUnread": { "path": "/summary", "field": "unreadCount" }
 }

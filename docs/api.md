@@ -471,9 +471,10 @@ its stylesheet and its words; a console reads the manifest while it runs and loa
 - **The manifest** keeps the shape bmo-ui's `console-manifest` module states, and names: the bundle `mail`, its
   menu title `mail.title.screen`, the icon `i-material-symbols-mail-outline`, its screens under `/mail`, the
   service `mail`, the module's, the stylesheet's and the words' paths, the API prefix `/`, the role `member`,
-  the owner key asked, the event stream read, no WebSocket, and the notice kind `message.created`. A service
-  whose console folder holds no module or no words has no bundle to offer and answers the manifest 404
-  `not-found`, which a console reads as a service with no screen.
+  the owner key asked, the event stream read, no WebSocket, the notice kind `message.created`, and the sidebar
+  count a console reads from `GET /summary`'s `unreadCount`. A service whose console folder holds no module or no
+  words has no bundle to offer and answers the manifest 404 `not-found`, which a console reads as a service with
+  no screen.
 - **The module's and the stylesheet's names follow their bytes:** `module.<hash>.js` and `style.<hash>.css`
   under `/console-bundle/`, the hash the first sixteen hex digits of the SHA-256 of the file's bytes as the
   service read them at start. Any other name is answered 404 `not-found`. Both are answered with
@@ -498,9 +499,9 @@ its stylesheet and its words; a console reads the manifest while it runs and loa
 - **A console that builds its bundles in** takes the screen from the pack instead: `bun pm pack` packs
   `client/` into `bmo-mail-client-<version>.tgz`, a Nuxt layer on bmo-ui holding the screen's pages, its
   components, its language pack and `client/console-bundle.json`, the declaration such a console attaches the
-  layer by. The declaration names the same bundle, title, icon, screen path, service, event stream and notice
-  kinds as the manifest, which the manifest's test holds. Such a console depends on the pack and on bmo-ui at
-  the version the pack's peer names, and extends the layer in its Nuxt configuration.
+  layer by. The declaration names the same bundle, title, icon, screen path, service, event stream, notice kinds
+  and sidebar count as the manifest, which the manifest's test holds. Such a console depends on the pack and on
+  bmo-ui at the version the pack's peer names, and extends the layer in its Nuxt configuration.
 - **What it depends on beside bmo-ui:** bmo-text's `web-address`, for the links a plain-text body shows, and
   the TipTap extensions its editor is built with. For the bundle's own install, typecheck and build a packed
   copy of bmo-ui stands in `client/vendor/`, and bmo-text's TypeScript package is read from the base library's

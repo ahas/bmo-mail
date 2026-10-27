@@ -126,7 +126,7 @@ and `side-parts`, and its components.
 | `client/app/domain/avatars.ts` | `identityMark` and the tones and initial it draws with, the letter an address wears without a logo | the bundle's own domain module, `mail-avatars` |
 | `client/app/domain/urls.ts` | `appUrl`, a path under the console's base path, which a part's, an inline picture's and a logo's addresses are written with | the bundle's own domain module, `mail-urls` |
 | `client/app/domain/events.ts` | `useMailEvents` | the bundle's own reading of the service's stream, `mail-stream` |
-| `client/app/domain/screens.ts` | the `/mail` navigation entry and its unread mark | the console's, by the bundle's declaration |
+| `client/app/domain/screens.ts` | the `/mail` navigation entry and its unread mark | the console's, by the sidebar count the bundle's manifest declares |
 | `client/app/layouts/default.vue` | the call of `useMailNotices` | not carried: the console raises notices from the declared kind |
 | `client/i18n/locales/ko.yaml` | the `mail` subtree, 292 keys: title 10, label 92, action 58, placeholder 9, aria 15, status 15, message 15, error 78 | `client/i18n/locales/ko.json`, the bundle's pack, its refusal words under the service's codes of today |
 | `client/i18n/locales/ko.yaml` | `screens.label.mail`, `screens.aria.mail_unread` | the bundle's pack, as `mail.title.screen` and `mail.aria.unread` |

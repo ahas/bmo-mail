@@ -226,6 +226,9 @@ flowchart TD
     `folder.changed`, and shows no notice.
   - The mail nav marks each account whose inbox holds unread mail, read from the summary when the
     screen mounts and again on each `folder.changed`.
+- **The console's sidebar carries the inboxes' unread count.** The bundle's manifest names the summary and
+  the field of its answer that holds the unread messages of every reachable inbox together, so a console
+  reads the count for the signed-in owner and draws it beside the mail screen.
 - **Notices on any other page** are the console's: the bundle's manifest names `message.created` among
   its notice kinds and gives it words in its pack, and a console that raises notices raises one for each
   such event on a page other than the mail screen on that account. A message from the account itself,

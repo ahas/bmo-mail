@@ -12,7 +12,7 @@ use ring::digest::{SHA256, digest};
 
 use crate::announcements::MESSAGE_CREATED;
 use crate::http::{Answer, Call, Guard, Operation, Refused, Route, answer, schema};
-use crate::wire::{ConsoleManifest, Role};
+use crate::wire::{ConsoleManifest, Role, SidebarUnread};
 
 /// The least role a reader holds to open the screen, and so the floor of every route the screen uses.
 pub const SCREEN_ROLE: Role = Role::Member;
@@ -120,6 +120,10 @@ impl Bundle {
       events: true,
       websocket: false,
       push_kinds: vec![MESSAGE_CREATED.to_owned()],
+      sidebar_unread: Some(SidebarUnread {
+        path: "/summary".to_owned(),
+        field: "unreadCount".to_owned(),
+      }),
     }
   }
 

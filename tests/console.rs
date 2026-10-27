@@ -122,6 +122,7 @@ async fn the_manifest_keeps_the_contract_and_agrees_with_the_declaration() {
   assert_eq!(read["events"], true);
   assert_eq!(read["apiPrefix"], "/");
   assert_eq!(read["pushKinds"], json!(["message.created"]));
+  assert_eq!(read["sidebarUnread"], json!({ "path": "/summary", "field": "unreadCount" }));
   assert!(manifest.bundle.starts_with("/console-bundle/module.") && manifest.bundle.ends_with(".js"));
   assert!(manifest.stylesheet.as_deref().is_some_and(|path| path.ends_with(".css")));
 
@@ -130,7 +131,17 @@ async fn the_manifest_keeps_the_contract_and_agrees_with_the_declaration() {
   )
   .expect("the declaration is JSON");
 
-  for field in ["name", "title", "icon", "screenPath", "serviceName", "events", "websocket", "pushKinds"] {
+  for field in [
+    "name",
+    "title",
+    "icon",
+    "screenPath",
+    "serviceName",
+    "events",
+    "websocket",
+    "pushKinds",
+    "sidebarUnread",
+  ] {
     assert_eq!(read[field], declaration[field], "the manifest and the declaration differ in {field}");
   }
 

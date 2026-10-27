@@ -5165,6 +5165,17 @@
               "type": "string"
             },
             "description": "The event kinds a console may raise as a notice to a reader not on the screen."
+          },
+          "sidebarUnread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SidebarUnread"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The route a console reads the sidebar's unread count from, where the bundle declares one."
           }
         },
         "required": [
@@ -5191,6 +5202,24 @@
           "member"
         ],
         "description": "A role a reader holds, as bmo-ui's console plugin contract names it: an administrator holds every role a\nmember holds."
+      },
+      "SidebarUnread": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The path of the service's API the summary is answered at."
+          },
+          "field": {
+            "type": "string",
+            "description": "The answer's field holding the count."
+          }
+        },
+        "required": [
+          "path",
+          "field"
+        ],
+        "description": "The route a console reads the sidebar's unread count from, and the field of its answer that holds the count. The\ncount is the unread messages of every reachable inbox together (`docs/api.md`, 「The console plugin bundle」)."
       },
       "EventPage": {
         "type": "object",

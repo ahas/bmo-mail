@@ -1100,6 +1100,8 @@ export interface components {
             websocket: boolean;
             /** @description The event kinds a console may raise as a notice to a reader not on the screen. */
             pushKinds: string[];
+            /** @description The route a console reads the sidebar's unread count from, where the bundle declares one. */
+            sidebarUnread?: components["schemas"]["SidebarUnread"] | null;
         };
         /**
          * @description A role a reader holds, as bmo-ui's console plugin contract names it: an administrator holds every role a
@@ -1107,6 +1109,16 @@ export interface components {
          * @enum {string}
          */
         Role: "administrator" | "member";
+        /**
+         * @description The route a console reads the sidebar's unread count from, and the field of its answer that holds the count. The
+         *     count is the unread messages of every reachable inbox together (`docs/api.md`, 「The console plugin bundle」).
+         */
+        SidebarUnread: {
+            /** @description The path of the service's API the summary is answered at. */
+            path: string;
+            /** @description The answer's field holding the count. */
+            field: string;
+        };
         /** @description A page of a list. */
         EventPage: {
             items: components["schemas"]["Event"][];

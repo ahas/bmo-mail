@@ -78,6 +78,16 @@ impl Role {
   }
 }
 
+/// The route a console reads the sidebar's unread count from, and the field of its answer that holds the count. The
+/// count is the unread messages of every reachable inbox together (`docs/api.md`, 「The console plugin bundle」).
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SidebarUnread {
+  /// The path of the service's API the summary is answered at.
+  pub path: String,
+  /// The answer's field holding the count.
+  pub field: String,
+}
+
 /// The console bundle's manifest, as bmo-ui's `console-manifest` module states its shape (`docs/api.md`, 「The
 /// console plugin bundle」).
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -112,6 +122,9 @@ pub struct ConsoleManifest {
   pub websocket: bool,
   /// The event kinds a console may raise as a notice to a reader not on the screen.
   pub push_kinds: Vec<String>,
+  /// The route a console reads the sidebar's unread count from, where the bundle declares one.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub sidebar_unread: Option<SidebarUnread>,
 }
 
 /// One event of the stream.
