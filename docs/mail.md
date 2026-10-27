@@ -158,6 +158,7 @@ flowchart TD
     default, whether a message's outside pictures are shown as it opens, how long a send waits
     before it goes, and the senders always sent to spam.
   - The watcher's high-water mark: the folder's UID validity and the highest UID it has handled.
+  - The arrivals the watcher took that are still owed their `message.created`.
   - Known addresses: every address written to or received from, with its name and when it was
     last used, for completion.
   - Sender logos: one row per sender domain holding the picture found there or nothing found, and
@@ -180,17 +181,25 @@ flowchart TD
     brings the folder up to date, since the server takes mail that arrived since into a
     connection's view only at a command: without that, the first read after new mail would miss it.
   - The mail server's per-user connection limit must leave room for both.
-- **A dropped connection** is opened again after a wait that starts at five seconds and doubles to
-  a minute. A server that will not hold `IDLE` is asked for the inbox's state every thirty seconds
-  instead.
+- **A read through the work connection that fails on the server's side** — a connection the server
+  closed while it stood unused, a pipe that broke — is asked once more on a connection opened again,
+  and the journal says so; a second failure is the read's answer. A write is never asked twice, since
+  the first may have taken.
+- **A dropped watch connection** is opened again after a wait that starts at five seconds and doubles
+  to a minute, and the journal says each time it dropped and each time it stands again. The connection
+  opened again takes whatever arrived above the high-water mark while nobody watched, as on start. A
+  server that will not hold `IDLE` is asked for the inbox's state every thirty seconds instead.
 - **When the inbox grows,** the watcher takes every message above its high-water mark, oldest first,
   and for each one:
   1. Runs the filter rules and the always-spam senders over it.
-  2. Moves the mark past it, so a message is handled once even across restarts.
+  2. Moves the mark past it, so a message is handled once even across restarts, and, where the
+     message is still in the inbox after the rules, keeps it as an arrival owed its event.
   3. Records the sender in the known addresses.
-- **Then, once for all it took:** it says on the event stream which messages arrived, each still in
-  the inbox after the rules, as `message.created`, and that the inbox's counts moved, as
-  `folder.changed` (`docs/api.md`, 「The event stream」). Which of them a reader shows as new mail —
+- **Then, once for all it took:** it says on the event stream which messages arrived, each arrival
+  owed its event, as `message.created`, and that the inbox's counts moved, as `folder.changed`
+  (`docs/api.md`, 「The event stream」). An arrival is let go once its event is said; one whose message
+  could not be read for the event stays owed and is said at the watcher's next handling, after a
+  dropped connection or a restart alike, so no arrival goes unsaid. Which of them a reader shows as new mail —
   unread, not from the account itself — is the reader's to judge.
 - **A message the service itself moved into the inbox is not new mail** — not spam, or a move to
   the inbox. The service notes where each such message landed, and the watcher waits for a move in

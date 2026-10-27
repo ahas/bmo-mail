@@ -80,6 +80,71 @@ async fn write_mark(
   Ok(())
 }
 
+/// Keeps a message as an arrival owed its `message.created`.
+async fn owe(
+  pool: &SqlitePool,
+  account: &str,
+  folder: &str,
+  validity: &str,
+  uid: u32,
+) -> Result<(), MailFault> {
+  sqlx::query("INSERT OR IGNORE INTO arrivals (account, folder, uid_validity, uid) VALUES (?, ?, ?, ?)")
+    .bind(account)
+    .bind(folder)
+    .bind(validity)
+    .bind(i64::from(uid))
+    .execute(pool)
+    .await?;
+
+  Ok(())
+}
+
+/// The arrivals still owed their event under the folder's UID validity, oldest first; those of another
+/// validity, a folder the server rebuilt, are let go.
+async fn owed(
+  pool: &SqlitePool,
+  account: &str,
+  folder: &str,
+  validity: &str,
+) -> Result<Vec<u32>, MailFault> {
+  sqlx::query("DELETE FROM arrivals WHERE account = ? AND folder = ? AND uid_validity <> ?")
+    .bind(account)
+    .bind(folder)
+    .bind(validity)
+    .execute(pool)
+    .await?;
+
+  let uids: Vec<i64> = sqlx::query_scalar(
+    "SELECT uid FROM arrivals WHERE account = ? AND folder = ? AND uid_validity = ? ORDER BY uid",
+  )
+  .bind(account)
+  .bind(folder)
+  .bind(validity)
+  .fetch_all(pool)
+  .await?;
+
+  Ok(uids.into_iter().filter_map(|uid| u32::try_from(uid).ok()).collect())
+}
+
+/// Lets an arrival go once its event is said.
+async fn settled(
+  pool: &SqlitePool,
+  account: &str,
+  folder: &str,
+  validity: &str,
+  uid: u32,
+) -> Result<(), MailFault> {
+  sqlx::query("DELETE FROM arrivals WHERE account = ? AND folder = ? AND uid_validity = ? AND uid = ?")
+    .bind(account)
+    .bind(folder)
+    .bind(validity)
+    .bind(i64::from(uid))
+    .execute(pool)
+    .await?;
+
+  Ok(())
+}
+
 /// Where handling starts: the stored mark where it was taken under the folder's present UID validity;
 /// otherwise — a first start, or a folder the server rebuilt — at the newest message, handling nothing
 /// older. The second answer says which.
@@ -121,6 +186,28 @@ impl Watcher {
     folder_now(&self.standing, &*self.mailbox, &self.account, INBOX).await;
   }
 
+  /// Says every arrival still owed its event, letting each go once said; one whose message could not be read
+  /// stays owed for the next handling.
+  async fn say_owed(&self, validity: &str) -> Result<(), MailFault> {
+    let pool = self.standing.store.pool();
+    let key = &self.account.store_key();
+
+    for uid in owed(pool, key, INBOX, validity).await? {
+      let at = MailRef {
+        folder: INBOX.to_owned(),
+        uid,
+      };
+
+      if message_now(&self.standing, &*self.mailbox, &self.account, MESSAGE_CREATED, &at).await {
+        settled(pool, key, INBOX, validity, uid).await?;
+      } else {
+        self.log(&format!("message {uid} stays owed its arrival event; it is said at the next handling"));
+      }
+    }
+
+    Ok(())
+  }
+
   /// Takes every message above the mark, oldest first, and says what it found.
   async fn handle_new(&self, connection: &mut Connection) -> Result<(), MailFault> {
     let pool = self.standing.store.pool();
@@ -145,13 +232,11 @@ impl Watcher {
     uids.sort_unstable();
 
     if uids.is_empty() {
-      return Ok(());
+      return self.say_owed(&mark.validity).await;
     }
 
     let (rules, spam_senders) = rule_context(pool, key).await?;
     let mut fetched = uid_fetch(connection.session(), &uids, "(UID BODY.PEEK[HEADER])").await?;
-    let mut arrived = Vec::new();
-
     fetched.sort_by_key(|fetch| fetch.uid);
 
     for fetch in &fetched {
@@ -170,26 +255,18 @@ impl Watcher {
       let acts = !plan.flags.is_empty() || plan.destination.is_some();
       let moved = acts && apply_plan(connection, uid, &plan).await?;
 
+      if !moved {
+        owe(pool, key, INBOX, &mark.validity, uid).await?;
+      }
+
       write_mark(pool, key, INBOX, &mark).await?;
 
       let read = heads(fetch.header());
 
       record_addresses(pool, key, address, &read.from, chrono::Utc::now().timestamp_millis()).await?;
-
-      if !moved {
-        arrived.push(uid);
-      }
     }
 
-    for uid in arrived {
-      let at = MailRef {
-        folder: INBOX.to_owned(),
-        uid,
-      };
-
-      message_now(&self.standing, &*self.mailbox, &self.account, MESSAGE_CREATED, &at).await;
-    }
-
+    self.say_owed(&mark.validity).await?;
     self.announce_inbox().await;
 
     Ok(())
@@ -215,6 +292,13 @@ impl Watcher {
     connection.select(INBOX).await?;
 
     let idles = connection.session().capabilities().await.map_err(MailFault::server)?.has_str("IDLE");
+
+    if *failures > 0 {
+      self.log(&format!(
+        "watching the inbox again after {} dropped connection(s); taking what arrived since",
+        *failures
+      ));
+    }
 
     *failures = 0;
     self.handle(&mut connection).await?;
@@ -247,9 +331,16 @@ impl Watcher {
       tokio::select! {
         () = stopped(&mut stop) => return,
         dropped = self.watch_once(&mut failures) => {
-          if let Err(MailFault::Server(why)) = dropped {
-            self.log(&format!("could not watch the inbox ({why}); trying again"));
-          }
+          let why = match dropped {
+            Err(MailFault::Server(why)) => why,
+            Err(MailFault::Asked(asked)) => asked.error,
+            Ok(()) => "the connection ended".to_owned(),
+          };
+
+          self.log(&format!(
+            "could not watch the inbox ({why}); opening the connection again in {}s",
+            retry_wait(failures + 1).as_secs()
+          ));
         }
       }
 

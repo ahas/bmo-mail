@@ -331,6 +331,27 @@ impl MailSession {
     }
   }
 
+  /// A read through the work connection, asked once more on a connection opened again where the server's side
+  /// failed it: a piece of work that meets a server fault lets its connection go, so the second asking opens a
+  /// fresh one. The journal says so; a second failure is the read's answer. Only a read is asked twice, since a
+  /// write that failed may still have taken.
+  pub async fn read_twice<T, F>(&self, read: impl Fn() -> F) -> Result<T, MailFault>
+  where
+    F: Future<Output = Result<T, MailFault>>,
+  {
+    match read().await {
+      Err(MailFault::Server(why)) => {
+        eprintln!(
+          "mail {}: a read on the work connection failed ({why}); opening the connection again for one more try",
+          self.account.address
+        );
+
+        read().await
+      }
+      done => done,
+    }
+  }
+
   /// Logs the connection out, or drops it where it will not.
   pub async fn close(&self) {
     let open = self.open.lock().await.take();

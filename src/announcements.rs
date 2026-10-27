@@ -19,22 +19,27 @@ pub const ACCOUNT_CREATED: &str = "account.created";
 pub const ACCOUNT_CHANGED: &str = "account.changed";
 pub const ACCOUNT_DELETED: &str = "account.deleted";
 
-/// Says a message came or changed, as it now stands; a message that cannot be read again is said nothing of.
+/// Says a message came or changed, as it now stands; a message that is gone is said nothing of. Answers
+/// whether the message was settled: said, or gone; false where it could not be read.
 pub async fn message_now(
   standing: &Standing,
   mailbox: &dyn Mailbox,
   account: &Account,
   kind: &'static str,
   at: &MailRef,
-) {
+) -> bool {
   match mailbox.row(at).await {
     Ok(Some(read)) => {
       let member = message(&account.name, read);
 
       standing.events.publish(kind, &account.owner, Some(&account.name), &member).await;
+      true
     }
-    Ok(None) => {}
-    Err(why) => eprintln!("mail: a message's change could not be read for the event stream: {why:?}"),
+    Ok(None) => true,
+    Err(why) => {
+      eprintln!("mail: a message's change could not be read for the event stream: {why:?}");
+      false
+    }
   }
 }
 

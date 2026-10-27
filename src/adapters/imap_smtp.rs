@@ -249,19 +249,19 @@ impl ImapSmtpMailbox {
 
 impl Mailbox for ImapSmtpMailbox {
   fn inbox_unread(&self) -> Pending<'_, u32> {
-    Box::pin(inbox_unseen(&self.session))
+    Box::pin(self.session.read_twice(|| inbox_unseen(&self.session)))
   }
 
   fn folders(&self) -> Pending<'_, Vec<MailFolder>> {
-    Box::pin(folders_of(&self.session))
+    Box::pin(self.session.read_twice(|| folders_of(&self.session)))
   }
 
   fn folder_states(&self) -> Pending<'_, Vec<MailFolderState>> {
-    Box::pin(folder_states(&self.session))
+    Box::pin(self.session.read_twice(|| folder_states(&self.session)))
   }
 
   fn folder_state<'a>(&'a self, path: &'a str) -> Pending<'a, Option<(usize, MailFolderState)>> {
-    Box::pin(folder_state(&self.session, path))
+    Box::pin(self.session.read_twice(|| folder_state(&self.session, path)))
   }
 
   fn mark_folder<'a>(&'a self, path: &'a str, read: bool) -> Pending<'a, ()> {
@@ -269,23 +269,23 @@ impl Mailbox for ImapSmtpMailbox {
   }
 
   fn page<'a>(&'a self, query: &'a MessageQuery) -> Pending<'a, (Vec<MailMessage>, bool)> {
-    Box::pin(page_of(&self.pool, &self.session, &self.key, query))
+    Box::pin(self.session.read_twice(|| page_of(&self.pool, &self.session, &self.key, query)))
   }
 
   fn message<'a>(&'a self, at: &'a MailRef) -> Pending<'a, Option<MailMessage>> {
-    Box::pin(read_message(&self.session, at))
+    Box::pin(self.session.read_twice(|| read_message(&self.session, at)))
   }
 
   fn row<'a>(&'a self, at: &'a MailRef) -> Pending<'a, Option<MailMessage>> {
-    Box::pin(read_row_of(&self.session, at))
+    Box::pin(self.session.read_twice(|| read_row_of(&self.session, at)))
   }
 
   fn thread<'a>(&'a self, key: &'a str, folder: Option<&'a str>) -> Pending<'a, Vec<MailMessage>> {
-    Box::pin(read_thread(&self.session, key, folder))
+    Box::pin(self.session.read_twice(move || read_thread(&self.session, key, folder)))
   }
 
   fn part<'a>(&'a self, at: &'a MailRef, part: &'a str) -> Pending<'a, Option<(OpenedPart, Disposition)>> {
-    Box::pin(async move {
+    Box::pin(self.session.read_twice(move || async move {
       let (number, disposition) = if part_number(part) {
         (part.to_owned(), Disposition::Attachment)
       } else {
@@ -297,7 +297,7 @@ impl Mailbox for ImapSmtpMailbox {
       };
 
       Ok(open_part(&self.session, at, &number).await?.map(|opened| (opened, disposition)))
-    })
+    }))
   }
 
   fn set_flags<'a>(&'a self, at: &'a MailRef, wanted: &'a [String]) -> Pending<'a, bool> {
@@ -326,7 +326,7 @@ impl Mailbox for ImapSmtpMailbox {
   }
 
   fn draft<'a>(&'a self, draft_id: &'a str) -> Pending<'a, Draft> {
-    Box::pin(draft_named(&self.session, draft_id))
+    Box::pin(self.session.read_twice(|| draft_named(&self.session, draft_id)))
   }
 
   fn save_draft<'a>(&'a self, draft: &'a Draft) -> Pending<'a, Draft> {

@@ -371,6 +371,7 @@ domain's, an event is its owner's, and an import is the service's.
 | `settings` | `account` (key), `signature`, `receipt_default`, `show_images`, `undo_send_ms` | the account's settings |
 | `spam_senders` | `account`, `address`, `created_at`; key both | the always-spam senders |
 | `marks` | `account`, `folder`, `uid_validity`, `last_uid`; key `account`, `folder` | the watcher's high-water mark |
+| `arrivals` | `account`, `folder`, `uid_validity`, `uid`; key all four | the messages the watcher took that are still owed their `message.created` (`docs/mail.md`, 「Connections and the watcher」) |
 | `addresses` | `account`, `address`, `name`, `last_used`, `uses`; key `account`, `address` | the known addresses |
 | `avatars` | `domain` (key), `type`, `bytes` (none where nothing was found), `looked_up_at` | the sender logos |
 | `events` | `id` (the event's number), `kind`, `owner`, `account` (the account's name), `at`, `data` (JSON) | the event stream's window |
