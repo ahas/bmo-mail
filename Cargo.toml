@@ -22,7 +22,7 @@ test = false
 [dependencies]
 # IMAP: the work connection the routes go through and the watcher's IDLE connection.
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
-axum = { version = "0.8.9", features = ["multipart"] }
+axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
 # Base64 bodies, read as far as their whole groups go; a file posted to a draft; a message's and a thread's
 # opaque ids.
 base64 = "0.23.1"
@@ -68,7 +68,7 @@ ring = "0.17.14"
 # The search box's words, a search's day, and a subject's reply prefixes.
 regex = "1.13.1"
 # The client's calls, the health command asking the service, and a sender's logo fetched over HTTPS.
-reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "rustls-no-provider"] }
+reqwest = { version = "0.13.5", features = ["json", "query", "stream"] }
 # The harness plugin's MCP server.
 rmcp = { version = "3.5.0", default-features = false, features = ["server", "transport-io"] }
 # The JSON Schemas of the bodies, the tools' inputs and outputs and the OpenAPI document.
@@ -85,7 +85,7 @@ socket2 = "0.6.5"
 # The store, one SQLite file.
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "macros", "migrate"] }
 thiserror = "2.0.17"
-tokio = { version = "1.53.2", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { version = "1.53.3", features = ["fs", "io-std", "io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "test-util", "time"] }
 # The service's own words, one TOML file to a language.
 toml = "1.1.8"
 # TLS to the mail servers, checked against the web's root certificates.
