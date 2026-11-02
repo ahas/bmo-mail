@@ -324,7 +324,8 @@ of the owner key it carries alone, resumes with `Last-Event-ID` or `after`, narr
 comma-separated list) and with `accountName`, and asks the same events as a page with
 `Accept: application/json`, by `after` and `limit` (1 to 1,000, 100 where none is given). The service keeps the events
 of the last day, at most 10,000; a resume from before them is answered 410 `gone`, and the reader reads the
-collections again. An idle stream carries a comment line every fifteen seconds.
+collections again. An idle stream carries a comment line every fifteen seconds. The stream ends when the service
+stops, and the reader resumes with `Last-Event-ID` once it stands again.
 
 | Kind | Data | When |
 |---|---|---|
@@ -360,7 +361,9 @@ Dates are written by `date` in `locale` at the setting `wording.time_zone`.
 
 A SQLite file, the one `store.path` names, opened and migrated when the service starts. Every row of the
 tables under an account is that account's by its id, written as text in `account`; a sender logo is a
-domain's, an event is its owner's, and an import is the service's.
+domain's, an event is its owner's, and an import is the service's. A statement that meets another's lock on the
+file waits until the lock is let go, and one that finds every connection to the file in use waits for one to come
+back; neither wait gives up.
 
 | Table | Columns | What it holds |
 |---|---|---|
@@ -380,9 +383,11 @@ domain's, an event is its owner's, and an import is the service's.
 
 `bmo-mail` is one binary, the service and its command alike.
 
-- **`bmo-mail serve`** opens and migrates the store, starts the watchers and answers the routes.
-- **`bmo-mail health`** asks the service the settings name, waiting at most five seconds, and ends 0 where it
-  answers ready.
+- **`bmo-mail serve`** opens and migrates the store, starts the watchers and answers the routes until it is told
+  to stop. A stop ends the event streams, waits for the calls in flight and the watchers to finish, lets every
+  account's connection go, and then the process ends.
+- **`bmo-mail health`** asks the service the settings name, waits for its answer, and ends 0 where it answers
+  ready.
 - **`bmo-mail mcp`** starts the harness plugin's MCP server (「The harness plugin」).
 - **`bmo-mail nouns`** prints nothing: the command carries no noun of its own for a host to dispatch.
 
@@ -390,7 +395,8 @@ domain's, an event is its owner's, and an import is the service's.
 
 `bmo_mail::client`, in the repository's crate: one method for each route, sending and reading the bodies the
 OpenAPI document states, and a refusal read back as its status, `code` and `error`. It carries the contract
-and no caller's policy: it acts for the owner key and the role it is given, and sends both on every call. The
+and no caller's policy: it acts for the owner key and the role it is given, and sends both on every call. A call
+waits for the service's answer, and ends on it or on the connection refused or broken. The
 console plugin bundle reads the same bodies through the TypeScript types generated from `docs/openapi.json` into
 `client/shared/openapi.ts`.
 

@@ -32,8 +32,6 @@ pub type ImapSession = Session<Box<dyn MailStream>>;
 /// The port IMAP is spoken over TLS from the first byte; any other port with a TLS name is upgraded with
 /// STARTTLS.
 const IMPLICIT_TLS_PORT: u16 = 993;
-// How long a connection may take to open, greeting and login included.
-const OPENING: Duration = Duration::from_secs(90);
 /// The name the service gives the server where the server asks with `ID`.
 const CLIENT_NAME: &str = "bmo-mail";
 
@@ -61,40 +59,33 @@ async fn tls(stream: TcpStream, name: &str) -> Result<Box<dyn MailStream>, MailF
 }
 
 /// Opens one connection of an account and logs in: over TLS on port 993, upgraded with STARTTLS on another
-/// port with a TLS name, and plain where the TLS name is `-`.
+/// port with a TLS name, and plain where the TLS name is `-`. Each step waits for the server's answer
+/// (`docs/mail.md`, 「Connections and the watcher」).
 pub async fn open(endpoint: &MailEndpoint, account: &MailAccount) -> Result<ImapSession, MailFault> {
-  let opening = async {
-    let tcp = TcpStream::connect((endpoint.host.as_str(), endpoint.port))
-      .await
-      .map_err(MailFault::server)?;
-    let client: Client<Box<dyn MailStream>> = match endpoint.tls_name.as_deref() {
-      None => greeted(Box::new(tcp)).await?,
-      Some(name) if endpoint.port == IMPLICIT_TLS_PORT => greeted(tls(tcp, name).await?).await?,
-      Some(name) => {
-        let mut plain = Client::new(tcp);
+  let tcp = endpoint.connect().await?;
+  let client: Client<Box<dyn MailStream>> = match endpoint.tls_name.as_deref() {
+    None => greeted(Box::new(tcp)).await?,
+    Some(name) if endpoint.port == IMPLICIT_TLS_PORT => greeted(tls(tcp, name).await?).await?,
+    Some(name) => {
+      let mut plain = Client::new(tcp);
 
-        plain.read_response().await.map_err(MailFault::server)?;
-        plain.run_command_and_check_ok("STARTTLS", None).await.map_err(MailFault::server)?;
+      plain.read_response().await.map_err(MailFault::server)?;
+      plain.run_command_and_check_ok("STARTTLS", None).await.map_err(MailFault::server)?;
 
-        // After STARTTLS the server greets no more; the conversation goes on over TLS.
-        Client::new(tls(plain.into_inner(), name).await?)
-      }
-    };
-    let mut session = client
-      .login(&account.login, &account.password)
-      .await
-      .map_err(|(why, _)| MailFault::server(why))?;
-
-    if session.capabilities().await.map_err(MailFault::server)?.has_str("ID") {
-      session.id([("name", Some(CLIENT_NAME))]).await.map_err(MailFault::server)?;
+      // After STARTTLS the server greets no more; the conversation goes on over TLS.
+      Client::new(tls(plain.into_inner(), name).await?)
     }
-
-    Ok(session)
   };
-
-  tokio::time::timeout(OPENING, opening)
+  let mut session = client
+    .login(&account.login, &account.password)
     .await
-    .map_err(|_| MailFault::server("the mail server did not open a connection in time"))?
+    .map_err(|(why, _)| MailFault::server(why))?;
+
+  if session.capabilities().await.map_err(MailFault::server)?.has_str("ID") {
+    session.id([("name", Some(CLIENT_NAME))]).await.map_err(MailFault::server)?;
+  }
+
+  Ok(session)
 }
 
 /// A client whose server's greeting has been read.

@@ -2,8 +2,6 @@
 //! bodies `docs/openapi.json` states, and a refusal read back as its status, code and sentence. It carries the
 //! contract and no caller's policy.
 
-use std::time::Duration;
-
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
@@ -17,9 +15,6 @@ use crate::wire::{
   NewRule, NewRuleRun, NewSend, Page, Receipt, Role, Rule, RulePatch, RuleRun, Send, Settings,
   SettingsPatch, SpamSender, Summary, Thread, ThreadQuery, WireError,
 };
-
-/// How long one call waits for its answer.
-const PATIENCE: Duration = Duration::from_secs(120);
 
 /// What a path segment keeps as it is: the characters no URI gives a meaning of their own.
 const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
@@ -82,7 +77,7 @@ impl MailClient {
       address: address.into().trim_end_matches('/').to_owned(),
       token: token.into(),
       owner: None,
-      http: reqwest::Client::builder().timeout(PATIENCE).build().unwrap_or_default(),
+      http: reqwest::Client::new(),
     }
   }
 

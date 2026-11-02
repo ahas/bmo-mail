@@ -26,8 +26,10 @@ use crate::avatars::domains::registrable_domain;
 const MOST_BYTES: usize = 64 * 1024;
 /// The most of a page read while looking for the icon its head names.
 const MOST_PAGE_BYTES: usize = 256 * 1024;
-/// How long one fetch may take.
-const WAIT: Duration = Duration::from_secs(5);
+/// How long a connection to a sender's site stays silent before the first keep-alive probe asks whether the
+/// site is still there, and how far apart the probes after it go.
+const KEEP_ALIVE: Duration = Duration::from_secs(30);
+const KEEP_ALIVE_PROBES: Duration = Duration::from_secs(10);
 /// How many redirects are followed, each of them checked before it is taken.
 const MOST_HOPS: usize = 3;
 /// How long a logo found holds before it is looked for again.
@@ -232,7 +234,8 @@ impl Default for Avatars {
   fn default() -> Self {
     let client = reqwest::Client::builder()
       .redirect(reqwest::redirect::Policy::none())
-      .timeout(WAIT)
+      .tcp_keepalive(KEEP_ALIVE)
+      .tcp_keepalive_interval(KEEP_ALIVE_PROBES)
       .build()
       .ok();
     let resolver = TokioResolver::builder_tokio().ok().and_then(|builder| builder.build().ok());

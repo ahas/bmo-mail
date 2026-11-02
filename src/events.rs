@@ -13,7 +13,7 @@ use futures::{StreamExt, stream};
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::SqlitePool;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::http::{Answer, Call, GONE, Guard, Operation, Refused, Route, answer, inline, schema};
@@ -39,11 +39,13 @@ struct Published {
   account: Option<String>,
 }
 
-/// The stream's window in the store and the broadcast of what is published now.
+/// The stream's window in the store, the broadcast of what is published now, and the word that the service
+/// stops, which ends every stream.
 #[derive(Debug)]
 pub struct Events {
   pool: SqlitePool,
   sender: broadcast::Sender<Published>,
+  closing: watch::Sender<bool>,
 }
 
 /// What a reader narrows the stream to: its owner's events, and of those the kinds and the account it asks.
@@ -88,6 +90,21 @@ impl Events {
     Self {
       pool,
       sender: broadcast::channel(BACKLOG).0,
+      closing: watch::channel(false).0,
+    }
+  }
+
+  /// Ends every stream being read, as the service stops, so a stop waits on no reader.
+  pub fn close(&self) {
+    self.closing.send_replace(true);
+  }
+
+  /// Resolves once the streams are closed.
+  fn closed(&self) -> impl Future<Output = ()> + use<> {
+    let mut closing = self.closing.subscribe();
+
+    async move {
+      let _ = closing.wait_for(|closed| *closed).await;
     }
   }
 
@@ -269,7 +286,9 @@ impl Route for EventStream {
 
       async move { admitted }
     });
-    let stream = stream::iter(backlog.iter().map(sent).collect::<Vec<_>>()).chain(live);
+    let stream = stream::iter(backlog.iter().map(sent).collect::<Vec<_>>())
+      .chain(live)
+      .take_until(events.closed());
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(IDLE)).into_response())
   }

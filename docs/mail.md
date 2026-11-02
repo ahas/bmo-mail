@@ -181,6 +181,12 @@ flowchart TD
     brings the folder up to date, since the server takes mail that arrived since into a
     connection's view only at a command: without that, the first read after new mail would miss it.
   - The mail server's per-user connection limit must leave room for both.
+- **No clock ends a conversation with a mail server.** Opening a connection — the greeting, STARTTLS
+  and the login — every IMAP command and every step of a submission wait for the server's answer,
+  however long it takes. A conversation ends on that answer, on the server refusing or closing the
+  connection, or on the connection breaking. Every IMAP and submission connection carries TCP
+  keep-alive probes, so a server that is gone, or a network that lost the connection without a word,
+  breaks the connection instead of leaving it waiting.
 - **A read through the work connection that fails on the server's side** — a connection the server
   closed while it stood unused, a pipe that broke — is asked once more on a connection opened again,
   and the journal says so; a second failure is the read's answer. A write is never asked twice, since
@@ -339,6 +345,9 @@ flowchart TD
 - **A logo's address is a stranger's word,** since the sender publishes the record it comes out of.
   A lookup goes only to an ordinary HTTPS address on the open web and never to one of this
   machine's own networks, and each hop of a redirect is asked that again before it is taken.
+- **A lookup waits for the sender's site to answer.** No clock cuts a fetch short: it ends on the
+  answer, on a refused or broken connection, and keep-alive probes break a connection whose other
+  end is gone.
 - **What comes back is checked before it is kept:** a type a browser draws, a size an icon could
   have, and no SVG carrying a script, a document of its own, or anything it would itself go and
   fetch. Such a file is dropped rather than cleaned. It is served with a policy that sandboxes it

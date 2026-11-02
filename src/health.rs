@@ -1,7 +1,5 @@
 //! Whether the service is up (`docs/api.md`, 「Health」): the route, and the command that asks it.
 
-use std::time::Duration;
-
 use axum::http::{Method, StatusCode};
 use axum::response::Response;
 
@@ -42,17 +40,13 @@ impl Route for HealthRoute {
 
 crate::route!(HealthRoute);
 
-// How long the command waits on the service.
-const WAIT: Duration = Duration::from_secs(5);
-
 /// Whether the service the settings name answers ready, asked once with the settings' token and waited on
-/// at most five seconds.
+/// until it answers.
 pub async fn ask(settings: &Settings) -> Result<(), String> {
   let address = format!("http://{}/health", settings.server.listen);
   let answer = reqwest::Client::new()
     .get(&address)
     .bearer_auth(&settings.server.token)
-    .timeout(WAIT)
     .send()
     .await
     .map_err(|why| format!("the service at {} did not answer: {why}", settings.server.listen))?;

@@ -58,8 +58,8 @@ fn secrets_of(settings: &Settings) -> Result<Option<Secrets>, String> {
 }
 
 /// Opens the store and the key, imports the accounts file where it waits, starts the watchers, then answers the
-/// routes on the settings' address until the process is told to stop, and lets the watchers and every
-/// account's connection go.
+/// routes on the settings' address until the process is told to stop; then ends the event streams, waits for
+/// the calls in flight, and lets the watchers and every account's connection go.
 pub async fn serve(settings: Settings) -> Result<(), String> {
   let store = Store::open(&settings.store.path).await.map_err(|why| why.to_string())?;
   let listen = settings.server.listen;
@@ -92,8 +92,12 @@ pub async fn serve(settings: Settings) -> Result<(), String> {
     .map_err(|why| format!("{listen} could not be listened on: {why}"))?;
   let (stop, stopping) = tokio::sync::watch::channel(false);
   let watching = tokio::spawn(watcher::watch(Arc::clone(&standing), stopping));
+  let closing = Arc::clone(&standing);
   let served = axum::serve(listener, router)
-    .with_graceful_shutdown(stopped())
+    .with_graceful_shutdown(async move {
+      stopped().await;
+      closing.events.close();
+    })
     .await
     .map_err(|why: io::Error| why.to_string());
 

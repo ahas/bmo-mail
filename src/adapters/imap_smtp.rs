@@ -10,7 +10,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
+use socket2::{SockRef, TcpKeepalive};
 use sqlx::SqlitePool;
+use tokio::net::TcpStream;
 
 use crate::accounts::Account;
 use crate::adapters::{Adapter, Context, Mailbox, Pending, Watch};
@@ -50,6 +52,10 @@ const PASSWORD: &str = "password";
 const PLAIN: &str = "-";
 /// How long the submission server's size is trusted before it is asked again.
 const LIMIT_KEPT: Duration = Duration::from_secs(60 * 60);
+/// How long a connection to a mail server stays silent before the first keep-alive probe asks whether the
+/// server is still there, and how far apart the probes after it go.
+const KEEP_ALIVE: Duration = Duration::from_secs(30);
+const KEEP_ALIVE_PROBES: Duration = Duration::from_secs(10);
 
 /// A server an account names.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,6 +65,19 @@ pub struct MailEndpoint {
   /// The name the server's certificate is checked against, or none for a plain connection, which only a
   /// stand-in server uses.
   pub tls_name: Option<String>,
+}
+
+impl MailEndpoint {
+  /// A TCP connection to the server, carrying keep-alive probes so a server that is gone breaks it
+  /// (`docs/mail.md`, 「Connections and the watcher」).
+  pub async fn connect(&self) -> Result<TcpStream, MailFault> {
+    let tcp = TcpStream::connect((self.host.as_str(), self.port)).await.map_err(MailFault::server)?;
+    let probes = TcpKeepalive::new().with_time(KEEP_ALIVE).with_interval(KEEP_ALIVE_PROBES);
+
+    SockRef::from(&tcp).set_tcp_keepalive(&probes).map_err(MailFault::server)?;
+
+    Ok(tcp)
+  }
 }
 
 /// An account's login to its servers.

@@ -40,6 +40,9 @@ futures = "0.3.31"
 hickory-resolver = "0.26.3"
 # Each route registers itself beside its own answer.
 inventory = "0.3.24"
+# The store's busy handler, set on each of its connections: a statement that meets another's lock waits until
+# the lock is let go. The same SQLite build sqlx runs on.
+libsqlite3-sys = { version = "0.30.1", default-features = false }
 # A message's pictures of its own turned into inline parts, the markup rewritten where they stand.
 lol_html = "3.0.1"
 # Messages written: a draft, a message sent, its copy, a read receipt. Without its default host-name
@@ -73,6 +76,10 @@ scraper = "0.27.0"
 serde = { version = "1.0.229", features = ["derive"] }
 # An answer keeps its fields in the order they were written.
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
+# The submission server's capabilities read: whether it offers STARTTLS. The same crate the SMTP client speaks.
+smtp-proto = "0.2.5"
+# Keep-alive probes on the connections to the mail servers.
+socket2 = "0.6.5"
 # The store, one SQLite file.
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "macros", "migrate"] }
 thiserror = "2.0.17"

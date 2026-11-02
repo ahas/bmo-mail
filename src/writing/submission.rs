@@ -5,14 +5,15 @@
 use std::path::Path;
 use std::time::Duration;
 
-use mail_send::SmtpClientBuilder;
+use mail_send::smtp::AssertReply;
 use mail_send::smtp::message::Message;
-use tokio::io::{AsyncRead, AsyncWrite};
+use mail_send::{Credentials, SmtpClient, SmtpClientBuilder};
+use smtp_proto::{EXT_START_TLS, EhloResponse};
 
 use crate::adapters::imap_smtp::{MailAccount, MailEndpoint};
 use crate::imap::folders::{ensure_role_folder, folders_of, searched_folders};
 use crate::imap::search::Search;
-use crate::imap::session::MailSession;
+use crate::imap::session::{MailSession, MailStream};
 use crate::imap::{append_landing, store_flags, uid_search};
 use crate::mail::{DraftKind, FolderRole, MailAddress, MailRef};
 use crate::routes::requests::{Asked, MailFault};
@@ -22,28 +23,91 @@ use crate::writing::drafts::{discard_draft, draft_named, resolve_attachments};
 /// The submission port that speaks TLS from the first byte; any other with a TLS name is upgraded with
 /// STARTTLS.
 const IMPLICIT_TLS_PORT: u16 = 465;
-/// How long a conversation with the submission server may take.
-const SUBMISSION_TIMEOUT: Duration = Duration::from_secs(60);
+/// The span the SMTP client takes for each step of a conversation, given as one it never reaches: a step
+/// waits for the server's answer, and the connection's keep-alive probes break it where the server is gone
+/// (`docs/mail.md`, 「Connections and the watcher」).
+const UNBOUNDED: Duration = Duration::MAX;
 
-fn builder(endpoint: &MailEndpoint) -> Result<SmtpClientBuilder<String>, MailFault> {
-  let mut builder = SmtpClientBuilder::new(endpoint.host.clone(), endpoint.port)
-    .map_err(MailFault::server)?
-    .timeout(SUBMISSION_TIMEOUT)
-    .implicit_tls(endpoint.port == IMPLICIT_TLS_PORT);
+/// A conversation with the submission server, over TLS or over a plain stream where the TLS name is `-`.
+type Submission = SmtpClient<Box<dyn MailStream>>;
 
-  if let Some(name) = &endpoint.tls_name {
-    builder.tls_hostname = name.clone();
+fn boxed<T: MailStream + 'static>(client: SmtpClient<T>) -> Submission {
+  SmtpClient {
+    stream: Box::new(client.stream),
+    timeout: client.timeout,
   }
-
-  Ok(builder)
 }
 
-async fn deliver<T: AsyncRead + AsyncWrite + Unpin>(
-  mut client: mail_send::SmtpClient<T>,
+/// Reads the server's greeting.
+async fn greeted<T: MailStream>(client: &mut SmtpClient<T>) -> Result<(), MailFault> {
+  client
+    .read()
+    .await
+    .map_err(MailFault::server)?
+    .assert_positive_completion()
+    .map_err(MailFault::server)
+}
+
+/// A conversation opened with the submission server: over TLS on port 465, upgraded with STARTTLS on
+/// another port with a TLS name, and plain where the TLS name is `-`; greeted, its capabilities asked, and
+/// where a login is given, signed in as it.
+async fn conversation(
+  endpoint: &MailEndpoint,
+  login: Option<&MailAccount>,
+) -> Result<(Submission, EhloResponse<String>), MailFault> {
+  // The builder is read for the TLS connector and the name the service greets the server with.
+  let builder = SmtpClientBuilder::new(endpoint.host.clone(), endpoint.port).map_err(MailFault::server)?;
+  let mut opened = SmtpClient {
+    stream: endpoint.connect().await?,
+    timeout: UNBOUNDED,
+  };
+  let mut client = match endpoint.tls_name.as_deref() {
+    None => {
+      greeted(&mut opened).await?;
+      boxed(opened)
+    }
+    Some(name) if endpoint.port == IMPLICIT_TLS_PORT => {
+      let mut client = opened.into_tls(&builder.tls_connector, name).await.map_err(MailFault::server)?;
+
+      greeted(&mut client).await?;
+      boxed(client)
+    }
+    Some(name) => {
+      greeted(&mut opened).await?;
+
+      if !opened
+        .ehlo(&builder.local_host)
+        .await
+        .map_err(MailFault::server)?
+        .has_capability(EXT_START_TLS)
+      {
+        return Err(MailFault::server("the submission server offers no STARTTLS"));
+      }
+
+      // After STARTTLS the server greets no more; the conversation goes on over TLS.
+      boxed(opened.start_tls(&builder.tls_connector, name).await.map_err(MailFault::server)?)
+    }
+  };
+  let capabilities = client.capabilities(&builder.local_host, false).await.map_err(MailFault::server)?;
+
+  if let Some(login) = login {
+    let credentials = Credentials::new(login.login.as_str(), login.password.as_str());
+
+    client.authenticate(&credentials, &capabilities).await.map_err(MailFault::server)?;
+  }
+
+  Ok((client, capabilities))
+}
+
+/// Hands one built message to the submission server as the account, to the envelope's recipients.
+pub async fn submit(
+  endpoint: &MailEndpoint,
+  account: &MailAccount,
   from: &str,
   to: &[String],
   raw: &[u8],
 ) -> Result<(), MailFault> {
+  let (mut client, _) = conversation(endpoint, Some(account)).await?;
   let message = Message::new(from.to_owned(), to.iter().cloned(), raw);
 
   client.send(message).await.map_err(MailFault::server)?;
@@ -52,58 +116,21 @@ async fn deliver<T: AsyncRead + AsyncWrite + Unpin>(
   Ok(())
 }
 
-/// Hands one built message to the submission server as the account, to the envelope's recipients: over
-/// TLS on port 465, upgraded with STARTTLS on another port with a TLS name, and plain where the TLS name is
-/// `-`.
-pub async fn submit(
-  endpoint: &MailEndpoint,
-  account: &MailAccount,
-  from: &str,
-  to: &[String],
-  raw: &[u8],
-) -> Result<(), MailFault> {
-  let builder = builder(endpoint)?.credentials((account.login.clone(), account.password.clone()));
-
-  if endpoint.tls_name.is_none() {
-    deliver(builder.connect_plain().await.map_err(MailFault::server)?, from, to, raw).await
-  } else {
-    deliver(builder.connect().await.map_err(MailFault::server)?, from, to, raw).await
-  }
-}
-
 /// Signs in to the submission server as the account and lets go, sending nothing.
 pub async fn sign_in(endpoint: &MailEndpoint, account: &MailAccount) -> Result<(), MailFault> {
-  let builder = builder(endpoint)?.credentials((account.login.clone(), account.password.clone()));
-
-  if endpoint.tls_name.is_none() {
-    let _ = builder.connect_plain().await.map_err(MailFault::server)?.quit().await;
-  } else {
-    let _ = builder.connect().await.map_err(MailFault::server)?.quit().await;
-  }
-
-  Ok(())
-}
-
-async fn advertised<T: AsyncRead + AsyncWrite + Unpin>(
-  mut client: mail_send::SmtpClient<T>,
-  local_host: &str,
-) -> Option<u64> {
-  let size = client.capabilities(local_host, false).await.ok().map(|said| said.size as u64);
+  let (client, _) = conversation(endpoint, Some(account)).await?;
   let _ = client.quit().await;
 
-  size.filter(|size| *size > 0)
+  Ok(())
 }
 
 /// The largest message the submission server says it takes (its `SIZE`), or none where it names no limit or
 /// does not answer. Asking needs no login.
 pub async fn submission_limit(endpoint: &MailEndpoint) -> Option<u64> {
-  let builder = builder(endpoint).ok()?.say_ehlo(false);
+  let (client, capabilities) = conversation(endpoint, None).await.ok()?;
+  let _ = client.quit().await;
 
-  if endpoint.tls_name.is_none() {
-    advertised(builder.connect_plain().await.ok()?, &builder.local_host).await
-  } else {
-    advertised(builder.connect().await.ok()?, &builder.local_host).await
-  }
+  Some(capabilities.size as u64).filter(|size| *size > 0)
 }
 
 /// Marks the message a reply answered or a forward carried, wherever in the mailbox it is.

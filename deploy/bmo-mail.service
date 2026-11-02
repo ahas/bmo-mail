@@ -13,9 +13,10 @@ WorkingDirectory=%h/.local/share/bmo-mail/deploy
 ExecStart=%h/.local/share/bmo-mail/deploy/bin/bmo-mail serve
 Restart=always
 RestartSec=2
-# A message held for undo send stays a draft on the server, so a stop never leaves one half-sent
-# (docs/mail.md, 「Writing」).
-TimeoutStopSec=30
+# A stop waits for the service to end: on the terminate it ends its event streams, finishes the calls in flight
+# and lets its connections go (docs/api.md, 「The command」). A message held for undo send stays a draft on the
+# server, so a stop never leaves one half-sent (docs/mail.md, 「Writing」).
+TimeoutStopSec=infinity
 
 [Install]
 WantedBy=default.target
