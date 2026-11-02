@@ -22,7 +22,7 @@ check_script = "typecheck"
 # The sweeps that read the tree before anything runs: Korean in the code, the README's folder table and the
 # dependencies the manifests name. The ledger is the count of lines with Korean each file may hold, a file it
 # does not name being allowed none: the service's own Korean words stand there.
-quick = ["korean", "layout", "dependencies"]
+quick = ["korean", "layout", "dependencies", "cargo-profile"]
 korean_ledger = "korean-ledger.json"
 base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-text"]
 

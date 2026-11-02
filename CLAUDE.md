@@ -68,8 +68,9 @@ structure (archive document #301, 「원칙」).
 - **`.graph/` is the code dependency graph,** written only by `bmo graph` run in this checkout; a change that
   moves a feature's files updates its node in the checkout. Its area files are generated and untracked, so a
   fresh checkout builds them again, while `settings.toml` is the repository's configuration and stays tracked.
-- Tests live in `tests/`; no test module stands in `src/`. The repository carries the personal-data check
-  there; the behaviour tests are deferred for now (README.md).
+- Tests live in `tests/`, one test target, `tests/main.rs`, each file of tests a module of it (bmo-chat's
+  `docs/conventions.md`, 「Rust builds」); no test module stands in `src/`. The repository carries the
+  personal-data check there beside the behaviour tests standing so far (README.md).
 
 ## The stages of a change
 
@@ -77,4 +78,5 @@ structure (archive document #301, 「원칙」).
 2. **Review:** read the whole diff against the document governing it, then `cargo fmt --all --check` and
    `cargo clippy --all-targets -- -D warnings`.
 3. **Verification:** the tests touched, then the whole suite once, output written to a file and the file
-   read. `cargo test --test personal_data` is the whole suite until the deferred behaviour tests stand.
+   read. A module's tests run by its name filter, `cargo test --test main <module>::`; the whole suite is
+   `cargo test` with the bundle's check.
