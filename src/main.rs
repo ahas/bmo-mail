@@ -37,6 +37,9 @@ enum Word {
     #[arg(long, env = "BMO_MAIL_ROLE", default_value = "administrator", value_parser = role)]
     role: Role,
   },
+  /// How a console reaches the service, as one JSON object the testbed's console probe reads; it prints both
+  /// credentials, so only the deployment runs it.
+  ConsoleReach,
   /// The nouns this command carries for a host to dispatch, one a line: none.
   Nouns,
   /// Moves the old archive's seven mail tables from the item's export into this service's store (TODO #1923).
@@ -118,6 +121,10 @@ async fn main() -> ExitCode {
       let owner = owner.unwrap_or_else(|| settings.accounts.administrator.clone());
 
       bmo_mail::mcp::serve(MailClient::new(address, token).acting_for(owner, role)).await
+    }
+    Word::ConsoleReach => {
+      println!("{}", bmo_mail::console::reach(&settings));
+      Ok(())
     }
     Word::Nouns => Ok(()),
     Word::Import { .. } => unreachable!("the import is answered before the settings are read"),

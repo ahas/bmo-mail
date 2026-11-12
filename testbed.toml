@@ -82,3 +82,9 @@ env_links = [{ link = "settings.local.toml", target = "env/mail.toml" }]
 units = ["deploy/*.service"]
 # Answers 0 once the service the deployed settings name answers ready (docs/api.md, 「Health」).
 health = "~/.local/share/bmo-mail/deploy/bin/bmo-mail health"
+
+[deploy.console]
+# The service brings the mail screen to a console; once it is up the deployment probes its console face
+# (docs/api.md, 「The console plugin bundle」). Run from the release, the command prints how a console reaches the
+# service from the release's settings (docs/api.md, 「The command」).
+reach = "bin/bmo-mail console-reach"

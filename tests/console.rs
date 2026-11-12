@@ -192,3 +192,18 @@ async fn a_build_the_face_refuses_stops_the_service() {
 
   assert!(faults.iter().any(|fault| fault.contains("console face")), "{faults:?}");
 }
+
+#[test]
+fn the_reach_names_the_address_and_both_credentials() {
+  let environment = HashMap::from([
+    ("BMO_MAIL_SERVER__LISTEN".to_owned(), "127.0.0.1:3971".to_owned()),
+    ("BMO_MAIL_SERVER__TOKEN".to_owned(), TOKEN.to_owned()),
+    ("BMO_MAIL_CONSOLE__TOKEN".to_owned(), CONSOLE.to_owned()),
+  ]);
+  let settings = Settings::read(&scratch("reach"), Some(environment)).expect("the settings read");
+
+  assert_eq!(
+    bmo_mail::console::reach(&settings),
+    json!({ "address": "http://127.0.0.1:3971", "consoleToken": CONSOLE, "token": TOKEN })
+  );
+}

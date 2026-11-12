@@ -6,7 +6,7 @@ use std::path::Path;
 
 use bmo_console_face::{BundleFolder, ConsoleFace};
 
-use crate::settings::Console;
+use crate::settings::{Console, Settings};
 use crate::wire::Role;
 
 /// The least role a reader holds to open the screen, and so the floor of every route the screen uses. The
@@ -42,4 +42,14 @@ fn folder(dir: &Path) -> BundleFolder {
   } else {
     folder
   }
+}
+
+/// How a console reaches the service, as the testbed's console probe asks it: the base address, the console's
+/// credential and the service's own token (`docs/api.md`, 「The command」).
+pub fn reach(settings: &Settings) -> serde_json::Value {
+  serde_json::json!({
+    "address": format!("http://{}", settings.server.listen),
+    "consoleToken": settings.console.token,
+    "token": settings.server.token,
+  })
 }
