@@ -497,7 +497,9 @@ guards them, and this section states only what mail supplies and chooses within 
 - **What it calls:** the routes above, at the address bmo-ui's relay module answers for the service `mail`,
   and the event stream the same way, its bodies read through the types generated from `docs/openapi.json`.
 - **Wording:** the words are the language pack, `client/i18n/locales/ko.json`, one JSON file to a locale,
-  holding the bundle's namespace `mail` alone; the words under `common` are the console's. The screen's name
+  holding the bundle's namespace `mail` alone. Beside them the screen asks only the layer's own keys, those
+  the `wording-keys` module of the vendored release lists, which the console answers; a test holds every key
+  the screen's code writes to the pack and that list. The screen's name
   stands under `mail.title.screen`, and the words a console raises a notice of a declared kind in under
   `mail.notice.<kind>`, a `title` and a `body` that takes the message's `{from}` and `{subject}`. The screen
   shows a refusal by the key `mail.error.<code>`, a kind of account by `mail.account_kind.<kind>` and each of

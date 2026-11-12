@@ -197,7 +197,7 @@ function foldedItems(editor: Editor, handlers: object): DropdownMenuItem[][] {
   const byKind = handlers as Record<string, MarkHandler | undefined>;
   const marks = GATHERED.folded.map((mark: EditorToolbarItem) => foldedItem(editor, byKind, mark as Mark));
   const colours: DropdownMenuItem[] = [
-    { label: t("common.label.default"), icon: "i-material-symbols-format-color-reset", onSelect: () => editor.chain().focus().unsetColor().run() },
+    { label: t("mail.label.color_default"), icon: "i-material-symbols-format-color-reset", onSelect: () => editor.chain().focus().unsetColor().run() },
     ...TEXT_COLORS.map((one) => ({ label: one.label, icon: "i-material-symbols-circle", onSelect: () => editor.chain().focus().setColor(one.value).run() })),
   ];
   const own: DropdownMenuItem[] = [

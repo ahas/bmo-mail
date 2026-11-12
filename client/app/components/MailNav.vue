@@ -95,13 +95,13 @@
       <UTooltip :text="$t('mail.action.settings')">
         <UButton color="neutral" variant="ghost" square icon="i-material-symbols-settings-outline" :aria-label="$t('mail.action.settings')" @click="emit('settings')" />
       </UTooltip>
-      <UTooltip v-if="props.foldable" :text="props.folded ? $t('common.action.expand') : $t('common.action.collapse')">
+      <UTooltip v-if="props.foldable" :text="props.folded ? $t('mail.action.expand') : $t('mail.action.collapse')">
         <UButton
           color="neutral"
           variant="ghost"
           square
           :icon="props.folded ? 'i-material-symbols-left-panel-open-outline' : 'i-material-symbols-left-panel-close-outline'"
-          :aria-label="props.folded ? $t('common.action.expand') : $t('common.action.collapse')"
+          :aria-label="props.folded ? $t('mail.action.expand') : $t('mail.action.collapse')"
           @click="emit('fold', !props.folded)"
         />
       </UTooltip>

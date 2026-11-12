@@ -53,7 +53,7 @@
              the far end, where a closing belongs. -->
         <div>
           <ChooseAll :keys="shownKeys" :selected="props.selected" @choose="(all) => emit('select', all ? 'all' : 'none')" />
-          <RollingSentence class="text-sm" :keypath="'common.label.count'" :figures="{ n: props.selected.size }" />
+          <RollingSentence class="text-sm" :keypath="'mail.label.count'" :figures="{ n: props.selected.size }" />
         </div>
         <div class="ms-auto">
           <UTooltip :text="trashLabel">
@@ -100,8 +100,8 @@
 
           <template v-if="props.selected.size === 0">
             <template v-if="!gathered">
-              <UTooltip :text="$t('common.action.refresh')">
-                <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-refresh" :aria-label="$t('common.action.refresh')" :loading="props.loading" @click="emit('refresh')" />
+              <UTooltip :text="$t('mail.action.refresh')">
+                <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-refresh" :aria-label="$t('mail.action.refresh')" :loading="props.loading" @click="emit('refresh')" />
               </UTooltip>
               <UTooltip v-if="props.readAll" :text="$t('mail.action.read_all')">
                 <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-mark-email-read-outline" :aria-label="$t('mail.action.read_all')" :loading="props.markingRead" @click="emit('read-all')" />
@@ -533,7 +533,7 @@ const selectMenu = computed<DropdownMenuItem[]>(() => SELECT_KINDS.map((one) => 
 // pressed state as the menu's own check.
 const listMenu = computed<DropdownMenuItem[][]>(() => [
   [
-    { label: t("common.action.refresh"), icon: "i-material-symbols-refresh", onSelect: () => emit("refresh") },
+    { label: t("mail.action.refresh"), icon: "i-material-symbols-refresh", onSelect: () => emit("refresh") },
     ...(props.readAll ? [{ label: t("mail.action.read_all"), icon: "i-material-symbols-mark-email-read-outline", onSelect: () => emit("read-all") }] : []),
     {
       label: t("mail.action.unread_only"),

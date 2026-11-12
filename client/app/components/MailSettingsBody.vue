@@ -38,8 +38,8 @@
             <li v-for="(rule, index) in rules" :key="rule.id" class="flex items-center gap-2 rounded-md border border-default px-3 py-2">
               <USwitch :model-value="rule.on" :aria-label="rule.on ? $t('mail.action.rule_off') : $t('mail.action.rule_on')" @update:model-value="(on: boolean) => toggleRule(rule, on)" />
               <span class="min-w-0 flex-1 text-sm break-words">{{ ruleText(rule) }}</span>
-              <UTooltip :text="$t('common.action.move_up')">
-                <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-arrow-upward" :aria-label="$t('common.action.move_up')" :disabled="index === 0" @click="moveRule(index, -1)" />
+              <UTooltip :text="$t('mail.action.move_up')">
+                <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-arrow-upward" :aria-label="$t('mail.action.move_up')" :disabled="index === 0" @click="moveRule(index, -1)" />
               </UTooltip>
               <UTooltip :text="$t('mail.action.rule_delete')">
                 <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-delete-outline" :aria-label="$t('mail.action.rule_delete')" @click="removeRule(rule)" />
@@ -89,13 +89,13 @@
           </ul>
           <div class="flex items-center gap-2">
             <UInput v-model="newLabel" :placeholder="$t('mail.placeholder.new_label')" class="min-w-0 flex-1" :aria-label="$t('mail.placeholder.new_label')" @keydown.enter="addLabel" />
-            <UButton :label="$t('common.action.add')" :loading="busy === 'label'" :disabled="newLabel.trim() === ''" @click="addLabel" />
+            <UButton :label="$t('mail.action.add')" :loading="busy === 'label'" :disabled="newLabel.trim() === ''" @click="addLabel" />
           </div>
         </section>
 
         <section class="flex flex-col gap-3 p-4" aria-labelledby="mail-settings-spam">
           <h3 id="mail-settings-spam" class="text-lg font-semibold">{{ $t("mail.title.spam_senders") }}</h3>
-          <p v-if="settings.spamSenders.length === 0" class="text-sm text-muted">{{ $t("common.label.none") }}</p>
+          <p v-if="settings.spamSenders.length === 0" class="text-sm text-muted">{{ $t("mail.label.none") }}</p>
           <ul class="flex flex-col gap-1">
             <li v-for="address in settings.spamSenders" :key="address" class="flex items-center gap-2 text-sm">
               <span class="min-w-0 flex-1 truncate">{{ address }}</span>
@@ -106,7 +106,7 @@
           </ul>
           <div class="flex items-center gap-2">
             <UInput v-model="newSpam" :placeholder="$t('mail.placeholder.address')" class="min-w-0 flex-1" :aria-label="$t('mail.placeholder.spam_sender')" @keydown.enter="addSpam" />
-            <UButton :label="$t('common.action.add')" :disabled="newSpam.trim() === ''" @click="addSpam" />
+            <UButton :label="$t('mail.action.add')" :disabled="newSpam.trim() === ''" @click="addSpam" />
           </div>
         </section>
       </template>
@@ -228,7 +228,7 @@ function saveSettings(): Promise<void> {
       receiptDefault.value = saved.readReceipts;
       emit("settings");
     },
-    t("common.error.save_failed"),
+    t("mail.error.save_failed"),
   );
 }
 

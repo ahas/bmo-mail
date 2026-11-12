@@ -13,8 +13,10 @@ states.
 The repository carries the repository-wide personal-data check in `tests/personal_data.rs`
 (`PERSONAL-DATA.md`), the old archive's import in `tests/import.rs`, the accounts in `tests/accounts.rs`:
 their routes, one owner key never reaching another's, the sealing of their secrets and the accounts file's
-import, and the console plugin bundle in `tests/console.rs`: the manifest read through bmo-ui's own reading,
-the guard of the screen's routes and the module's name following its bytes. `cargo test` runs them all. The other behaviour tests are deferred: they are written and run here once
+import, the watcher over a dropped connection in `tests/watcher.rs`, the console face in `tests/console.rs`: the
+served manifest read through the vendored bmo-ui release's own reading and how far the console's credential and
+the service's token reach, and the screen's words in `tests/words.rs`: every key the screen writes is its own
+pack's or one the release's `wording-keys` module lists. `cargo test` runs them all. The other behaviour tests are deferred: they are written and run here once
 the minimal services stand on the new repositories, and `docs/inventory.md` lists what the old behaviour was
 held to. The build check is `cargo check --all-targets` and the bundle's typecheck.
 

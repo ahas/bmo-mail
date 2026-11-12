@@ -48,8 +48,8 @@
   >
     <div class="flex h-10 shrink-0 items-center gap-1 border-b border-default bg-elevated px-3">
       <button type="button" class="min-w-0 flex-1 truncate text-start text-sm font-semibold" @click="minimized = !minimized">{{ title }}</button>
-      <UTooltip :text="minimized ? $t('common.action.expand') : $t('mail.action.minimize')">
-        <UButton color="neutral" variant="ghost" size="sm" square :icon="minimized ? 'i-material-symbols-expand-less' : 'i-material-symbols-minimize'" :aria-label="minimized ? $t('common.action.expand') : $t('mail.action.minimize')" @click="minimized = !minimized" />
+      <UTooltip :text="minimized ? $t('mail.action.expand') : $t('mail.action.minimize')">
+        <UButton color="neutral" variant="ghost" size="sm" square :icon="minimized ? 'i-material-symbols-expand-less' : 'i-material-symbols-minimize'" :aria-label="minimized ? $t('mail.action.expand') : $t('mail.action.minimize')" @click="minimized = !minimized" />
       </UTooltip>
       <UTooltip :text="$t('mail.action.maximize')">
         <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-open-in-full" :aria-label="$t('mail.action.maximize')" @click="maximize" />
@@ -317,7 +317,7 @@ async function send(): Promise<void> {
     open.value = false;
     emit("sent", account.value, held);
   } catch (error) {
-    failure.value = mailFailure(t, error, t("common.error.not_sent"));
+    failure.value = mailFailure(t, error, t("mail.error.not_sent"));
   } finally {
     sending.value = false;
   }

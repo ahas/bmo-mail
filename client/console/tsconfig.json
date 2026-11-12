@@ -1,5 +1,5 @@
 {
-  // The module's build and entry, typechecked on their own: the screen's sources are the Nuxt layer's and
+  // The module's build and entry, typechecked on their own: the screen's sources are the Nuxt project's and
   // its typecheck reads them (`../tsconfig.json`).
   "compilerOptions": {
     "target": "ES2022",
