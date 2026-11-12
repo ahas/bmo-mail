@@ -391,6 +391,10 @@ back; neither wait gives up.
 - **`bmo-mail health`** asks the service the settings name, waits for its answer, and ends 0 where it answers
   ready.
 - **`bmo-mail mcp`** starts the harness plugin's MCP server (「The harness plugin」).
+- **`bmo-mail console-reach`** prints one JSON object naming how a console reaches the service, as the
+  testbed's console probe asks it (bmo-testbed's `docs/declaration.md`, `[deploy.console]`): `address`,
+  `http://` and the settings' `server.listen`, `consoleToken`, the settings' `console.token`, and `token`, the
+  settings' `server.token`. It prints both credentials, so only the deployment runs it.
 - **`bmo-mail nouns`** prints nothing: the command carries no noun of its own for a host to dispatch.
 
 ## The client
