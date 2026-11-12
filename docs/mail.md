@@ -469,16 +469,20 @@ flowchart TD
      would all wear it. An address is longer than the panel is wide, so the row cuts it and names it on
      hover at every width rather than folded alone; nothing in the nav moves.
   2. **List** — the search box on top, the toolbar under it, then the conversations.
-  3. **Thread** — the subject on a row of its own; under it the labels on the left and reply,
-     reply all and forward on the right, which answer the newest message; then the messages, the
-     newest and every unread one open and the others folded to a line each. Each open message
-     carries a menu with the same three, answering that message. With nothing chosen it holds a
-     one-line empty state.
+  3. **Thread** — its toolbar on top, holding reply, reply all and forward at its right end, which
+     answer the newest message; under it the subject on a row of its own with the labels under the
+     subject; then the messages, the newest and every unread one open and the others folded to a line
+     each. Each open message carries a menu with the same three, answering that message. With nothing
+     chosen it holds a one-line empty state.
 - **Opening a conversation reads that conversation and nothing else.** The folder panel and the
   list are not asked for again — only the selection moves — and a conversation opened once stands
   straight away when it is opened again, read behind it rather than under a skeleton. A skeleton is
   for a first reading alone.
 - **A conversation in drafts** opens in the composer, to be written on, rather than as a thread.
+- **Every toolbar is bmo-ui's toolbar row:** the list's, the thread's and the editor's. A button in
+  one is the component library's small button at its own size, centred in the row, its hover and
+  press filling only its own rounded shape; the select-all checkbox stands with its words as one
+  pressable control the same way. Nothing the screen draws stands in the console's title bar.
 - **The list toolbar** spans the list edge to edge, groups divided by dividers:
   - Selection: the select-all checkbox with its menu (all, none, read, unread, starred, unstarred),
     refresh, mark all read and unread only, which give their place to the selection's actions while
@@ -530,7 +534,9 @@ flowchart TD
   - The body is the list, and it never leaves it. A thread opens over the list rather than in its
     place — one history step all the same, so a link opens it and Back closes it — and because the
     list was never taken down, the scroll, the selection and the page it had read are where they
-    were when the thread closes. While the thread stands, the list under it is out of reach.
+    were when the thread closes. While the thread stands, the list under it is out of reach. The
+    way back to the list stands at the left end of the thread's toolbar, the row directly under the
+    title bar, and the subject keeps its own row under it.
   - The mail nav is a bottom drawer opened from the folder button at the left of the search row; the
     search box shares that row, and the list's toolbar is the one row under it.
   - A row is two lines with the sender's avatar at the left of both: the sender and the date, then

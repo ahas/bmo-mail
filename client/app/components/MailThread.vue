@@ -1,8 +1,8 @@
 <template>
-  <!-- One conversation (docs/mail.md, 「The screen」): its subject on a row of its own; under it the
-       labels on the left and reply, reply-all and forward on the right; then the messages, the newest open and
-       the older ones folded to a line each. On a phone it stands in the list's place, and the back
-       button returns to the list where it was. -->
+  <!-- One conversation (docs/mail.md, 「The screen」): its toolbar with reply, reply-all and forward
+       at the right end; under it the subject on a row of its own with the labels under it; then the
+       messages, the newest open and the older ones folded to a line each. On a phone it stands over
+       the list, and the back button at the toolbar's left end returns to the list where it was. -->
   <section class="flex min-h-0 flex-1 flex-col" :aria-label="$t('mail.aria.thread')">
     <p v-if="props.failure !== ''" role="alert" class="p-4 text-sm text-error">{{ props.failure }}</p>
 
@@ -22,28 +22,31 @@
     <p v-else-if="props.messages.length === 0" class="p-6 text-center text-sm text-muted">{{ $t("mail.message.choose_mail") }}</p>
 
     <template v-else>
-      <div class="flex shrink-0 flex-col gap-2 border-b border-default px-4 py-3">
-        <div class="flex items-center gap-2">
-          <UTooltip v-if="props.narrow" :text="$t('mail.action.back_to_list')">
+      <!-- The thread's own row, directly under the title bar on a phone: the way back at its left
+           end, the answers at its right end, each the toolbar's small button. -->
+      <ToolBar :label="$t('mail.aria.thread_tools')" class="shrink-0">
+        <div v-if="props.narrow">
+          <UTooltip :text="$t('mail.action.back_to_list')">
             <UButton color="neutral" variant="ghost" square icon="i-material-symbols-arrow-back" :aria-label="$t('mail.action.back_to_list')" @click="emit('back')" />
           </UTooltip>
-          <h2 class="min-w-0 flex-1 text-xl font-semibold break-words text-highlighted">{{ subjectText($t, subject) }}</h2>
         </div>
-        <div class="flex items-center gap-2">
-          <div class="flex min-w-0 flex-1 flex-wrap gap-1">
-            <span v-for="label in threadLabels" :key="label.id" class="rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.colour }">{{ label.name }}</span>
-          </div>
-          <div class="flex shrink-0 items-center gap-1">
-            <UTooltip :text="$t('mail.action.reply')">
-              <UButton color="neutral" variant="ghost" square icon="i-material-symbols-reply" :aria-label="$t('mail.action.reply')" @click="emit('write', 'reply', newest)" />
-            </UTooltip>
-            <UTooltip :text="$t('mail.action.reply_all')">
-              <UButton color="neutral" variant="ghost" square icon="i-material-symbols-reply-all" :aria-label="$t('mail.action.reply_all')" @click="emit('write', 'reply-all', newest)" />
-            </UTooltip>
-            <UTooltip :text="$t('mail.action.forward')">
-              <UButton color="neutral" variant="ghost" square icon="i-material-symbols-forward" :aria-label="$t('mail.action.forward')" @click="emit('write', 'forward', newest)" />
-            </UTooltip>
-          </div>
+        <div class="ms-auto">
+          <UTooltip :text="$t('mail.action.reply')">
+            <UButton color="neutral" variant="ghost" square icon="i-material-symbols-reply" :aria-label="$t('mail.action.reply')" @click="emit('write', 'reply', newest)" />
+          </UTooltip>
+          <UTooltip :text="$t('mail.action.reply_all')">
+            <UButton color="neutral" variant="ghost" square icon="i-material-symbols-reply-all" :aria-label="$t('mail.action.reply_all')" @click="emit('write', 'reply-all', newest)" />
+          </UTooltip>
+          <UTooltip :text="$t('mail.action.forward')">
+            <UButton color="neutral" variant="ghost" square icon="i-material-symbols-forward" :aria-label="$t('mail.action.forward')" @click="emit('write', 'forward', newest)" />
+          </UTooltip>
+        </div>
+      </ToolBar>
+
+      <div class="flex shrink-0 flex-col gap-2 border-b border-default px-4 py-3">
+        <h2 class="text-xl font-semibold break-words text-highlighted">{{ subjectText($t, subject) }}</h2>
+        <div v-if="threadLabels.length > 0" class="flex flex-wrap gap-1">
+          <span v-for="label in threadLabels" :key="label.id" class="rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.colour }">{{ label.name }}</span>
         </div>
       </div>
 

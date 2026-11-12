@@ -9,7 +9,7 @@
   <p v-if="props.error !== undefined" role="alert" class="px-3 py-2 text-sm text-error">{{ $t("mail.error.editor_failed") }}</p>
   <ContentSkeleton v-else :label="$t('mail.status.editor_loading')" :class="props.class" listClass="flex flex-1 flex-col">
     <ToolBar :label="$t('mail.label.format')" class="sticky top-0 z-10 bg-default">
-      <div class="flex items-stretch !gap-1.5 !px-0">
+      <div class="flex items-stretch !gap-1.5 !px-1">
         <template v-for="(marks, group) in TOOLBAR_GROUPS" :key="group">
           <div v-if="group > 0" class="w-px self-stretch bg-border" />
           <div class="flex items-center gap-0.5">
@@ -17,7 +17,7 @@
           </div>
         </template>
       </div>
-      <div v-for="n in OWN_CELLS" :key="`own-${n}`" class="!px-0">
+      <div v-for="n in OWN_CELLS" :key="`own-${n}`" class="!px-1">
         <div :class="CELL"><SkeletonBar class="size-4 rounded-sm" /></div>
       </div>
     </ToolBar>
@@ -68,6 +68,7 @@ const blocks = computed(() => {
 const TOOLBAR_GROUPS = editorToolbar(t).map((group) => group.length);
 const OWN_CELLS = 2;
 
-// One mark's square: the toolbar row's height, as wide as it is tall.
-const CELL = "flex h-9 min-w-9 items-center justify-center pointer-coarse:h-10 pointer-coarse:min-w-10";
+// One mark's place: the component library's small square icon button, centred in the row, and the
+// cells around the marks keep the small room from the row's edge a cell of buttons keeps.
+const CELL = "flex size-7 items-center justify-center";
 </script>

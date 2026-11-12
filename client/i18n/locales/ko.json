@@ -121,6 +121,7 @@
       "rule_action": "동작",
       "rule_field": "항목",
       "thread": "메일 대화",
+      "thread_tools": "메일 대화 도구",
       "unread": "안읽은 메일 있음"
     },
     "error": {

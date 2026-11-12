@@ -2,9 +2,11 @@
   <!-- The rich editor the console writes mail with (docs/mail.md, 「Writing」). One component stands
        for every place a message's markup is written — the composer's body and the account's
        signature — so what can be written in one can be written in the other. Its toolbar is the
-       console's own toolbar row, so its marks are squares of the row's height like every other
-       toolbar here; the marks the component library has no handler for — the text colour, the
-       table, the link and the picture — are cells of this screen's own beside them.
+       console's own toolbar row, so its marks are the component library's small buttons centred in
+       the row like every other toolbar's here, the library's own marks keeping the small room from
+       the row's edge a cell of buttons keeps; the marks the component library has no handler for —
+       the text colour, the table, the link and the picture — are cells of this screen's own beside
+       them.
        A picture is carried in the markup itself as its own bytes; the message that goes out turns
        each one into an inline part, so a signature's picture arrives with the mail. -->
   <UEditor
@@ -21,9 +23,9 @@
     @focus="emit('focused')"
   >
     <ToolBar :label="$t('mail.label.format')" class="sticky top-0 z-10 bg-default">
-      <UEditorToolbar :editor="editor" :items="TOOLBAR" class="!px-0" />
+      <UEditorToolbar :editor="editor" :items="TOOLBAR" class="px-1" />
 
-      <div class="!px-0">
+      <div>
         <UPopover :content="{ align: 'start' }">
           <UTooltip :text="$t('mail.label.text_color')">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-format-color-text" :aria-label="$t('mail.label.text_color')" />
@@ -41,7 +43,7 @@
         </UPopover>
       </div>
 
-      <div class="!px-0">
+      <div>
         <UDropdownMenu :items="insertItems(editor)" :content="{ align: 'start' }">
           <UTooltip :text="$t('mail.label.insert')">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-add-circle-outline" :aria-label="$t('mail.label.insert')" />
@@ -49,7 +51,7 @@
         </UDropdownMenu>
       </div>
 
-      <div v-if="editor.isActive('table')" class="!px-0">
+      <div v-if="editor.isActive('table')">
         <UDropdownMenu :items="tableItems(editor)" :content="{ align: 'start' }">
           <UTooltip :text="$t('mail.label.table_edit')">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-table-chart-outline" :aria-label="$t('mail.label.table_edit')" />
