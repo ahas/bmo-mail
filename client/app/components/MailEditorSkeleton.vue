@@ -2,22 +2,23 @@
   <!-- The place the mail editor keeps while its own code arrives (docs/mail.md, 「Writing」): the
        editor is loaded apart from the mail screen, so the first composer or signature opened before
        it has arrived stands on this. The toolbar row is the editor's own, drawn at once, with one
-       bar where each of its marks will stand, grouped as the editor groups them. The writing
+       bar where each of its marks will stand, grouped as the editor groups them and gathered as the
+       editor's row gathers by the room it has. The writing
        surface keeps its full height and its own padding: an empty body shows the placeholder the
        editor will show, and a body already written in — a signature, a quoted message — a line for
        each of its first blocks. A load that failed says so in the surface's place. -->
   <p v-if="props.error !== undefined" role="alert" class="px-3 py-2 text-sm text-error">{{ $t("mail.error.editor_failed") }}</p>
   <ContentSkeleton v-else :label="$t('mail.status.editor_loading')" :class="props.class" listClass="flex flex-1 flex-col">
-    <ToolBar :label="$t('mail.label.format')" class="sticky top-0 z-10 bg-default">
+    <ToolBar ref="bar" :label="$t('mail.label.format')" class="sticky top-0 z-10 bg-default">
       <div class="flex items-stretch !gap-1.5 !px-1">
-        <template v-for="(marks, group) in TOOLBAR_GROUPS" :key="group">
+        <template v-for="(marks, group) in groups" :key="group">
           <div v-if="group > 0" class="w-px self-stretch bg-border" />
           <div class="flex items-center gap-0.5">
             <div v-for="n in marks" :key="n" :class="CELL"><SkeletonBar class="size-4 rounded-sm" /></div>
           </div>
         </template>
       </div>
-      <div v-for="n in OWN_CELLS" :key="`own-${n}`" class="!px-1">
+      <div v-for="n in ownCells" :key="`own-${n}`" class="!px-1">
         <div :class="CELL"><SkeletonBar class="size-4 rounded-sm" /></div>
       </div>
     </ToolBar>
@@ -31,6 +32,8 @@
 </template>
 
 <script setup lang="ts">
+import { barGathers, GATHERED_ACTIONS, useBarRoom } from "bmo-ui/app/domain/actionbar";
+
 import { editorToolbar } from "../domain/mail-editor";
 
 defineOptions({ inheritAttrs: false });
@@ -67,6 +70,14 @@ const blocks = computed(() => {
 // text colour and the insert menu; the table menu stands only while the cursor is in a table.
 const TOOLBAR_GROUPS = editorToolbar(t).map((group) => group.length);
 const OWN_CELLS = 2;
+
+// Short of room the editor's row stands the marks reached for first as one group and one more menu,
+// so its place stands the same.
+const bar = useTemplateRef<{ $el: HTMLElement }>("bar");
+const room = useBarRoom(() => bar.value?.$el);
+const gathered = computed(() => barGathers(room.value));
+const groups = computed(() => (gathered.value ? [GATHERED_ACTIONS] : TOOLBAR_GROUPS));
+const ownCells = computed(() => (gathered.value ? 1 : OWN_CELLS));
 
 // One mark's place: the component library's small square icon button, centred in the row, and the
 // cells around the marks keep the small room from the row's edge a cell of buttons keeps.

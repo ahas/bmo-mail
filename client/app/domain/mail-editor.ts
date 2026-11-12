@@ -108,3 +108,20 @@ export function editorToolbar(t: Translate): EditorToolbarItem[][] {
     [{ kind: "clearFormatting", icon: "i-material-symbols-format-clear", tooltip: { text: t("mail.action.clear_format") }, "aria-label": t("mail.action.clear_format") }],
   ];
 }
+
+// The toolbar's marks in the order a hand reaches for them while writing a mail: the inline marks, the
+// lists, the headings and the alignments, then undo, redo and clearing. A toolbar short of room stands
+// the first of them and folds the rest (docs/mail.md, 「Writing」).
+export function marksByReach(groups: EditorToolbarItem[][]): EditorToolbarItem[] {
+  const [history = [], headings = [], inline = [], align = [], lists = [], clearing = []] = groups;
+
+  return [...inline, ...lists, ...headings, ...align, ...history, ...clearing];
+}
+
+// The toolbar a bar short of room draws: the first `standing` marks by reach as one group, and every
+// other mark, in reach order, for its one more menu.
+export function gatheredToolbar(groups: EditorToolbarItem[][], standing: number): { standing: EditorToolbarItem[][]; folded: EditorToolbarItem[] } {
+  const marks = marksByReach(groups);
+
+  return { standing: [marks.slice(0, standing)], folded: marks.slice(standing) };
+}

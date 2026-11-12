@@ -1,7 +1,7 @@
 <template>
   <!-- One message of a thread (docs/mail.md, 「The screen」 and 「Read receipts」). Folded, it is one
        line — the sender, the snippet, the date — and pressing it opens it. Open, it shows who wrote
-       to whom with a menu to answer or forward this message, the read-receipt bar where the message
+       to whom with reply, reply-all and forward buttons for this message, the read-receipt bar where the message
        asks for one, the body and the attachments. -->
   <article class="border-b border-default">
     <button
@@ -30,11 +30,11 @@
             <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(props.message.at) }}</span>
           </UTooltip>
         </button>
-        <UDropdownMenu :items="writeMenu" :content="{ align: 'end' }">
-          <UTooltip :text="$t('common.action.more')">
-            <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-more-vert" :aria-label="$t('common.action.more')" />
+        <div class="flex shrink-0 items-center gap-1">
+          <UTooltip v-for="write in writes" :key="write.kind" :text="write.label">
+            <UButton color="neutral" variant="ghost" size="sm" square :icon="write.icon" :aria-label="write.label" @click="emit('write', write.kind)" />
           </UTooltip>
-        </UDropdownMenu>
+        </div>
       </div>
 
       <div v-if="asksReceipt" class="flex flex-wrap items-center gap-2 rounded-md bg-elevated px-3 py-2 text-sm">
@@ -70,7 +70,6 @@ import { partUrl } from "../domain/mail-api";
 import { attachmentsOf, partSize, receiptAnswered } from "../../shared/mail";
 
 import type { MailMessage } from "../../shared/mail";
-import type { DropdownMenuItem } from "@nuxt/ui";
 
 const props = defineProps<{ message: MailMessage; account: string; address: string; open: boolean; showImages: boolean }>();
 const { t } = useI18n();
@@ -82,10 +81,12 @@ const emit = defineEmits<{
 }>();
 
 // Reply, reply-all and forward for this one message, beside the thread's own that answer the newest.
-const writeMenu = computed<DropdownMenuItem[]>(() => [
-  { label: t("mail.action.reply"), icon: "i-material-symbols-reply", onSelect: () => emit("write", "reply") },
-  { label: t("mail.action.reply_all"), icon: "i-material-symbols-reply-all", onSelect: () => emit("write", "reply-all") },
-  { label: t("mail.action.forward"), icon: "i-material-symbols-forward", onSelect: () => emit("write", "forward") },
+// The three answers to this message. A group of three stands as icon buttons, so the screen never shows a
+// second more menu beside the list's.
+const writes = computed(() => [
+  { kind: "reply" as const, label: t("mail.action.reply"), icon: "i-material-symbols-reply" },
+  { kind: "reply-all" as const, label: t("mail.action.reply_all"), icon: "i-material-symbols-reply-all" },
+  { kind: "forward" as const, label: t("mail.action.forward"), icon: "i-material-symbols-forward" },
 ]);
 
 const sender = computed(() => {

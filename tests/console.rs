@@ -78,10 +78,14 @@ fn client_project() -> PathBuf {
 }
 
 /// The manifest as bmo-ui's own `consoleManifest` reads it, run by Bun in the client's project: the reading
-/// with its defaults filled, or the reading's refusal.
+/// with its defaults filled, or the reading's refusal. The service names no layer while the console it is
+/// served to reads manifests without one, so the reading is handed the layer of the release the client
+/// vendors, and every other field is held to that release's reading.
 fn read_by_bmo_ui(manifest: &ConsoleManifest) -> Result<Value, String> {
   let script = r#"import { consoleManifest } from "bmo-ui/shared/console-manifest";
-console.log(JSON.stringify(consoleManifest(JSON.parse(await Bun.stdin.text()))));"#;
+import release from "bmo-ui/shared/layer.json" with { type: "json" };
+const manifest = JSON.parse(await Bun.stdin.text());
+console.log(JSON.stringify(consoleManifest({ layer: release.layer, ...manifest })));"#;
   let mut bun = Command::new("bun")
     .args(["--eval", script])
     .current_dir(client_project())

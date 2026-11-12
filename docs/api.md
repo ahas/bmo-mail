@@ -474,7 +474,8 @@ its stylesheet and its words; a console reads the manifest while it runs and loa
 | `GET /console-words` | the bundle's words, each locale's tree under the locale's code | the token |
 | `GET /console-bundle/{file}` | the module or the stylesheet, at the name the manifest gives it | the token, the role and the owner key |
 
-- **The manifest** keeps the shape bmo-ui's `console-manifest` module states, and names: the bundle `mail`, its
+- **The manifest** keeps the shape bmo-ui's `console-manifest` module states but its `layer`, which it does not
+  name while the console it is served to reads manifests without one, and names: the bundle `mail`, its
   menu title `mail.title.screen`, the icon `i-material-symbols-mail-outline`, its screens under `/mail`, the
   service `mail`, the module's, the stylesheet's and the words' paths, the API prefix `/`, the role `member`,
   the owner key asked, the event stream read, no WebSocket, the notice kind `message.created`, and the sidebar

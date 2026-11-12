@@ -388,11 +388,16 @@ flowchart TD
   undo and redo, the headings, bold, italic, underline and strike, a text colour, the alignments,
   the lists with quote and code, a link, a picture, a table with its own menu for rows, columns and
   cells while the cursor is in one, a rule, and clearing the formatting. Its toolbar is the
-  console's own toolbar row.
+  console's own toolbar row, and it gathers by the room it has as every bar here does (bmo-ui's
+  action bar): short of that room bold and italic stand, the marks reached for first, and every other
+  mark, the text colour, the insert menu and the table's menu fold into one more menu at the row's
+  end. The docked composer is wide enough for the whole row, so only a narrow composer or settings
+  page gathers it.
 - **The editor is loaded apart from the mail screen.** Its rich-text engine would otherwise be most
   of what the screen loads before it is drawn, so the screen stands without it and fetches it once
   it is drawn and the browser is idle. A composer or a signature opened before it has arrived
-  shows the toolbar row with a bar for each mark over the writing surface's full height, with the
+  shows the toolbar row with a bar for each mark the row will stand, gathered as the row gathers,
+  over the writing surface's full height, with the
   placeholder where nothing is written yet; a load that failed says so in the editor's place.
 - **A picture is carried in the markup as its own bytes** — chosen from the picture menu, pasted or
   dragged in, and capped at two megabytes each. A signature has no message to hang an attachment
@@ -472,7 +477,9 @@ flowchart TD
   3. **Thread** — its toolbar on top, holding reply, reply all and forward at its right end, which
      answer the newest message; under it the subject on a row of its own with the labels under the
      subject; then the messages, the newest and every unread one open and the others folded to a line
-     each. Each open message carries a menu with the same three, answering that message. With nothing
+     each. Each open message carries the same three as small icon buttons in its head, answering that
+     message; a group of three stands as buttons rather than folding into a second more menu beside the
+     list's. With nothing
      chosen it holds a one-line empty state.
 - **Opening a conversation reads that conversation and nothing else.** The folder panel and the
   list are not asked for again — only the selection moves — and a conversation opened once stands

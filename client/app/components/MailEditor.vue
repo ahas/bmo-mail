@@ -6,12 +6,14 @@
        the row like every other toolbar's here, the library's own marks keeping the small room from
        the row's edge a cell of buttons keeps; the marks the component library has no handler for —
        the text colour, the table, the link and the picture — are cells of this screen's own beside
-       them.
+       them. The row gathers by the room it has, as every bar here does: short of it the marks a hand
+       reaches for first stand and every other mark and cell folds into one more menu at the row's end,
+       each run by the editor's own handlers.
        A picture is carried in the markup itself as its own bytes; the message that goes out turns
        each one into an inline part, so a signature's picture arrives with the mail. -->
   <UEditor
     ref="board"
-    v-slot="{ editor }"
+    v-slot="{ editor, handlers }"
     v-model="model"
     content-type="html"
     :placeholder="props.placeholder"
@@ -22,10 +24,18 @@
     :ui="{ base: props.compact ? 'min-h-32 px-3 py-2' : 'min-h-48 px-3 py-2' }"
     @focus="emit('focused')"
   >
-    <ToolBar :label="$t('mail.label.format')" class="sticky top-0 z-10 bg-default">
-      <UEditorToolbar :editor="editor" :items="TOOLBAR" class="px-1" />
+    <ToolBar ref="bar" :label="$t('mail.label.format')" class="sticky top-0 z-10 bg-default">
+      <UEditorToolbar :editor="editor" :items="gathered ? GATHERED.standing : TOOLBAR" class="px-1" />
 
-      <div>
+      <div v-if="gathered">
+        <UDropdownMenu :items="foldedItems(editor, handlers)" :content="{ align: 'end' }">
+          <UTooltip :text="$t('common.action.more')">
+            <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-more-vert" :aria-label="$t('common.action.more')" />
+          </UTooltip>
+        </UDropdownMenu>
+      </div>
+
+      <div v-if="!gathered">
         <UPopover :content="{ align: 'start' }">
           <UTooltip :text="$t('mail.label.text_color')">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-format-color-text" :aria-label="$t('mail.label.text_color')" />
@@ -43,7 +53,7 @@
         </UPopover>
       </div>
 
-      <div>
+      <div v-if="!gathered">
         <UDropdownMenu :items="insertItems(editor)" :content="{ align: 'start' }">
           <UTooltip :text="$t('mail.label.insert')">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-add-circle-outline" :aria-label="$t('mail.label.insert')" />
@@ -51,7 +61,7 @@
         </UDropdownMenu>
       </div>
 
-      <div v-if="editor.isActive('table')">
+      <div v-if="!gathered && editor.isActive('table')">
         <UDropdownMenu :items="tableItems(editor)" :content="{ align: 'start' }">
           <UTooltip :text="$t('mail.label.table_edit')">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-table-chart-outline" :aria-label="$t('mail.label.table_edit')" />
@@ -79,10 +89,12 @@ import { TableKit } from "@tiptap/extension-table";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
 
-import { editorToolbar, imageIn, MailImageError, readImageData } from "../domain/mail-editor";
+import { barGathers, GATHERED_ACTIONS, useBarRoom } from "bmo-ui/app/domain/actionbar";
+
+import { editorToolbar, gatheredToolbar, imageIn, MailImageError, readImageData } from "../domain/mail-editor";
 
 import type { Editor } from "@tiptap/vue-3";
-import type { DropdownMenuItem } from "@nuxt/ui";
+import type { DropdownMenuItem, EditorToolbarItem } from "@nuxt/ui";
 
 defineOptions({ inheritAttrs: false });
 
@@ -133,6 +145,69 @@ const extensions = [
 const IMAGE = { allowBase64: true };
 
 const TOOLBAR = editorToolbar(t);
+const GATHERED = gatheredToolbar(TOOLBAR, GATHERED_ACTIONS);
+
+// The row gathers by its own width, never the window's: a composer or a settings page is as narrow as
+// it stands (bmo-ui's action bar).
+const bar = useTemplateRef<{ $el: HTMLElement }>("bar");
+const room = useBarRoom(() => bar.value?.$el);
+const gathered = computed(() => barGathers(room.value));
+
+// What a handler of the editor's does with one mark, as the editor hands them to its toolbar.
+interface MarkHandler {
+  canExecute: (editor: Editor, mark: unknown) => boolean;
+  execute: (editor: Editor, mark: unknown) => { run: () => unknown };
+  isActive: (editor: Editor, mark: unknown) => boolean;
+}
+
+// One mark of the toolbar as the more menu reads it: its name, its mark, and the marks it opens.
+interface Mark {
+  kind?: string;
+  label?: string;
+  icon?: string;
+  tooltip?: { text?: string };
+  "aria-label"?: string;
+  items?: Mark[];
+}
+
+// A folded mark as an item of the more menu, run by the editor's own handler and checked while it holds,
+// as a mark that only acts, undo or clearing, never does; a mark that opens others opens them as its submenu.
+function foldedItem(editor: Editor, handlers: Record<string, MarkHandler | undefined>, mark: Mark): DropdownMenuItem {
+  const label = mark.label ?? mark.tooltip?.text ?? mark["aria-label"] ?? "";
+
+  if (mark.items !== undefined) {
+    return { label, icon: mark.icon, children: mark.items.map((child) => foldedItem(editor, handlers, child)) };
+  }
+
+  const handler = mark.kind === undefined ? undefined : handlers[mark.kind];
+
+  return {
+    label,
+    icon: mark.icon,
+    type: "checkbox",
+    checked: handler?.isActive(editor, mark) ?? false,
+    disabled: handler === undefined || !handler.canExecute(editor, mark),
+    onSelect: () => handler?.execute(editor, mark).run(),
+  };
+}
+
+// The more menu of a row short of room: every mark it folds, then the text colour, the insert menu and,
+// while the cursor stands in a table, the table's menu.
+function foldedItems(editor: Editor, handlers: object): DropdownMenuItem[][] {
+  const byKind = handlers as Record<string, MarkHandler | undefined>;
+  const marks = GATHERED.folded.map((mark: EditorToolbarItem) => foldedItem(editor, byKind, mark as Mark));
+  const colours: DropdownMenuItem[] = [
+    { label: t("common.label.default"), icon: "i-material-symbols-format-color-reset", onSelect: () => editor.chain().focus().unsetColor().run() },
+    ...TEXT_COLORS.map((one) => ({ label: one.label, icon: "i-material-symbols-circle", onSelect: () => editor.chain().focus().setColor(one.value).run() })),
+  ];
+  const own: DropdownMenuItem[] = [
+    { label: t("mail.label.text_color"), icon: "i-material-symbols-format-color-text", children: colours },
+    { label: t("mail.label.insert"), icon: "i-material-symbols-add-circle-outline", children: insertItems(editor) },
+    ...(editor.isActive("table") ? [{ label: t("mail.label.table_edit"), icon: "i-material-symbols-table-chart-outline", children: tableItems(editor) }] : []),
+  ];
+
+  return [marks, own];
+}
 
 // What a menu of this screen's own does. The editor comes from the slot that drew the menu, so
 // nothing of it is held between renders.

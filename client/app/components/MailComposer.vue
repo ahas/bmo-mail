@@ -42,7 +42,7 @@
        own parts. -->
   <Teleport v-else-if="open" to="body">
   <section
-    class="fixed right-4 bottom-0 z-40 flex w-[560px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-t-lg border border-b-0 border-default bg-default shadow-xl"
+    class="fixed right-4 bottom-0 z-40 flex w-[576px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-t-lg border border-b-0 border-default bg-default shadow-xl"
     :class="minimized ? '' : 'h-[min(640px,85dvh)]'"
     :aria-label="$t('mail.action.compose')"
   >
