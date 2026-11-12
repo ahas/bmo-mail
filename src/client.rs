@@ -7,13 +7,12 @@ use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::console::ConsoleWords;
 use crate::wire::{
-  Account, AccountKind, AccountPatch, Address, AddressQuery, Authorization, ConsoleManifest, Draft,
-  DraftPatch, Event, EventQuery, Folder, FolderPatch, Health, Label, LabelPatch, ListQuery, Message,
-  MessagePatch, MessageQuery, NewAccount, NewAttachment, NewAuthorization, NewDraft, NewLabel, NewReceipt,
-  NewRule, NewRuleRun, NewSend, Page, Receipt, Role, Rule, RulePatch, RuleRun, Send, Settings,
-  SettingsPatch, SpamSender, Summary, Thread, ThreadQuery, WireError,
+  Account, AccountKind, AccountPatch, Address, AddressQuery, Authorization, Draft, DraftPatch, Event,
+  EventQuery, Folder, FolderPatch, Health, Label, LabelPatch, ListQuery, Message, MessagePatch,
+  MessageQuery, NewAccount, NewAttachment, NewAuthorization, NewDraft, NewLabel, NewReceipt, NewRule,
+  NewRuleRun, NewSend, Page, Receipt, Role, Rule, RulePatch, RuleRun, Send, Settings, SettingsPatch,
+  SpamSender, Summary, Thread, ThreadQuery, WireError,
 };
 
 /// What a path segment keeps as it is: the characters no URI gives a meaning of their own.
@@ -70,8 +69,7 @@ pub struct MailClient {
 }
 
 impl MailClient {
-  /// A client acting for no owner: it reaches the routes the screen does not use alone: the health, the
-  /// console bundle's manifest and its words.
+  /// A client acting for no owner: it reaches the one route the screen does not use alone, the health.
   pub fn new(address: impl Into<String>, token: impl Into<String>) -> Self {
     Self {
       address: address.into().trim_end_matches('/').to_owned(),
@@ -426,20 +424,5 @@ impl MailClient {
   /// `GET /avatars/{address}`: the logo's bytes.
   pub async fn avatar(&self, address: &str) -> Called<Vec<u8>> {
     self.bytes(&format!("/avatars/{}", segment(address))).await
-  }
-
-  /// `GET /console-manifest`.
-  pub async fn console_manifest(&self) -> Called<ConsoleManifest> {
-    self.get("/console-manifest", &()).await
-  }
-
-  /// `GET /console-words`.
-  pub async fn console_words(&self) -> Called<ConsoleWords> {
-    self.get("/console-words", &()).await
-  }
-
-  /// `GET /console-bundle/{file}`: the module's or the stylesheet's bytes, by the path the manifest names.
-  pub async fn console_file(&self, path: &str) -> Called<Vec<u8>> {
-    self.bytes(path).await
   }
 }

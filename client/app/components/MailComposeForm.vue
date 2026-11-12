@@ -74,7 +74,7 @@
         <UButton color="neutral" variant="ghost" square icon="i-material-symbols-delete-outline" :aria-label="$t('mail.action.discard_draft')" @click="emit('discard')" />
       </UTooltip>
       <span v-if="props.status !== ''" class="ms-2 min-w-0 truncate text-sm text-muted">{{ props.status }}</span>
-      <UButton class="ms-auto" :label="$t('common.action.send')" icon="i-material-symbols-send-outline" :loading="props.sending" :disabled="props.uploading" @click="emit('send')" />
+      <UButton class="ms-auto" :label="$t('mail.action.send')" icon="i-material-symbols-send-outline" :loading="props.sending" :disabled="props.uploading" @click="emit('send')" />
     </div>
   </div>
 </template>

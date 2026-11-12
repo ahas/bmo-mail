@@ -39,14 +39,14 @@ local settings a deployment gives.
 
 ## The console plugin bundle
 
-`client/` holds the mail screen as a console bundle on bmo-ui, by bmo-ui's console plugin contract: `bun run
-bundle` builds the module, the stylesheet and the words the service serves beside its manifest, from the build
-in `client/console/`, and `bun pm pack` packs the same screen as the Nuxt layer `bmo-mail-client`, declared in
-`client/console-bundle.json` for a console that builds its bundles in. A packed copy of bmo-ui stands under
-`client/vendor/` for its own install, typecheck and build, and bmo-text's TypeScript package is read from the
-base library. Its bodies are typed by `client/shared/openapi.ts`, which `bun run openapi` generates from
-`docs/openapi.json`. The bundle's check is `bun install --frozen-lockfile && bun run typecheck` inside
-`client/`.
+`client/` holds the mail screen as a console bundle on bmo-ui. It keeps bmo-ui's console plugin contract
+(bmo-ui's `docs/console-bundles.md`) through bmo-chat's console face (`docs/api.md`, 「The console plugin
+bundle」): `bun run bundle` builds the module, the stylesheet, the words and the layer it was built on with
+bmo-ui's bundle build, from `client/console/`, and the service serves them beside the manifest its declaration
+makes. The bmo-ui release bmo-chat pins stands under `client/vendor/` for its own install, typecheck and build,
+and bmo-text's TypeScript package is read from the base library. Its bodies are typed by
+`client/shared/openapi.ts`, which `bun run openapi` generates from `docs/openapi.json`. The bundle's check is
+`bun install --frozen-lockfile && bun run typecheck` inside `client/`.
 
 ## Documents
 

@@ -34,7 +34,7 @@ structure (archive document #301, 「원칙」).
 - **A client of another service is one module named for that service** under `src/clients/`, holding only
   the calls this repository makes, so it can be swapped for that service's own client.
 - **Dependencies:** crates from the registry pinned in `Cargo.toml`, and among other repositories only the
-  base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text`.
+  base libraries `bmo-chat`, `bmo-chat-client`, bmo-chat's `bmo-console-face`, `bmo-ui` and `bmo-text`.
 - **The plumbing knows no route.** A route registers itself beside its own answer; adding one changes no
   file but its own.
 - **The accounts file is a secret.** Nothing read from it but an account's address reaches a log line or an
@@ -51,8 +51,8 @@ structure (archive document #301, 「원칙」).
   branch names. The exceptions are the service's own words under `wording/` and the screen's language pack
   under `client/i18n/locales/`, a file to a language, each in its own.
 - **Hangul the code inherently handles** is written plainly, never as an escape or a character code, and
-  each file's count of lines holding it stands in `korean-ledger.json`, the wording files' among them. No
-  other Korean stands in code or tests.
+  each code file's count of lines holding it stands in `korean-ledger.json`; the wording files and the language
+  pack are no code files and stand outside it. No other Korean stands in code or tests.
 - What the service answers is an English sentence for a log and a snake_case code a screen shows in its own
   language's words (`docs/api.md`, 「Refusals」). The screen's words stand in the bundle's own language pack,
   one key for every code (`docs/api.md`, 「The console plugin bundle」).

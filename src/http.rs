@@ -22,7 +22,7 @@ use crate::accounts::Accounts;
 use crate::accounts::authorizations::Authorizations;
 use crate::adapters::{Context, Mailboxes};
 use crate::avatars::Avatars;
-use crate::console::{Bundle, SCREEN_ROLE};
+use crate::console::{self, SCREEN_ROLE};
 use crate::events::Events;
 use crate::secrets::Secrets;
 use crate::settings::Settings;
@@ -82,9 +82,10 @@ pub struct Operation {
 /// What a call needs before its route answers it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Guard {
-  /// The token alone: a route the console reads for no reader.
+  /// The service's token alone: a route the screen does not use.
   Token,
-  /// The token, an `Owner-Role` allowing the screen's role and an `Owner-Key`: every route the screen uses.
+  /// The service's token or the console's credential, an `Owner-Role` allowing the screen's role and an
+  /// `Owner-Key`: every route the screen uses.
   Screen,
 }
 
@@ -247,8 +248,6 @@ pub struct Standing {
   pub sends: Sends,
   /// The lookups of sender logos.
   pub avatars: Avatars,
-  /// The built console bundle the settings' console folder holds, read at start; none where it holds none.
-  pub console: Option<Bundle>,
 }
 
 impl Standing {
@@ -256,11 +255,6 @@ impl Standing {
   pub fn new(settings: Settings, store: Store, wording: Wording, secrets: Option<Secrets>) -> Self {
     let accounts = Accounts::new(store.pool().clone(), secrets);
     let events = Events::new(store.pool().clone());
-    let console = Bundle::read(&settings.console.dir).unwrap_or_else(|why| {
-      eprintln!("mail: the console bundle could not be read: {why}");
-      None
-    });
-
     Self {
       settings,
       store,
@@ -271,7 +265,6 @@ impl Standing {
       wording,
       sends: Sends::default(),
       avatars: Avatars::default(),
-      console,
     }
   }
 
@@ -390,16 +383,21 @@ fn screen_reader(request: &Request) -> Result<(), Refused> {
   Ok(())
 }
 
-/// Whether a request carries the settings' token as its bearer; an empty token lets nobody in.
-fn authorized(standing: &Standing, request: &Request) -> bool {
-  let expected = standing.settings.server.token.as_str();
+/// Whether a request carries as its bearer the service's token, or on a route the screen uses the console's
+/// credential; an empty token or credential lets nobody in.
+fn authorized(standing: &Standing, request: &Request, guard: Guard) -> bool {
   let presented = request
     .headers()
     .get(header::AUTHORIZATION)
     .and_then(|value| value.to_str().ok())
     .and_then(|value| value.strip_prefix("Bearer "));
+  let Some(presented) = presented else {
+    return false;
+  };
+  let settings = &standing.settings;
+  let accepted = |expected: &str| !expected.is_empty() && presented == expected;
 
-  matches!(presented, Some(token) if !expected.is_empty() && token == expected)
+  accepted(&settings.server.token) || (guard == Guard::Screen && accepted(&settings.console.token))
 }
 
 /// What a request to a path no route claims is answered.
@@ -412,15 +410,21 @@ async fn no_route(request: Request) -> Response {
   .into_response()
 }
 
-/// The router answering every registered route behind the token, or what is wrong with the routes linked in.
+/// A path's methods as the router holds them, beside the guard every one of them shares.
+type Guarded = (Guard, MethodRouter<Arc<Standing>>);
+
+/// The router answering every registered route behind the token, with the console face beside them where the
+/// settings make one and its guard laid over them, or what is wrong with the routes linked in or the face.
 pub fn router(standing: Arc<Standing>) -> Result<Router, Vec<String>> {
+  let face = console::face(&standing.settings.console).map_err(|why| vec![why])?;
   let faults = route_faults();
 
   if !faults.is_empty() {
     return Err(faults);
   }
 
-  let mut by_path: BTreeMap<&'static str, MethodRouter<Arc<Standing>>> = BTreeMap::new();
+  // Each path's methods, and whether the screen uses them, which every method of one path agrees on.
+  let mut by_path: BTreeMap<&'static str, Guarded> = BTreeMap::new();
   let mut faults = Vec::new();
 
   for route in routes() {
@@ -429,7 +433,7 @@ pub fn router(standing: Arc<Standing>) -> Result<Router, Vec<String>> {
       continue;
     };
     let handler = move |State(standing): State<Arc<Standing>>, request: Request| async move {
-      if !authorized(&standing, &request) {
+      if !authorized(&standing, &request, route.operation().guard) {
         return Refused::new(StatusCode::UNAUTHORIZED, UNAUTHORIZED, "a missing or wrong token")
           .into_response();
       }
@@ -445,19 +449,39 @@ pub fn router(standing: Arc<Standing>) -> Result<Router, Vec<String>> {
         .await
         .unwrap_or_else(IntoResponse::into_response)
     };
-    let methods = by_path.remove(route.path()).unwrap_or_default();
+    let guard = route.operation().guard;
+    let (held, methods) = by_path.remove(route.path()).unwrap_or((guard, MethodRouter::default()));
 
-    by_path.insert(route.path(), methods.on(filter, handler));
+    if held != guard {
+      faults.push(format!("{}: the path's methods differ in their guard", route.path()));
+    }
+
+    by_path.insert(route.path(), (guard, methods.on(filter, handler)));
   }
 
   if !faults.is_empty() {
     return Err(faults);
   }
 
-  let router = by_path
-    .into_iter()
-    .fold(Router::new(), |router, (path, methods)| router.route(path, methods))
-    .fallback(no_route);
+  let (screens, others): (Vec<_>, Vec<_>) =
+    by_path.into_iter().partition(|(_, (guard, _))| *guard == Guard::Screen);
+  let routed = |routes: Vec<(&'static str, Guarded)>| {
+    routes
+      .into_iter()
+      .fold(Router::new(), |router, (path, (_, methods))| router.route(path, methods))
+  };
+  let screens = match &face {
+    Some(face) => face.guard_screens(routed(screens)),
+    None => routed(screens),
+  };
+  let router = routed(others)
+    .merge(screens)
+    .fallback(no_route)
+    .layer(DefaultBodyLimit::max(BODY_LIMIT))
+    .with_state(standing);
 
-  Ok(router.layer(DefaultBodyLimit::max(BODY_LIMIT)).with_state(standing))
+  Ok(match face {
+    Some(face) => router.merge(face.router()),
+    None => router,
+  })
 }

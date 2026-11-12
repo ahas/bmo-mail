@@ -77,11 +77,15 @@ pub struct Staging {
   pub dir: PathBuf,
 }
 
-/// The built console bundle the service serves (`docs/api.md`, 「The console plugin bundle」).
+/// The console face the service serves (`docs/api.md`, 「The console plugin bundle」).
 #[derive(Clone, Debug, Deserialize)]
 pub struct Console {
-  /// The folder its module, its stylesheet and its words stand in.
+  /// The bundle build's folder: its module, its stylesheet, its words and the layer it was built on.
   pub dir: PathBuf,
+  /// The console's credential, which reaches the console face and the routes the screen uses; an empty one
+  /// serves no console face.
+  #[serde(default)]
+  pub token: String,
 }
 
 /// The service's own words (`docs/api.md`, 「The service's own words」).

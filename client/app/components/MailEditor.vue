@@ -32,8 +32,8 @@
           </UTooltip>
           <template #content>
             <div class="flex flex-wrap gap-1 p-2">
-              <UTooltip :text="$t('common.label.default')">
-                <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-format-color-reset" :aria-label="$t('common.label.default')" @click="editor.chain().focus().unsetColor().run()" />
+              <UTooltip :text="$t('mail.label.color_default')">
+                <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-format-color-reset" :aria-label="$t('mail.label.color_default')" @click="editor.chain().focus().unsetColor().run()" />
               </UTooltip>
               <UTooltip v-for="one in TEXT_COLORS" :key="one.value" :text="one.label">
                 <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-circle" :style="{ color: one.value }" :aria-label="one.label" @click="editor.chain().focus().setColor(one.value).run()" />

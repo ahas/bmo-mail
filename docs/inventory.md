@@ -29,7 +29,7 @@ work knows what the old behaviour was held to. The repository carries the person
 - **The server is ported to Rust,** one crate split into modules, keeping what each old module did. The
   old server ran inside the console's Nuxt server; this service stands on its own, behind its own token
   (`docs/api.md`).
-- **The screen is copied** as the console plugin bundle in `client/`, a Nuxt layer on bmo-ui, its imports
+- **The screen is copied** as the console plugin bundle in `client/`, built on bmo-ui, its imports
   and its routes re-pointed (`docs/api.md`, 「The console plugin bundle」).
 - **`docs/mail.md` is carried** and stated for this repository: its settings, store and event stream in
   place of the console's environment, the archive's tables and the console's plugin.

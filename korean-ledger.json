@@ -1,6 +1,4 @@
 {
-  "client/i18n/locales/ko.json": 318,
   "src/imap/conversation.rs": 1,
-  "src/writing/compose.rs": 2,
-  "wording/ko.toml": 10
+  "src/writing/compose.rs": 2
 }
