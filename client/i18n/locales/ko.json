@@ -1,29 +1,4 @@
 {
-  "common": {
-    "action": {
-      "add": "추가",
-      "cancel": "취소",
-      "close": "닫기",
-      "collapse": "축소",
-      "expand": "확장",
-      "more": "더보기",
-      "move_up": "위로",
-      "refresh": "새로고침",
-      "save": "저장",
-      "send": "보내기"
-    },
-    "error": {
-      "not_sent": "보내지 못했습니다.",
-      "save_failed": "저장하지 못했습니다."
-    },
-    "label": {
-      "code": "코드",
-      "count": "{n}개",
-      "default": "기본",
-      "link": "링크",
-      "none": "없음"
-    }
-  },
   "mail": {
     "account_field": {
       "imapHost": "IMAP 서버",
@@ -94,6 +69,7 @@
       "rule_delete": "규칙 삭제",
       "rule_off": "규칙 끄기",
       "rule_on": "규칙 켜기",
+      "send": "보내기",
       "settings": "메일 설정",
       "show_all": "전체 보기",
       "show_images": "이미지 표시",
@@ -208,7 +184,9 @@
       "bold": "굵게",
       "bullet_list": "글머리 목록",
       "cc": "참조",
+      "code_block": "코드",
       "color_blue": "파랑",
+      "color_default": "기본",
       "color_gray": "회색",
       "color_green": "초록",
       "color_orange": "주황",

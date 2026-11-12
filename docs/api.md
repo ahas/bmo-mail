@@ -23,11 +23,12 @@ flowchart TD
   the events under `x-events`, the harness plugin under `x-harness` and its tools under `x-tools`. Each route
   states its own part of it beside its answer. `cargo run --example openapi` prints the document as the
   repository keeps it.
-- **Every route, `GET /health` among them, needs `Authorization: Bearer <token>`,** the token of the settings;
-  a missing or wrong token is answered 401 `unauthorized`. An empty token lets no caller in.
+- **Every route, `GET /health` among them, needs `Authorization: Bearer <token>`:** the service's token,
+  `server.token`, on every route, or the console's credential, `console.token`, on the routes the screen uses
+  alone. A missing or wrong token is answered 401 `unauthorized`, and an empty one lets no caller in. The
+  console face's own routes take the console's credential alone (「The console plugin bundle」).
 - **Every route the screen uses needs `Owner-Role` and `Owner-Key`,** the headers bmo-ui's console plugin
-  contract names (「Who checks what」): every route but `GET /health`, `GET /console-manifest` and
-  `GET /console-words`, the bundle's module and stylesheet among them. `Owner-Role` is the role the reader
+  contract names (「Who checks what」): every route here but `GET /health`. `Owner-Role` is the role the reader
   holds, `administrator` or `member`, and either allows the screen's role, `member`; `Owner-Key` is the opaque
   key of the owner the caller acts for. A call whose role is missing or not one of the two, or whose owner key is
   missing or empty, is refused 403 `forbidden`; an owner key past 200 characters is refused 400 `bad-request`.
@@ -51,7 +52,8 @@ flowchart TD
   console's word, the bearer token being what makes them the console's: the role compared against the screen's,
   the owner key an opaque string of 1 to 200 characters, compared exactly, never parsed and never answered. Every account stands under
   the key that added it, and a key reaches only its own: another owner's account is answered as if it did not
-  stand. A caller holding the token may act for any key, so the token is the console's and the harness's alone.
+  stand. A caller holding a token may act for any key, so the service's token is the harness's alone and the
+  console's credential the console's alone.
 - **The administrator's key** is the setting `accounts.administrator`. The accounts imported from the accounts
   file are that key's (`docs/mail.md`, 「The accounts file, imported once」), and the harness plugin acts for
   it unless it is told another (「The harness plugin」). The key is an owner key like any other; no route turns
@@ -438,8 +440,8 @@ It calls no other service.
   never one of this machine's own networks (`docs/mail.md`, 「Sender avatars」).
 - **The staging folder** the setting `staging.dir` names, where a file posted to a draft waits until the draft
   carrying it is saved.
-- **The console folder** the setting `console.dir` names, the built bundle it serves, read once at start
-  (「The console plugin bundle」).
+- **The console folder** the setting `console.dir` names, the bundle build's folder it serves, read once at
+  start (「The console plugin bundle」).
 
 ## Settings
 
@@ -460,65 +462,43 @@ the settings folder.
 | `staging` | `dir` | the folder posted files wait in | `mail-staging` |
 | `wording` | `language` | the language of 「The service's own words」 | `ko` |
 | `wording` | `time_zone` | the time zone dates are written in | `Asia/Seoul` |
-| `console` | `dir` | the folder holding the built console bundle: `module.js`, `style.css` and `words.json` | `console` |
+| `console` | `dir` | the bundle build's folder: `module.js`, `style.css`, `words.json`, `layer.json` and every chunk the module loads | `console` |
+| `console` | `token` | the console's credential, which reaches the console face and the routes the screen uses | none: no console face is served |
 
 ## The console plugin bundle
 
-`bmo-mail-client`, in `client/`: the mail screen as a console bundle on bmo-ui, by bmo-ui's console plugin
-contract (bmo-ui's `docs/console-bundles.md`). The service answers the bundle's manifest and serves its module,
-its stylesheet and its words; a console reads the manifest while it runs and loads the screen from it.
+`client/` holds the mail screen as a console bundle on bmo-ui. bmo-ui's `docs/console-bundles.md` is the
+contract it keeps, and bmo-chat's `docs/console-face.md` is how the service keeps it: the service serves its
+console face through bmo-chat's `bmo-console-face` crate, which answers the manifest and the bundle's files and
+guards them, and this section states only what mail supplies and chooses within the contract.
 
-| Method and path | Answers | Needs |
-|---|---|---|
-| `GET /console-manifest` | the manifest | the token |
-| `GET /console-words` | the bundle's words, each locale's tree under the locale's code | the token |
-| `GET /console-bundle/{file}` | the module or the stylesheet, at the name the manifest gives it | the token, the role and the owner key |
-
-- **The manifest** keeps the shape bmo-ui's `console-manifest` module states but its `layer`, which it does not
-  name while the console it is served to reads manifests without one, and names: the bundle `mail`, its
+- **The declaration** is `src/console.json`, every manifest field the service decides: the bundle `mail`, its
   menu title `mail.title.screen`, the icon `i-material-symbols-mail-outline`, its screens under `/mail`, the
-  service `mail`, the module's, the stylesheet's and the words' paths, the API prefix `/`, the role `member`,
-  the owner key asked, the event stream read, no WebSocket, the notice kind `message.created`, and the sidebar
-  count a console reads from `GET /summary`'s `unreadCount`. A service whose console folder holds no module or no
-  words has no bundle to offer and answers the manifest 404 `not-found`, which a console reads as a service with
-  no screen.
-- **The module's and the stylesheet's names follow their bytes:** `module.<hash>.js` and `style.<hash>.css`
-  under `/console-bundle/`, the hash the first sixteen hex digits of the SHA-256 of the file's bytes as the
-  service read them at start. Any other name is answered 404 `not-found`. Both are answered with
-  `x-content-type-options: nosniff` and `cache-control: private, max-age=31536000, immutable`, the module as
-  `text/javascript` and the stylesheet as `text/css`; the words are answered as JSON with
-  `cache-control: no-cache`.
-- **What the files are:** `bun run bundle` in `client/` builds the three from the screen's own sources. The
-  module is an ECMAScript module whose default export is the screen's routes under `/mail`; it imports `vue`,
-  `vue-router`, `vue-i18n`, `nuxt/app`, `@nuxt/ui` and bmo-ui by each package's own path and carries everything
-  else, bmo-text's `web-address`, the TipTap extensions and DOMPurify among them. The stylesheet is the
-  utility classes the screen's own sources use, on bmo-ui's tokens, and the styles of its components. The words
-  are the language pack, `client/i18n/locales/`, one JSON object keyed by locale. The build writes them to
-  `client/.output/console`, or to the folder `BMO_MAIL_CONSOLE_OUT` names; a deployment builds them into its
-  release's `console/`, the folder the setting `console.dir` names by default.
+  service `mail`, the API prefix `/`, the role `member`, the owner key asked, the event stream read, no
+  WebSocket, the notice kind `message.created`, and the sidebar count read from `GET /summary`'s `unreadCount`.
+  It names no share read.
+- **The bundle build's folder** is the setting `console.dir`. `bun run bundle` in `client/` builds the screen
+  with bmo-ui's bundle build into `client/.output/console`, or the folder `BMO_MAIL_CONSOLE_OUT` names: the
+  module `module.js`, whose default export is the screen's routes under `/mail`, the stylesheet `style.css`,
+  the words `words.json` and the build's `layer.json`. A deployment builds them into its release's
+  `console/`, the folder `console.dir` names by default.
+- **The console's credential** is the setting `console.token`. A service whose console folder holds no build,
+  or whose settings name no console credential, serves no console face, which a console reads as a service with
+  no screen; a build or a declaration the face refuses stops the service at start, naming what is at fault.
+- **The layer it is built on** is the bmo-ui release bmo-chat's `shared-versions.toml` pins, vendored in
+  `client/vendor/` as the release verb wrote it. The bundle's own install, typecheck and build use that copy,
+  and read bmo-text's TypeScript package from the base library's own folder.
+- **What it depends on beside bmo-ui:** bmo-text's `web-address`, for the links a plain-text body shows, the
+  TipTap extensions its editor is built with, and DOMPurify, all carried in the module.
 - **What it calls:** the routes above, at the address bmo-ui's relay module answers for the service `mail`,
-  and the event stream the same way. Every address it makes is complete as given, under the console app's base
-  path, for a call, a picture's source, a frame and the event stream alike. It reads the bodies through the
-  types generated from `docs/openapi.json`.
-- **The owner key and the role are not the bundle's.** The bundle calls the routes with neither header; the
-  console sets both on each request it relays and on the event stream it relays, from the person signed in
-  (「Who checks what」).
-- **A console that builds its bundles in** takes the screen from the pack instead: `bun pm pack` packs
-  `client/` into `bmo-mail-client-<version>.tgz`, a Nuxt layer on bmo-ui holding the screen's pages, its
-  components, its language pack and `client/console-bundle.json`, the declaration such a console attaches the
-  layer by. The declaration names the same bundle, title, icon, screen path, service, event stream, notice kinds
-  and sidebar count as the manifest, which the manifest's test holds. Such a console depends on the pack and on
-  bmo-ui at the version the pack's peer names, and extends the layer in its Nuxt configuration.
-- **What it depends on beside bmo-ui:** bmo-text's `web-address`, for the links a plain-text body shows, and
-  the TipTap extensions its editor is built with. For the bundle's own install, typecheck and build a packed
-  copy of bmo-ui stands in `client/vendor/`, and bmo-text's TypeScript package is read from the base library's
-  own folder.
-- **Wording:** every word the screen shows is the bundle's language pack, `client/i18n/locales/ko.json`, one
-  JSON file to a locale, under the bundle's namespace: the screen's name under `mail.title.screen`, and the
-  words a console raises a notice of a declared kind in under `mail.notice.<kind>`, a `title` and a `body` that
-  takes the message's `{from}` and `{subject}`. The screen shows a refusal by the key `mail.error.<code>`, a
-  kind of account by `mail.account_kind.<kind>` and each of its fields by `mail.account_field.<field>`, so a
-  kind the service declares is named without the screen knowing it.
+  and the event stream the same way, its bodies read through the types generated from `docs/openapi.json`.
+- **Wording:** the words are the language pack, `client/i18n/locales/ko.json`, one JSON file to a locale,
+  holding the bundle's namespace `mail` alone; the words under `common` are the console's. The screen's name
+  stands under `mail.title.screen`, and the words a console raises a notice of a declared kind in under
+  `mail.notice.<kind>`, a `title` and a `body` that takes the message's `{from}` and `{subject}`. The screen
+  shows a refusal by the key `mail.error.<code>`, a kind of account by `mail.account_kind.<kind>` and each of
+  its fields by `mail.account_field.<field>`, so a kind the service declares is named without the screen
+  knowing it.
 
 ## Versions
 

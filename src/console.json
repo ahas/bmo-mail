@@ -1,0 +1,14 @@
+{
+  "name": "mail",
+  "title": "mail.title.screen",
+  "icon": "i-material-symbols-mail-outline",
+  "screenPath": "/mail",
+  "serviceName": "mail",
+  "apiPrefix": "/",
+  "role": "member",
+  "ownerKey": true,
+  "events": true,
+  "websocket": false,
+  "pushKinds": ["message.created"],
+  "sidebarUnread": { "path": "/summary", "field": "unreadCount" }
+}

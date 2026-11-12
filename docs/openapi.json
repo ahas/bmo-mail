@@ -3,7 +3,7 @@
   "info": {
     "title": "bmo-mail",
     "version": "0.1.0-rev.3",
-    "description": "Mailboxes read, written and watched behind one API, each account an owner's and of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings, and the console bundle the mail screen is. Every route the screen uses takes the role the reader holds in `Owner-Role` and the opaque owner key the caller acts for in `Owner-Key`; a route that reads or changes an account reaches that owner's accounts alone. A mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`."
+    "description": "Mailboxes read, written and watched behind one API, each account an owner's and of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings; the console face beside them is bmo-chat's and stated there. Every route the screen uses takes the role the reader holds in `Owner-Role` and the opaque owner key the caller acts for in `Owner-Key`; a route that reads or changes an account reaches that owner's accounts alone. A mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`."
   },
   "servers": [
     {
@@ -39,9 +39,6 @@
     },
     {
       "name": "avatars"
-    },
-    {
-      "name": "console"
     }
   ],
   "paths": {
@@ -3147,132 +3144,6 @@
         ]
       }
     },
-    "/console-bundle/{file}": {
-      "get": {
-        "operationId": "readConsoleBundleByFile",
-        "tags": [
-          "console"
-        ],
-        "summary": "The console bundle's module or stylesheet.",
-        "responses": {
-          "200": {
-            "description": "The console bundle's module or stylesheet.",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "type": "string",
-                  "contentEncoding": "binary"
-                }
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        },
-        "x-codes": [
-          "unauthorized",
-          "forbidden",
-          "bad-request",
-          "not-found",
-          "failed"
-        ],
-        "parameters": [
-          {
-            "name": "file",
-            "in": "path",
-            "required": true,
-            "description": "The module's or the stylesheet's name, as the manifest gives it.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Owner-Role",
-            "in": "header",
-            "required": true,
-            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "administrator",
-                "member"
-              ]
-            }
-          },
-          {
-            "name": "Owner-Key",
-            "in": "header",
-            "required": true,
-            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
-          }
-        ]
-      }
-    },
-    "/console-manifest": {
-      "get": {
-        "operationId": "readConsoleManifest",
-        "tags": [
-          "console"
-        ],
-        "summary": "The console bundle's manifest.",
-        "responses": {
-          "200": {
-            "description": "The console bundle's manifest.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConsoleManifest"
-                }
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        },
-        "x-codes": [
-          "unauthorized",
-          "not-found",
-          "failed"
-        ]
-      }
-    },
-    "/console-words": {
-      "get": {
-        "operationId": "readConsoleWords",
-        "tags": [
-          "console"
-        ],
-        "summary": "The console bundle's words, each locale's tree under the locale's code.",
-        "responses": {
-          "200": {
-            "description": "The console bundle's words, each locale's tree under the locale's code.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        },
-        "x-codes": [
-          "unauthorized",
-          "not-found",
-          "failed"
-        ]
-      }
-    },
     "/events": {
       "get": {
         "operationId": "listEvents",
@@ -5100,126 +4971,6 @@
           "returnTo"
         ],
         "description": "An authorization to start."
-      },
-      "ConsoleManifest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The bundle's name, in kebab-case: its words' namespace."
-          },
-          "title": {
-            "type": "string",
-            "description": "The key, in the bundle's words, the console's menu names the screen by."
-          },
-          "icon": {
-            "type": "string",
-            "description": "The icon drawn beside that name."
-          },
-          "screenPath": {
-            "type": "string",
-            "description": "The path the bundle's screens stand under."
-          },
-          "serviceName": {
-            "type": "string",
-            "description": "The service's name, which a console relays it under."
-          },
-          "bundle": {
-            "type": "string",
-            "description": "The path the module is answered at."
-          },
-          "stylesheet": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The path the stylesheet is answered at, where the bundle has one."
-          },
-          "words": {
-            "type": "string",
-            "description": "The path the words are answered at."
-          },
-          "apiPrefix": {
-            "type": "string",
-            "description": "The path every call the screens make stands under."
-          },
-          "role": {
-            "$ref": "#/components/schemas/Role",
-            "description": "The least role a reader holds to open the screen."
-          },
-          "ownerKey": {
-            "type": "boolean",
-            "description": "Whether every call the screens make needs the reader's owner key."
-          },
-          "events": {
-            "type": "boolean",
-            "description": "Whether the screens read the event stream through the console."
-          },
-          "websocket": {
-            "type": "boolean",
-            "description": "Whether the screens open a WebSocket through the console."
-          },
-          "pushKinds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The event kinds a console may raise as a notice to a reader not on the screen."
-          },
-          "sidebarUnread": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SidebarUnread"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The route a console reads the sidebar's unread count from, where the bundle declares one."
-          }
-        },
-        "required": [
-          "name",
-          "title",
-          "icon",
-          "screenPath",
-          "serviceName",
-          "bundle",
-          "words",
-          "apiPrefix",
-          "role",
-          "ownerKey",
-          "events",
-          "websocket",
-          "pushKinds"
-        ],
-        "description": "The console bundle's manifest, as bmo-ui's `console-manifest` module states its shape (`docs/api.md`, 「The\nconsole plugin bundle」)."
-      },
-      "Role": {
-        "type": "string",
-        "enum": [
-          "administrator",
-          "member"
-        ],
-        "description": "A role a reader holds, as bmo-ui's console plugin contract names it: an administrator holds every role a\nmember holds."
-      },
-      "SidebarUnread": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "The path of the service's API the summary is answered at."
-          },
-          "field": {
-            "type": "string",
-            "description": "The answer's field holding the count."
-          }
-        },
-        "required": [
-          "path",
-          "field"
-        ],
-        "description": "The route a console reads the sidebar's unread count from, and the field of its answer that holds the count. The\ncount is the unread messages of every reachable inbox together (`docs/api.md`, 「The console plugin bundle」)."
       },
       "EventPage": {
         "type": "object",

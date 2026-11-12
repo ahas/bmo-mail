@@ -443,57 +443,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/console-bundle/{file}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The console bundle's module or stylesheet. */
-        get: operations["readConsoleBundleByFile"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/console-manifest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The console bundle's manifest. */
-        get: operations["readConsoleManifest"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/console-words": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The console bundle's words, each locale's tree under the locale's code. */
-        get: operations["readConsoleWords"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/events": {
         parameters: {
             query?: never;
@@ -1066,58 +1015,6 @@ export interface components {
             kind: string;
             /** @description Where the provider sends the browser back to. */
             returnTo: string;
-        };
-        /**
-         * @description The console bundle's manifest, as bmo-ui's `console-manifest` module states its shape (`docs/api.md`, 「The
-         *     console plugin bundle」).
-         */
-        ConsoleManifest: {
-            /** @description The bundle's name, in kebab-case: its words' namespace. */
-            name: string;
-            /** @description The key, in the bundle's words, the console's menu names the screen by. */
-            title: string;
-            /** @description The icon drawn beside that name. */
-            icon: string;
-            /** @description The path the bundle's screens stand under. */
-            screenPath: string;
-            /** @description The service's name, which a console relays it under. */
-            serviceName: string;
-            /** @description The path the module is answered at. */
-            bundle: string;
-            /** @description The path the stylesheet is answered at, where the bundle has one. */
-            stylesheet?: string | null;
-            /** @description The path the words are answered at. */
-            words: string;
-            /** @description The path every call the screens make stands under. */
-            apiPrefix: string;
-            /** @description The least role a reader holds to open the screen. */
-            role: components["schemas"]["Role"];
-            /** @description Whether every call the screens make needs the reader's owner key. */
-            ownerKey: boolean;
-            /** @description Whether the screens read the event stream through the console. */
-            events: boolean;
-            /** @description Whether the screens open a WebSocket through the console. */
-            websocket: boolean;
-            /** @description The event kinds a console may raise as a notice to a reader not on the screen. */
-            pushKinds: string[];
-            /** @description The route a console reads the sidebar's unread count from, where the bundle declares one. */
-            sidebarUnread?: components["schemas"]["SidebarUnread"] | null;
-        };
-        /**
-         * @description A role a reader holds, as bmo-ui's console plugin contract names it: an administrator holds every role a
-         *     member holds.
-         * @enum {string}
-         */
-        Role: "administrator" | "member";
-        /**
-         * @description The route a console reads the sidebar's unread count from, and the field of its answer that holds the count. The
-         *     count is the unread messages of every reachable inbox together (`docs/api.md`, 「The console plugin bundle」).
-         */
-        SidebarUnread: {
-            /** @description The path of the service's API the summary is answered at. */
-            path: string;
-            /** @description The answer's field holding the count. */
-            field: string;
         };
         /** @description A page of a list. */
         EventPage: {
@@ -2452,79 +2349,6 @@ export interface operations {
                 };
                 content: {
                     "application/octet-stream": string;
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    readConsoleBundleByFile: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
-                "Owner-Role": "administrator" | "member";
-                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
-                "Owner-Key": string;
-            };
-            path: {
-                /** @description The module's or the stylesheet's name, as the manifest gives it. */
-                file: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The console bundle's module or stylesheet. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/octet-stream": string;
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    readConsoleManifest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The console bundle's manifest. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsoleManifest"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    readConsoleWords: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The console bundle's words, each locale's tree under the locale's code. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
             default: components["responses"]["Error"];

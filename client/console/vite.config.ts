@@ -6,26 +6,23 @@ import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
 import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
+import { consoleBundle } from "bmo-ui/bundle/console-bundle.js";
 import { defineConfig } from "vite";
 
 import type { Plugin } from "vite";
 
 // The mail screen as the browser module a console loads (docs/api.md, "The console plugin bundle"), built
-// from the same sources the Nuxt layer packs. Every import of what a console shares — `vue`, `vue-router`,
-// `vue-i18n`, `nuxt/app`, `@nuxt/ui` and bmo-ui — stays an import of the package's own path, which the
-// console resolves to its copy; everything else is carried in the module. The names Nuxt imports and
-// registers by itself are read from the declarations `nuxi prepare` writes, so the module imports
-// exactly what the layer would have, each from its package's own path. The output is three files: the
-// module, its stylesheet and its words, which the service answers.
+// with bmo-ui's bundle build, which leaves every import of a library the console shares as an import of the
+// package's own path and writes the layer the bundle was built on; everything else is carried in the
+// module. The names Nuxt imports and registers by itself are read from the declarations `nuxi prepare`
+// writes, so the module imports exactly what the screen's sources use, each from its package's own path.
+// The output is the module, its stylesheet, its words and the layer, which the service answers.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const generated = join(root, ".nuxt");
 const packages = join(root, "node_modules");
 const out = process.env.BMO_MAIL_CONSOLE_OUT ?? join(root, ".output", "console");
-
-// What a console shares with every bundle, by the package's own path.
-const SHARED = /^(?:vue|vue-router|vue-i18n|nuxt\/app|@nuxt\/ui(?:\/.*)?|bmo-ui\/.+)$/;
 
 // The page macro Nuxt strips from a page as it builds; the route's meta stands in the module's routes.
 const PAGE_MACRO = join(here, "page-meta.ts");
@@ -191,6 +188,7 @@ export default defineConfig({
   root,
   logLevel: "warn",
   plugins: [
+    consoleBundle(),
     sharedOnly(),
     vue({ isProduction: true }),
     AutoImport({
@@ -234,7 +232,6 @@ export default defineConfig({
       cssFileName: "style"
     },
     rollupOptions: {
-      external: (id) => SHARED.test(id),
       output: { codeSplitting: false }
     }
   }

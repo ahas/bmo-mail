@@ -101,7 +101,7 @@ export function editorToolbar(t: Translate): EditorToolbarItem[][] {
           { kind: "bulletList", label: t("mail.label.bullet_list"), icon: "i-material-symbols-format-list-bulleted" },
           { kind: "orderedList", label: t("mail.label.ordered_list"), icon: "i-material-symbols-format-list-numbered" },
           { kind: "blockquote", label: t("mail.label.quote"), icon: "i-material-symbols-format-quote" },
-          { kind: "codeBlock", label: t("common.label.code"), icon: "i-material-symbols-code" },
+          { kind: "codeBlock", label: t("mail.label.code_block"), icon: "i-material-symbols-code" },
         ],
       },
     ],

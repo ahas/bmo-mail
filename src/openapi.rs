@@ -20,7 +20,7 @@ const SCHEMAS: &str = "/components/schemas";
 
 const DESCRIPTION: &str = "Mailboxes read, written and watched behind one API, each account an owner's and \
   of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, \
-  rules, spam senders and settings, and the console bundle the mail screen is. Every route the screen uses \
+  rules, spam senders and settings; the console face beside them is bmo-chat's and stated there. Every route the screen uses \
   takes the role the reader holds in `Owner-Role` and the opaque owner key the caller acts for in `Owner-Key`; \
   a route that reads or changes an account reaches that owner's accounts alone. A mailbox's members nest under its \
   account. Bodies are JSON with camelCase keys; times are integers of epoch \
@@ -234,7 +234,6 @@ pub fn openapi() -> Value {
       { "name": "accounts" },
       { "name": "summary" },
       { "name": "avatars" },
-      { "name": "console" },
     ],
     "paths": paths,
     "components": {

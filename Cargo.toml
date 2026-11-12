@@ -26,6 +26,7 @@ axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
 # Base64 bodies, read as far as their whole groups go; a file posted to a draft; a message's and a thread's
 # opaque ids.
 base64 = "0.23.1"
+bmo-console-face = { path = "../../base/chat/console-face" }
 # Dates: an IMAP internal date, a header's date, a search's day, and a date written in the service's
 # language.
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "unstable-locales"] }

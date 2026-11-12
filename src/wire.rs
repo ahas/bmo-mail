@@ -78,55 +78,6 @@ impl Role {
   }
 }
 
-/// The route a console reads the sidebar's unread count from, and the field of its answer that holds the count. The
-/// count is the unread messages of every reachable inbox together (`docs/api.md`, 「The console plugin bundle」).
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct SidebarUnread {
-  /// The path of the service's API the summary is answered at.
-  pub path: String,
-  /// The answer's field holding the count.
-  pub field: String,
-}
-
-/// The console bundle's manifest, as bmo-ui's `console-manifest` module states its shape (`docs/api.md`, 「The
-/// console plugin bundle」).
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ConsoleManifest {
-  /// The bundle's name, in kebab-case: its words' namespace.
-  pub name: String,
-  /// The key, in the bundle's words, the console's menu names the screen by.
-  pub title: String,
-  /// The icon drawn beside that name.
-  pub icon: String,
-  /// The path the bundle's screens stand under.
-  pub screen_path: String,
-  /// The service's name, which a console relays it under.
-  pub service_name: String,
-  /// The path the module is answered at.
-  pub bundle: String,
-  /// The path the stylesheet is answered at, where the bundle has one.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub stylesheet: Option<String>,
-  /// The path the words are answered at.
-  pub words: String,
-  /// The path every call the screens make stands under.
-  pub api_prefix: String,
-  /// The least role a reader holds to open the screen.
-  pub role: Role,
-  /// Whether every call the screens make needs the reader's owner key.
-  pub owner_key: bool,
-  /// Whether the screens read the event stream through the console.
-  pub events: bool,
-  /// Whether the screens open a WebSocket through the console.
-  pub websocket: bool,
-  /// The event kinds a console may raise as a notice to a reader not on the screen.
-  pub push_kinds: Vec<String>,
-  /// The route a console reads the sidebar's unread count from, where the bundle declares one.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub sidebar_unread: Option<SidebarUnread>,
-}
-
 /// One event of the stream.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Event {

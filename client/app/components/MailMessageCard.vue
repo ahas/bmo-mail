@@ -41,7 +41,7 @@
         <UIcon name="i-material-symbols-mark-email-read-outline" class="size-4 shrink-0 text-muted" />
         <span class="min-w-0 flex-1">{{ $t("mail.message.receipt_requested") }}</span>
         <UButton size="sm" color="neutral" variant="ghost" :label="$t('mail.action.receipt_decline')" :loading="answering === 'decline'" :disabled="answering !== null" @click="answer(false)" />
-        <UButton size="sm" color="neutral" variant="outline" :label="$t('common.action.send')" :loading="answering === 'send'" :disabled="answering !== null" @click="answer(true)" />
+        <UButton size="sm" color="neutral" variant="outline" :label="$t('mail.action.send')" :loading="answering === 'send'" :disabled="answering !== null" @click="answer(true)" />
       </div>
 
       <MailBody :message="props.message" :account="props.account" :show-images="props.showImages" />

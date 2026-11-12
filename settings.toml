@@ -31,10 +31,13 @@ key_file = ""
 dir = "mail-staging"
 
 [console]
-# The folder the built console bundle stands in: its module, its stylesheet and its words, which the service
-# serves beside its manifest (docs/api.md, 「The console plugin bundle」). A deployment builds it into its
-# release's console/; an instance run from source without it offers no bundle.
+# The bundle build's folder: the module, the stylesheet, the words and the layer it was built on, which the
+# service serves beside its manifest (docs/api.md, 「The console plugin bundle」). A deployment builds it into
+# its release's console/; an instance run from source without it offers no console face.
 dir = "console"
+# The console's credential, which reaches the console face and the routes the screen uses. A deployment names
+# it in settings.local.toml; empty, the service serves no console face.
+token = ""
 
 [wording]
 # The language of the service's own words, under wording/, and of a list's order.
