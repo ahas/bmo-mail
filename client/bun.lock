@@ -10,7 +10,7 @@
         "@tiptap/extension-text-align": "3.32.0",
         "@tiptap/extension-text-style": "3.32.0",
         "@tiptap/vue-3": "3.32.0",
-        "bmo-text": "file:../../../base/text/package",
+        "bmo-text": "file:vendor/bmo-text-0.1.0-rev.5-f5874fb.tgz",
         "dompurify": "3.4.8",
         "vue": "^3.5.24",
         "vue-router": "^5.2.0",
@@ -842,13 +842,11 @@
 
     "baseline-browser-mapping": ["baseline-browser-mapping@2.11.29", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-YeesxhUmR4h5y5V8KF8iBCqJb8YFrBJ++XBTeGcWIaQOYXGN19JM0FoiOjAhwuDoln8owMgXcWBmgHtYSkky2w=="],
 
-    "binaryen": ["binaryen@132.0.0", "", { "bin": { "wasm-as": "bin/wasm-as", "wasm2js": "bin/wasm2js", "wasm-dis": "bin/wasm-dis", "wasm-opt": "bin/wasm-opt", "wasm-merge": "bin/wasm-merge", "wasm-shell": "bin/wasm-shell", "wasm-reduce": "bin/wasm-reduce", "wasm-metadce": "bin/wasm-metadce", "wasm-ctor-eval": "bin/wasm-ctor-eval" } }, "sha512-4Usg7yEvwO3FMso3Oov6qkOOHSod1IEv+boKkh77kTljM+eNBouqCTbqWswGzbG+vDNO/b/v2C4gfEh1WgB9Lg=="],
-
     "bindings": ["bindings@1.5.0", "", { "dependencies": { "file-uri-to-path": "1.0.0" } }, "sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ=="],
 
     "birpc": ["birpc@4.2.0", "", {}, "sha512-KxgKcZPfrtzJDDALHPguGpGJUrzdgpymyiQQgzFjWreHMOpWrnFNVREr5J48x2DBh8ZVioscrV1SBkDipGiX+Q=="],
 
-    "bmo-text": ["bmo-text@file:../../../base/text/package", { "devDependencies": { "@types/bun": "^1.4.0", "binaryen": "132.0.0", "typescript": "5.9.3" } }],
+    "bmo-text": ["bmo-text@vendor/bmo-text-0.1.0-rev.5-f5874fb.tgz", {}, "sha512-C1O6+RXSYvnGELjahWwU78qX55DoFAz97CeFYKxVLG3WxfFe8wKzWhcrrSwSZ2+PhFGE1TdcHakQKgFRmPri+Q=="],
 
     "bmo-ui": ["bmo-ui@vendor/bmo-ui-0.1.0-rev.23.tgz", { "dependencies": { "@iconify-json/material-icon-theme": "^1.2.72", "@iconify-json/material-symbols": "^1.2.93", "@modelcontextprotocol/sdk": "^1.32.1", "@nuxt/ui": "^4.11.2", "@tanstack/vue-table": "8.21.3", "dayjs": "^1.11.23", "mermaid": "12.0.0", "monaco-editor": "^0.56.0", "tailwindcss": "^4.1.16", "vue": "^3.5.24", "vue-router": "^5.2.0", "zod": "^4.6.7" }, "peerDependencies": { "@nuxtjs/i18n": "^10.6.0", "nuxt": "^4.5.2", "vue-i18n": "^11.4.8" }, "bin": { "bmo-ui": "./bin/bmo-ui.ts" } }, "sha512-DMIkaAyn/Z1jneBidF7G0s8NybgqL3d24nHSFC8hjzI+jgnSO3XAcCJfURK/UUvCRcMHoYehHIgKXxQnYlQKeg=="],
 

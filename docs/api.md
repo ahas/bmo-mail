@@ -490,8 +490,10 @@ guards them, and this section states only what mail supplies and chooses within 
   or whose settings name no console credential, serves no console face, which a console reads as a service with
   no screen; a build or a declaration the face refuses stops the service at start, naming what is at fault.
 - **The layer it is built on** is the bmo-ui release bmo-chat's `shared-versions.toml` pins, vendored in
-  `client/vendor/` as the release verb wrote it. The bundle's own install, typecheck and build use that copy,
-  and read bmo-text's TypeScript package from the base library's own folder.
+  `client/vendor/` as the release verb wrote it. The bundle's own install, typecheck and build use that copy.
+- **bmo-text's TypeScript package stands in `client/vendor/` too,** packed with `bun pm pack` from a scratch
+  export (`git archive`) of bmo-text's committed main and named by the commit it was packed from, so a clone of
+  this repository installs, typechecks and builds the bundle with no other checkout beside it.
 - **What it depends on beside bmo-ui:** bmo-text's `web-address`, for the links a plain-text body shows, the
   TipTap extensions its editor is built with, and DOMPurify, all carried in the module.
 - **What it calls:** the routes above, at the address bmo-ui's relay module answers for the service `mail`,

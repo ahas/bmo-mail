@@ -45,8 +45,8 @@ local settings a deployment gives.
 (bmo-ui's `docs/console-bundles.md`) through bmo-chat's console face (`docs/api.md`, 「The console plugin
 bundle」): `bun run bundle` builds the module, the stylesheet, the words and the layer it was built on with
 bmo-ui's bundle build, from `client/console/`, and the service serves them beside the manifest its declaration
-makes. The bmo-ui release bmo-chat pins stands under `client/vendor/` for its own install, typecheck and build,
-and bmo-text's TypeScript package is read from the base library. Its bodies are typed by
+makes. The bmo-ui release bmo-chat pins and a pack of bmo-text's TypeScript package stand under `client/vendor/`
+for its own install, typecheck and build, so a clone needs no other checkout. Its bodies are typed by
 `client/shared/openapi.ts`, which `bun run openapi` generates from `docs/openapi.json`. The bundle's check is
 `bun install --frozen-lockfile && bun run typecheck` inside `client/`.
 
