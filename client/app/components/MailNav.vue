@@ -1,5 +1,5 @@
 <template>
-  <!-- The mail nav (docs/mail.md, 「The screen」): the accounts, the compose button, the folder roles
+  <!-- The mail nav (docs/mail.md, 「The screen」): the accounts, the folder roles
        with the Starred role after the inbox, the labels with their colours, the other folders, and
        the accounts and settings buttons. An entry carries its title and a mark for unread mail,
        never a count. Folded, only the icons stand, each named on hover, with the unread mark on the
@@ -10,14 +10,7 @@
        them apart. The letter is the address's own local part and the colour the whole address's,
        never the domain's logo, on which two accounts of one domain would collide. -->
   <nav class="flex min-h-0 flex-1 flex-col" :aria-label="$t('mail.aria.nav')">
-    <div class="flex shrink-0 flex-col gap-2 p-3" :class="{ 'items-center px-2': props.folded }">
-      <UTooltip v-if="props.folded" :text="$t('mail.action.compose')">
-        <UButton icon="i-material-symbols-edit-outline" square :aria-label="$t('mail.action.compose')" @click="emit('compose')" />
-      </UTooltip>
-      <UButton v-else icon="i-material-symbols-edit-outline" :label="$t('mail.action.compose')" block @click="emit('compose')" />
-    </div>
-
-    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3">
+    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain py-3">
       <ul class="flex flex-col" :aria-label="$t('mail.aria.accounts')">
         <li v-for="one in props.accounts" :key="one.name">
           <MailNavEntry
@@ -128,7 +121,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  compose: [];
   accounts: [];
   settings: [];
   fold: [folded: boolean];

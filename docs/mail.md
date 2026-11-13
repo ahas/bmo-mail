@@ -464,7 +464,7 @@ flowchart TD
   the address's local part and a view is a folder role, `starred`, `label/<id>`, `folder/<name>` or
   `search?q=`. Opening a thread is a history step, so a shared link opens the same thread.
 - **Desktop (1440px):** three regions side by side behind Splitters, each scrolling on its own:
-  1. **Mail nav** — the account switch (each account with its unread mark), compose, the folder roles,
+  1. **Mail nav** — the account switch (each account with its unread mark), the folder roles,
      starred, the labels with their colours, the other folders, and the accounts and settings buttons. It
      folds to icons; folded, the unread mark is drawn over its row's icon rather than beside it, so every
      row's icon stands on one centre whether it carries a mark or not. An account stands as its own
@@ -511,6 +511,9 @@ flowchart TD
   - At the right end: the range shown (`1–50 / 1,213`, tabular) with previous and next. In a list
     narrower than its cells need, the range steps aside while anything is chosen, so every action
     of the selection stays in view.
+  - Last, in a cell of its own at the far right: compose, the screen's one create button (bmo-ui's
+    `docs/components.md`, 「Creating」), a grey icon whose tooltip names it and its key. Compose is
+    made from this button and from nowhere else on the screen.
 - **A list row on one line** stands in the columns the header names: a leading cell holding the
   checkbox, the star, the unread mark and the sender's avatar; the sender with the thread's count;
   the labels with the subject and snippet; the attachment mark; and the date. A row's words are cut
@@ -556,12 +559,17 @@ flowchart TD
     menu with the rest, and end choosing at the far end. The checkbox is the first thing in the row,
     so it stands on the same vertical line as the marks down the rows it speaks for, and it is the
     same one the wide toolbar carries, so the whole page is taken or given up at either width.
-  - Compose is a button fixed at the bottom right, and the list keeps room at its foot for it, so
-    the last row is never under it however far down the list is read. The composer is a full-height
-    bottom drawer, and Enter in its body makes a new line.
+  - Compose is the same create button, floating at the bottom right while no thread stands over
+    the list and nothing is being chosen. The list pads the scrolling end of its rows by the layer's
+    `--bmo-create-room`, so the last row is never under it however far down the list is read. The
+    composer is a full-height bottom drawer, and Enter in its body makes a new line.
+- **With no account yet** the screen is a one-line empty state saying so, and its one create button
+  adds an account instead of composing, at the right end of a row of its own over that line on a wide
+  screen and floating on a phone; there is nothing to compose from until an account stands.
 - **The accounts** are one modal, opened from the mail nav's accounts button and, where the owner has
-  no account yet, from the empty state; on a phone it is a bottom drawer. It lists the owner's own
-  accounts, each with its kind and address and a remove action that asks first, and adds one:
+  no account yet, from the empty state's create button; on a phone it is a bottom drawer. It lists
+  the owner's own accounts, each with its kind and address and a remove action that asks first, and
+  adds one:
   - The kinds offered are the ones the service declares; the screen names a kind and each of its
     fields by the words its pack holds under that name, and knows nothing else of any kind.
   - A kind that signs in with a password draws a form from its declared fields: the address, a name
@@ -578,9 +586,10 @@ flowchart TD
   moved or removed. The signature is written in the same editor the body is, so a picture or a
   table goes into it; images says whether a message's outside pictures are shown as it opens or held
   behind the bar over the body.
-- **Keyboard (desktop only):** `c` compose, `/` search, `j` and `k` next and previous, `x` select,
-  `s` star, `#` trash, and in a thread `r` reply, `a` reply to all, `f` forward. None fires inside
-  a text field.
+- **Keyboard (desktop only):** `c` compose (the create button's key, so it presses only while
+  nothing floats over the screen, and adds an account where the empty state stands), `/` search,
+  `j` and `k` next and previous, `x` select, `s` star, `#` trash, and in a thread `r` reply, `a`
+  reply to all, `f` forward. None fires inside a text field.
 - The folder list shows a status mark for unread mail, not a count; the count of the open folder
   stands in the list toolbar's range.
 - **Every word the screen shows** is the bundle's own language pack (`docs/api.md`, 「The console

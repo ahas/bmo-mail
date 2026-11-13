@@ -308,12 +308,14 @@ export function labelsState(keys: ReadonlySet<string>, conversations: readonly M
   return { all, some };
 }
 
+// The key that presses the screen's one create button, which the button itself answers.
+export const CREATE_KEY = "c";
+
 // A key the mail screen answers on a desktop, and what it does. A key typed into a field is the
 // field's, never a shortcut; so is one held with a modifier.
-export type MailShortcut = "compose" | "search" | "next" | "previous" | "select" | "star" | "trash" | "reply" | "reply-all" | "forward";
+export type MailShortcut = "search" | "next" | "previous" | "select" | "star" | "trash" | "reply" | "reply-all" | "forward";
 
 const SHORTCUTS: Record<string, MailShortcut> = {
-  c: "compose",
   "/": "search",
   j: "next",
   k: "previous",

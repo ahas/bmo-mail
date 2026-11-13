@@ -10,9 +10,15 @@
     </template>
 
     <template #body>
-      <div v-if="accounts !== null && accounts.length === 0" class="flex flex-col items-center gap-3 p-6">
-        <p class="text-center text-sm text-muted">{{ $t("mail.status.no_accounts") }}</p>
-        <UButton icon="i-material-symbols-add" :label="$t('mail.action.account_add')" @click="accountsOpen = true" />
+      <!-- With no account there is nothing to compose from, so the screen's one create button adds
+           an account instead (docs/mail.md, 「The screen」): at the right end of a row of its own on a
+           wide screen, floating on a phone, where no row is drawn for it; under it a one-line empty state. -->
+      <div v-if="accounts !== null && accounts.length === 0" class="flex min-h-0 flex-1 flex-col">
+        <ToolBar v-if="!narrow" :label="$t('mail.aria.accounts')">
+          <CreateButton class="ms-auto" :label="$t('mail.action.account_add')" :shortcut="CREATE_KEY" @click="accountsOpen = true" />
+        </ToolBar>
+        <CreateButton v-else :label="$t('mail.action.account_add')" :shortcut="CREATE_KEY" @click="accountsOpen = true" />
+        <p class="p-6 text-center text-sm text-muted">{{ $t("mail.status.no_accounts") }}</p>
       </div>
 
       <!-- The screen's frame stands while the accounts are read, the list keeping its own place
@@ -50,7 +56,13 @@
             @unread-only="onlyUnread"
             @nav="navDrawer = true"
             @stop-choosing="stopChoosing"
-          />
+          >
+            <!-- It floats on a phone, so it stands only while the list is what is read: not under a
+                 thread, and never while rows are being chosen, when the list's row holds no cell for it. -->
+            <template #create="{ cellClass }">
+              <CreateButton v-if="place?.thread == null" :class="cellClass" :label="$t('mail.action.compose')" :shortcut="CREATE_KEY" @click="compose" />
+            </template>
+          </MailList>
 
           <div v-if="place !== null && place.thread !== null" class="absolute inset-0 z-30 flex min-h-0 flex-col bg-default">
             <MailThread
@@ -67,15 +79,6 @@
             />
           </div>
 
-          <UButton
-            v-if="place?.thread == null && !choosing"
-            class="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 shadow-lg"
-            size="xl"
-            icon="i-material-symbols-edit-outline"
-            :label="$t('mail.action.compose')"
-            @click="compose"
-          />
-
           <UDrawer v-model:open="navDrawer" :title="$t('mail.label.folders')" :ui="FULL_SHEET">
             <template #body>
               <MailNav
@@ -88,7 +91,6 @@
                 :unread="unreadByAccount"
                 :folded="false"
                 :foldable="false"
-                @compose="navDrawer = false; compose()"
                 @accounts="navDrawer = false; accountsOpen = true"
                 @settings="navDrawer = false; settingsOpen = true"
                 @navigated="navDrawer = false"
@@ -126,7 +128,6 @@
                 :unread="unreadByAccount"
                 :folded="navFolded"
                 :foldable="true"
-                @compose="compose"
                 @accounts="accountsOpen = true"
                 @settings="settingsOpen = true"
                 @fold="foldNav"
@@ -156,7 +157,11 @@
                 @page="goToPage"
                 @search="search"
                 @unread-only="onlyUnread"
-              />
+              >
+                <template #create="{ cellClass }">
+                  <CreateButton :class="cellClass" :label="$t('mail.action.compose')" :shortcut="CREATE_KEY" @click="compose" />
+                </template>
+              </MailList>
             </div>
           </template>
 
@@ -244,7 +249,7 @@ import { useCloseGuard } from "bmo-ui/app/domain/form-save";
 import { useIsland } from "bmo-ui/app/domain/island";
 import { usePainted } from "bmo-ui/app/domain/loading";
 import { useBackClose } from "bmo-ui/app/domain/layers";
-import { mailPath, messagesOf, PAGE_MESSAGES, parseMailPath, ROLE_ICONS, ROLE_LABELS, selectBy, shortcutOf, viewFolder, viewRole, viewTitle } from "../../domain/mail";
+import { CREATE_KEY, mailPath, messagesOf, PAGE_MESSAGES, parseMailPath, ROLE_ICONS, ROLE_LABELS, selectBy, shortcutOf, viewFolder, viewRole, viewTitle } from "../../domain/mail";
 import { mailAccounts, mailApi, pageQuery, roleFolder } from "../../domain/mail-api";
 import { finishAuthorization } from "../../domain/mail-authorization";
 import { loadMailEditor } from "../../domain/mail-editor-load";
@@ -1010,9 +1015,6 @@ function onKey(event: KeyboardEvent): void {
   const current = rows[focused.value];
 
   switch (shortcut) {
-    case "compose":
-      void compose();
-      break;
     case "search":
       list.value?.focusSearch();
       break;

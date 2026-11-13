@@ -211,7 +211,7 @@
           </UDropdownMenu>
         </div>
 
-        <div v-if="props.narrow || props.selected.size === 0 || !compactRows" class="ms-auto">
+        <div v-if="rangeShown" class="ms-auto">
           <!-- A count is a claim, so before the list has come back its place holds a figure's bar
                rather than a nought. -->
           <SkeletonBar v-if="props.conversations === null" class="inline-block h-4 w-16 align-middle" />
@@ -223,6 +223,11 @@
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-chevron-right" :aria-label="$t('mail.action.next')" :disabled="!props.more" @click="emit('page', 1)" />
           </UTooltip>
         </div>
+
+        <!-- The screen's one create button, a cell of its own at the far right. The screen hands it
+             in, since what it makes and what a press does are the screen's; it is told the class
+             that puts its cell at the right end where the range has stepped aside. -->
+        <slot name="create" :cell-class="rangeShown ? '' : 'ms-auto'" />
       </template>
     </ToolBar>
 
@@ -230,8 +235,7 @@
 
     <div
       ref="rows"
-      class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-      :class="{ 'pb-[calc(5rem+env(safe-area-inset-bottom))]': props.narrow }"
+      class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-(--bmo-create-room)"
       role="grid"
       :aria-label="$t('mail.aria.list')"
     >
@@ -390,6 +394,11 @@ const emit = defineEmits<{
   "stop-choosing": [];
 }>();
 
+defineSlots<{
+  // The screen's create button, standing last in the toolbar; its cell takes the class handed here.
+  create?: (scope: { cellClass: string }) => unknown;
+}>();
+
 const typed = ref(props.query);
 
 // The toolbar gathers by the room it has and not by the window's width: this list often stands in
@@ -448,6 +457,8 @@ const shown = computed(() => props.conversations ?? []);
 const shownKeys = computed(() => shown.value.map((one) => one.key));
 const fit = computed(() => rowFit(rowsWidth.value, widthOf("from"), widthOf("date")));
 const compactRows = computed(() => props.narrow || !fit.value.oneLine);
+// The range steps aside while anything is chosen in a list narrower than its cells need.
+const rangeShown = computed(() => props.narrow || props.selected.size === 0 || !compactRows.value);
 const state = computed(() => selectionState(props.selected, shown.value));
 const labelState = computed(() => labelsState(props.selected, shown.value));
 const inTrashOrJunk = computed(() => props.role === "trash" || props.role === "junk");
