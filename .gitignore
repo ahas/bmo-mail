@@ -4,6 +4,7 @@
 /mail-staging/
 node_modules/
 client/.nuxt/
+client/tests/host/.nuxt/
 client/.output/
 .graph/*
 !.graph/settings.toml

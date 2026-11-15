@@ -453,8 +453,8 @@ flowchart TD
 - **Reporting spam** moves the selection to spam and sets `$Junk`; its dialog can add the senders to
   the always-spam list. **Not spam** moves it back to the inbox and sets `$NotJunk`.
 - A rule can be run over the folder that is open, for the mail that came before it existed.
-- **The rules' order is set in the settings:** a rule is carried by the pointer to another place, a line
-  marking where it will land, or moved one place up or down by its buttons.
+- **The rules' order is set in the settings:** a rule is carried by the pointer to another place, a handle on
+  its left showing it can be, a line marking where it will land, or moved one place up or down by its buttons.
 
 ## The screen
 

@@ -7,8 +7,8 @@
     "prepare": "bun x nuxi prepare",
     "openapi": "openapi-typescript ../docs/openapi.json --output shared/openapi.ts",
     "bundle": "nuxi prepare && vite build --config console/vite.config.ts",
-    "typecheck": "nuxi prepare && vue-tsc --noEmit -p .nuxt/tsconfig.app.json && tsc -p console/tsconfig.json",
-    "check": "bun install --frozen-lockfile && bun run typecheck"
+    "typecheck": "nuxi prepare && vue-tsc --noEmit -p .nuxt/tsconfig.app.json && tsc -p console/tsconfig.json && tsc -p tests/tsconfig.json",
+    "check": "bun install --frozen-lockfile && bun run typecheck && bun test"
   },
   "dependencies": {
     "@nuxt/ui": "^4.11.2",
@@ -29,6 +29,7 @@
     "bmo-ui": "file:vendor/bmo-ui-0.1.0-rev.24.tgz",
     "nuxt": "^4.5.2",
     "openapi-typescript": "7.13.0",
+    "playwright-core": "1.62.1",
     "tailwindcss": "4.3.3",
     "typescript": "^5.9.3",
     "unplugin-auto-import": "21.1.0",

@@ -1,0 +1,3 @@
+[test]
+# The bundle's tests stand under tests/ alone: the browser files and what supports them.
+root = "./tests"

@@ -34,9 +34,9 @@
         <section class="flex flex-col gap-3 border-b border-default p-4" aria-labelledby="mail-settings-rules">
           <h3 id="mail-settings-rules" class="text-lg font-semibold">{{ $t("mail.title.filters") }}</h3>
           <p v-if="rules.length === 0" class="text-sm text-muted">{{ $t("mail.status.no_rules") }}</p>
-          <!-- A rule is carried by the pointer to another place in the order, a line marking where it will land; its
-               buttons move it one place for a reader without a pointer. -->
-          <ul class="flex flex-col gap-2" @dragover="ruleOver" @drop="ruleDropped">
+          <!-- A rule is carried by the pointer to another place in the order, its handle on the left, a line marking
+               where it will land; its buttons move it one place for a reader without a pointer. -->
+          <ul class="flex flex-col gap-2" @dragenter="ruleOver" @dragover="ruleOver" @drop="ruleDropped">
             <li
               v-for="(rule, index) in rules"
               :key="rule.id"
@@ -47,6 +47,7 @@
               @dragstart="carryRule($event, index)"
               @dragend="setRuleDown"
             >
+              <UIcon name="i-material-symbols-drag-indicator" class="size-5 shrink-0 text-muted" aria-hidden="true" />
               <USwitch :model-value="rule.on" :aria-label="rule.on ? $t('mail.action.rule_off') : $t('mail.action.rule_on')" @update:model-value="(on: boolean) => toggleRule(rule, on)" />
               <span class="min-w-0 flex-1 text-sm break-words">{{ ruleText(rule) }}</span>
               <UTooltip :text="$t('mail.action.move_up')">
@@ -346,7 +347,10 @@ function setRuleDown(): void {
   ruleLand.value = null;
 }
 
-/** Where the pointer stands among the rules: before the first whose middle it has not passed. */
+/**
+ * Where the pointer stands among the rules: before the first whose middle it has not passed. It is read as the
+ * pointer enters a rule as well as while it moves, since a browser says only that it entered until it moves again.
+ */
 function ruleOver(event: DragEvent): void {
   if (ruleCarried.value === null) return;
 

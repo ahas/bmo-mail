@@ -1,0 +1,16 @@
+{
+  // The browser tests and what supports them, typechecked on their own: the host they stand the screen in is a
+  // Nuxt project, typed by its own preparation, and stands outside.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": ["browser/**/*.ts", "support/**/*.ts"]
+}

@@ -156,18 +156,23 @@ function carriesMail(event: DragEvent): boolean {
   return event.dataTransfer?.types.includes(MAIL_DRAG) ?? false;
 }
 
-// What a row of the nav answers to chosen mail carried over it: nothing where the view takes none.
+// What a row of the nav answers to chosen mail carried over it: nothing where the view takes none. The row
+// is marked as the pointer enters it as well as while it moves over it, since a browser says only that it
+// entered until the pointer moves again.
 function dropOn(view: string): Record<string, unknown> {
   if (view === props.view || !(props.dropViews ?? []).includes(view)) return {};
 
+  const over = (event: DragEvent) => {
+    if (!carriesMail(event)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    dropping.value = view;
+  };
+
   return {
     class: dropping.value === view ? "rounded-md bg-primary/10 ring-1 ring-primary ring-inset" : "",
-    onDragover: (event: DragEvent) => {
-      if (!carriesMail(event)) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-      dropping.value = view;
-    },
+    onDragenter: over,
+    onDragover: over,
     onDragleave: (event: DragEvent) => {
       if ((event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) return;
       if (dropping.value === view) dropping.value = null;

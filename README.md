@@ -16,7 +16,12 @@ their routes, one owner key never reaching another's, the sealing of their secre
 import, the watcher over a dropped connection in `tests/watcher.rs`, the console face in `tests/console.rs`: the
 served manifest read through the vendored bmo-ui release's own reading and how far the console's credential and
 the service's token reach, and the screen's words in `tests/words.rs`: every key the screen writes is its own
-pack's or one the release's `wording-keys` module lists. `cargo test` runs them all. The other behaviour tests are deferred: they are written and run here once
+pack's or one the release's `wording-keys` module lists. `cargo test` runs them all. The console plugin bundle
+carries its browser tests in `client/tests/`: the screen stands on its own in a small Nuxt host there, served by
+the client's dev server and driven with the mouse in Chromium against a stand-in of the service that keeps what
+the screen changes, and `tests/browser/mail-drag.test.ts` carries a list row onto a folder and a label of the mail
+nav and a filter rule to another place, reading each result from a page loaded again. The bundle's check runs
+them after its typecheck. The other behaviour tests are deferred: they are written and run here once
 the minimal services stand on the new repositories, and `docs/inventory.md` lists what the old behaviour was
 held to. The build check is `cargo check --all-targets` and the bundle's typecheck.
 
@@ -48,7 +53,7 @@ bmo-ui's bundle build, from `client/console/`, and the service serves them besid
 makes. The bmo-ui release bmo-chat pins and a pack of bmo-text's TypeScript package stand under `client/vendor/`
 for its own install, typecheck and build, so a clone needs no other checkout. Its bodies are typed by
 `client/shared/openapi.ts`, which `bun run openapi` generates from `docs/openapi.json`. The bundle's check is
-`bun install --frozen-lockfile && bun run typecheck` inside `client/`.
+`bun run check` inside `client/`: its frozen install, its typecheck and its browser tests.
 
 ## Documents
 
