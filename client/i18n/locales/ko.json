@@ -51,6 +51,7 @@
       "merge_cells": "셀 병합",
       "minimize": "최소화",
       "move": "이동",
+      "move_down": "아래로",
       "move_to_named": "이동: {name}",
       "move_up": "위로",
       "next": "다음",

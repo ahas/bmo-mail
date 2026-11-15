@@ -34,12 +34,26 @@
         <section class="flex flex-col gap-3 border-b border-default p-4" aria-labelledby="mail-settings-rules">
           <h3 id="mail-settings-rules" class="text-lg font-semibold">{{ $t("mail.title.filters") }}</h3>
           <p v-if="rules.length === 0" class="text-sm text-muted">{{ $t("mail.status.no_rules") }}</p>
-          <ul class="flex flex-col gap-2">
-            <li v-for="(rule, index) in rules" :key="rule.id" class="flex items-center gap-2 rounded-md border border-default px-3 py-2">
+          <!-- A rule is carried by the pointer to another place in the order, a line marking where it will land; its
+               buttons move it one place for a reader without a pointer. -->
+          <ul class="flex flex-col gap-2" @dragover="ruleOver" @drop="ruleDropped">
+            <li
+              v-for="(rule, index) in rules"
+              :key="rule.id"
+              draggable="true"
+              data-rule
+              class="flex cursor-grab items-center gap-2 rounded-md border border-default px-3 py-2 active:cursor-grabbing"
+              :class="[ruleLand === index ? 'shadow-[0_-3px_0_0_var(--ui-primary)]' : '', ruleLand === rules.length && index === rules.length - 1 ? 'shadow-[0_3px_0_0_var(--ui-primary)]' : '', ruleCarried === index ? 'opacity-50' : '']"
+              @dragstart="carryRule($event, index)"
+              @dragend="setRuleDown"
+            >
               <USwitch :model-value="rule.on" :aria-label="rule.on ? $t('mail.action.rule_off') : $t('mail.action.rule_on')" @update:model-value="(on: boolean) => toggleRule(rule, on)" />
               <span class="min-w-0 flex-1 text-sm break-words">{{ ruleText(rule) }}</span>
               <UTooltip :text="$t('mail.action.move_up')">
                 <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-arrow-upward" :aria-label="$t('mail.action.move_up')" :disabled="index === 0" @click="moveRule(index, -1)" />
+              </UTooltip>
+              <UTooltip :text="$t('mail.action.move_down')">
+                <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-arrow-downward" :aria-label="$t('mail.action.move_down')" :disabled="index === rules.length - 1" @click="moveRule(index, 1)" />
               </UTooltip>
               <UTooltip :text="$t('mail.action.rule_delete')">
                 <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-delete-outline" :aria-label="$t('mail.action.rule_delete')" @click="removeRule(rule)" />
@@ -304,12 +318,63 @@ function toggleRule(rule: MailRule, on: boolean): Promise<void> {
 
 // A rule moved one place up or down: its position among the others, the rest closing up around it.
 function moveRule(index: number, by: number): Promise<void> {
+  return placeRule(index, index + by);
+}
+
+// A rule put at a place from 0 among the others, the rest closing up around it.
+function placeRule(index: number, to: number): Promise<void> {
   const rule = rules.value[index]!;
 
   return run("order", async () => {
-    await props.api.updateRule(rule.id, { position: index + 1 + by });
+    await props.api.updateRule(rule.id, { position: to + 1 });
     await reload();
   }, t("mail.error.rule_order_failed"));
+}
+
+const ruleCarried = ref<number | null>(null);
+// Where among the rules the carried one would be put down: before the rule at that index.
+const ruleLand = ref<number | null>(null);
+
+function carryRule(event: DragEvent, index: number): void {
+  event.dataTransfer?.setData("text/plain", ruleText(rules.value[index]!));
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  ruleCarried.value = index;
+}
+
+function setRuleDown(): void {
+  ruleCarried.value = null;
+  ruleLand.value = null;
+}
+
+/** Where the pointer stands among the rules: before the first whose middle it has not passed. */
+function ruleOver(event: DragEvent): void {
+  if (ruleCarried.value === null) return;
+
+  event.preventDefault();
+
+  const rows = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(":scope > [data-rule]")];
+  const at = rows.findIndex((row) => {
+    const box = row.getBoundingClientRect();
+
+    return event.clientY < box.top + box.height / 2;
+  });
+
+  ruleLand.value = at === -1 ? rows.length : at;
+}
+
+/** A rule let go where the line stood: one change of its place, none where it lands beside itself. */
+function ruleDropped(event: DragEvent): void {
+  const from = ruleCarried.value;
+  const land = ruleLand.value;
+
+  if (from === null || land === null) return;
+
+  event.preventDefault();
+  setRuleDown();
+
+  const to = land > from ? land - 1 : land;
+
+  if (to !== from) void placeRule(from, to);
 }
 
 function removeRule(rule: MailRule): Promise<void> {

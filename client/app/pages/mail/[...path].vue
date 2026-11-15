@@ -128,6 +128,8 @@
                 :unread="unreadByAccount"
                 :folded="navFolded"
                 :foldable="true"
+                :drop-views="dropViews"
+                @dropped="droppedOn"
                 @accounts="accountsOpen = true"
                 @settings="settingsOpen = true"
                 @fold="foldNav"
@@ -889,6 +891,22 @@ function moveTo(target: MoveTarget): void {
   void perform(() => api.value.changeAll(messages, { folderName: target.folderName }), t("mail.error.move_failed"), t("mail.message.moved_to", { name: target.label })).then(() => {
     if (leaving) go({ thread: null });
   });
+}
+
+// The nav's views chosen mail may be dropped on from a wide list: the places it can move to and the labels.
+const dropViews = computed(() => [...moveTargets.value.map((one) => one.key), ...labels.value.map((one) => `label:${one.id}`)]);
+
+// Chosen mail dropped on a nav row: moved to that folder, or given that label.
+function droppedOn(view: string): void {
+  if (view.startsWith("label:")) {
+    labelSelected(view.slice("label:".length), true);
+
+    return;
+  }
+
+  const target = moveTargets.value.find((one) => one.key === view);
+
+  if (target !== undefined) moveTo(target);
 }
 
 function labelSelected(id: string, on: boolean): void {

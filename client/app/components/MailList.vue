@@ -307,6 +307,8 @@
         :narrow="props.narrow"
         :compact="compactRows"
         :choosing="props.choosing"
+        :draggable="!props.narrow"
+        @dragstart="carry($event, conversation)"
         @open="emit('open', conversation)"
         @toggle="emit('toggle', conversation.key)"
         @star="emit('star', conversation)"
@@ -331,7 +333,7 @@
 <script setup lang="ts">
 import { barGathers, useBarRoom } from "bmo-ui/app/domain/actionbar";
 import { useDragSelect } from "bmo-ui/app/domain/dragselect";
-import { clampColumn, labelsState, mailDate, MAIL_COLUMN_BOUNDS, MAIL_ROW_LEAD_PX, rowFit, rangeText, SELECT_KINDS, selectionState, sendersLine } from "../domain/mail";
+import { clampColumn, labelsState, mailDate, MAIL_COLUMN_BOUNDS, MAIL_DRAG, MAIL_ROW_LEAD_PX, rowFit, rangeText, SELECT_KINDS, selectionState, sendersLine } from "../domain/mail";
 import { useWidth } from "bmo-ui/app/domain/screen";
 import { useMailColumns } from "../domain/mail-columns";
 
@@ -447,6 +449,13 @@ function submitSearch(): void {
 function clearSearch(): void {
   typed.value = "";
   emit("search", "");
+}
+
+// A wide list's row carried to the mail nav takes what is chosen with it, or itself alone where it is not chosen.
+function carry(event: DragEvent, conversation: MailConversation): void {
+  if (!props.selected.has(conversation.key)) emit("choose", new Set([conversation.key]));
+  event.dataTransfer?.setData(MAIL_DRAG, conversation.key);
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 }
 
 defineExpose({

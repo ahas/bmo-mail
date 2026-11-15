@@ -453,6 +453,8 @@ flowchart TD
 - **Reporting spam** moves the selection to spam and sets `$Junk`; its dialog can add the senders to
   the always-spam list. **Not spam** moves it back to the inbox and sets `$NotJunk`.
 - A rule can be run over the folder that is open, for the mail that came before it existed.
+- **The rules' order is set in the settings:** a rule is carried by the pointer to another place, a line
+  marking where it will land, or moved one place up or down by its buttons.
 
 ## The screen
 
@@ -473,7 +475,11 @@ flowchart TD
      would otherwise be one icon repeated. The domain's logo is never that avatar: accounts of one domain
      would all wear it. An address is longer than the panel is wide, so the row cuts it and names it on
      hover at every width rather than folded alone; nothing in the nav moves.
-  2. **List** — the search box on top, the toolbar under it, then the conversations.
+  2. **List** — the search box on top, the toolbar under it, then the conversations. A row is carried
+     by the pointer onto a folder or a label of the mail nav, taking what is chosen with it, or itself
+     alone where it is not chosen: dropped on the inbox, the trash or another folder it moves there,
+     dropped on a label it is given that label, the row under it marked while it is carried. The
+     toolbar's move and label menus do the same for a reader without a pointer and on a phone.
   3. **Thread** — its toolbar on top, holding reply, reply all and forward at its right end, which
      answer the newest message; under it the subject on a row of its own with the labels under the
      subject; then the messages, the newest and every unread one open and the others folded to a line

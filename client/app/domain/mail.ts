@@ -35,6 +35,9 @@ export interface MoveTarget {
   folderName: string;
 }
 
+// The drag type chosen conversations travel under from a wide list to the mail nav's folders and labels.
+export const MAIL_DRAG = "application/x-mail-conversations";
+
 // What a list shows, as its address spells it: a folder role, `starred`, `label:<id>`,
 // `folder:<path>`, or `search`.
 export type MailViewKey = string;

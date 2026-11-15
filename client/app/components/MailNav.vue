@@ -31,7 +31,7 @@
       <USeparator class="my-2" />
 
       <ul class="flex flex-col" :aria-label="$t('mail.label.folders')">
-        <li v-for="entry in roleEntries" :key="entry.view">
+        <li v-for="entry in roleEntries" :key="entry.view" v-bind="dropOn(entry.view)">
           <MailNavEntry
             :to="mailPath({ account: props.account, view: entry.view, thread: null })"
             :name="entry.label"
@@ -48,7 +48,7 @@
         <p v-if="!props.folded" class="px-3 pt-3 pb-1 text-sm text-muted">{{ $t("mail.label.labels") }}</p>
         <USeparator v-else class="my-2" />
         <ul class="flex flex-col" :aria-label="$t('mail.label.labels')">
-          <li v-for="label in props.labels" :key="label.id">
+          <li v-for="label in props.labels" :key="label.id" v-bind="dropOn(`label:${label.id}`)">
             <MailNavEntry
               :to="mailPath({ account: props.account, view: `label:${label.id}`, thread: null })"
               :name="label.name"
@@ -66,7 +66,7 @@
         <p v-if="!props.folded" class="px-3 pt-3 pb-1 text-sm text-muted">{{ $t("mail.label.folders") }}</p>
         <USeparator v-else class="my-2" />
         <ul class="flex flex-col" :aria-label="$t('mail.aria.other_folders')">
-          <li v-for="folder in otherFolders" :key="folder.name">
+          <li v-for="folder in otherFolders" :key="folder.name" v-bind="dropOn(`folder:${folder.name}`)">
             <MailNavEntry
               :to="mailPath({ account: props.account, view: `folder:${folder.name}`, thread: null })"
               :name="folder.shortName"
@@ -103,7 +103,7 @@
 </template>
 
 <script setup lang="ts">
-import { addressMark, mailPath, NAV_ROLES, ROLE_ICONS, ROLE_LABELS } from "../domain/mail";
+import { addressMark, MAIL_DRAG, mailPath, NAV_ROLES, ROLE_ICONS, ROLE_LABELS } from "../domain/mail";
 
 import type { MailAccount, MailFolder, MailLabel } from "../../shared/mail";
 
@@ -118,6 +118,8 @@ const props = defineProps<{
   unread: Record<string, boolean>;
   folded: boolean;
   foldable: boolean;
+  // The views chosen mail carried from the list may be dropped on: the folders it can move to and the labels.
+  dropViews?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -126,6 +128,8 @@ const emit = defineEmits<{
   fold: [folded: boolean];
   // A choice was made, which a nav standing in a drawer answers by closing.
   navigated: [];
+  // Chosen mail carried from the list was dropped on this view.
+  dropped: [view: string];
 }>();
 
 // The roles in order, the Starred role after the inbox. A role's unread mark is its folders' together, the sent
@@ -144,4 +148,36 @@ const roleEntries = computed(() => {
 });
 
 const otherFolders = computed(() => props.folders.filter((folder) => folder.role === null));
+
+// The row chosen mail carried from the list stands over, marked as the place it will go.
+const dropping = ref<string | null>(null);
+
+function carriesMail(event: DragEvent): boolean {
+  return event.dataTransfer?.types.includes(MAIL_DRAG) ?? false;
+}
+
+// What a row of the nav answers to chosen mail carried over it: nothing where the view takes none.
+function dropOn(view: string): Record<string, unknown> {
+  if (view === props.view || !(props.dropViews ?? []).includes(view)) return {};
+
+  return {
+    class: dropping.value === view ? "rounded-md bg-primary/10 ring-1 ring-primary ring-inset" : "",
+    onDragover: (event: DragEvent) => {
+      if (!carriesMail(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      dropping.value = view;
+    },
+    onDragleave: (event: DragEvent) => {
+      if ((event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) return;
+      if (dropping.value === view) dropping.value = null;
+    },
+    onDrop: (event: DragEvent) => {
+      if (!carriesMail(event)) return;
+      event.preventDefault();
+      dropping.value = null;
+      emit("dropped", view);
+    }
+  };
+}
 </script>
