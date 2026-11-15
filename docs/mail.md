@@ -191,9 +191,9 @@ flowchart TD
   closed while it stood unused, a pipe that broke — is asked once more on a connection opened again,
   and the journal says so; a second failure is the read's answer. A write is never asked twice, since
   the first may have taken.
-- **A dropped watch connection** is opened again after a wait that starts at five seconds and doubles
-  to a minute, and the journal says each time it dropped and each time it stands again. The connection
-  opened again takes whatever arrived above the high-water mark while nobody watched, as on start. A
+- **A dropped watch connection** is opened again after a wait that starts at the settings'
+  `watcher.retry_ms`, five seconds by default, and doubles to a minute, and the journal says each time
+  it dropped and each time it stands again. The connection opened again takes whatever arrived above the high-water mark while nobody watched, as on start. A
   server that will not hold `IDLE` is asked for the inbox's state every thirty seconds instead.
 - **When the inbox grows,** the watcher takes every message above its high-water mark, oldest first,
   and for each one:

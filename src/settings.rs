@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
@@ -31,6 +32,7 @@ pub struct Settings {
   pub accounts: Accounts,
   pub secrets: Secrets,
   pub staging: Staging,
+  pub watcher: Watcher,
   pub wording: Wording,
   pub console: Console,
 }
@@ -75,6 +77,20 @@ pub struct Secrets {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Staging {
   pub dir: PathBuf,
+}
+
+/// The account watchers (`docs/mail.md`, 「Connections and the watcher」).
+#[derive(Clone, Debug, Deserialize)]
+pub struct Watcher {
+  /// The first wait, in milliseconds, before a dropped watch connection is opened again.
+  pub retry_ms: u64,
+}
+
+impl Watcher {
+  /// The first wait before a dropped watch connection is opened again.
+  pub fn retry(&self) -> Duration {
+    Duration::from_millis(self.retry_ms)
+  }
 }
 
 /// The console face the service serves (`docs/api.md`, 「The console plugin bundle」).

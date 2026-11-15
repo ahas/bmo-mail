@@ -26,8 +26,6 @@ use crate::writing::addresses::record_addresses;
 
 /// The folder a watcher stands on.
 const INBOX: &str = "INBOX";
-/// The first wait before a dropped connection is opened again; it doubles with each failure in a row.
-const RETRY: Duration = Duration::from_secs(5);
 /// The longest wait before a dropped connection is opened again.
 const RETRY_CAP: Duration = Duration::from_secs(60);
 /// How long a watcher stands in `IDLE`, or waits between asking a server that has none, before it asks
@@ -161,9 +159,9 @@ pub fn starting_mark(stored: Option<MailMark>, validity: &str, uid_next: u32) ->
   }
 }
 
-/// The wait before the next try after this many failures in a row: five seconds, doubling to a minute.
-pub fn retry_wait(failures: u32) -> Duration {
-  RETRY.saturating_mul(2u32.saturating_pow(failures.saturating_sub(1))).min(RETRY_CAP)
+/// The wait before the next try after this many failures in a row: the first wait, doubling to a minute.
+pub fn retry_wait(first: Duration, failures: u32) -> Duration {
+  first.saturating_mul(2u32.saturating_pow(failures.saturating_sub(1))).min(RETRY_CAP)
 }
 
 /// One account's watcher: the account, its mailbox the events are read through, and the server and login
@@ -179,6 +177,11 @@ pub struct Watcher {
 impl Watcher {
   fn log(&self, line: &str) {
     eprintln!("mail watcher {}: {line}", self.account.address);
+  }
+
+  /// The wait before the next try after this many failures in a row, from the first wait the settings name.
+  fn retry_wait(&self, failures: u32) -> Duration {
+    retry_wait(self.standing.settings.watcher.retry(), failures)
   }
 
   /// Says on the event stream that the inbox's counts may have moved.
@@ -338,8 +341,8 @@ impl Watcher {
           };
 
           self.log(&format!(
-            "could not watch the inbox ({why}); opening the connection again in {}s",
-            retry_wait(failures + 1).as_secs()
+            "could not watch the inbox ({why}); opening the connection again in {} ms",
+            self.retry_wait(failures + 1).as_millis()
           ));
         }
       }
@@ -348,7 +351,7 @@ impl Watcher {
 
       tokio::select! {
         () = stopped(&mut stop) => return,
-        () = tokio::time::sleep(retry_wait(failures)) => {}
+        () = tokio::time::sleep(self.retry_wait(failures)) => {}
       }
     }
   }

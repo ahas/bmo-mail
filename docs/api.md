@@ -464,6 +464,7 @@ the settings folder.
 | `accounts` | `administrator` | the administrator's owner key (「Who checks what」) | none: nothing is imported, and the harness plugin needs `--owner` |
 | `secrets` | `key_file` | the key file account secrets are sealed with: 32 random bytes as base64 on one line | none: no account is kept |
 | `staging` | `dir` | the folder posted files wait in | `mail-staging` |
+| `watcher` | `retry_ms` | the first wait, in milliseconds, before a dropped watch connection is opened again (`docs/mail.md`, 「Connections and the watcher」) | `5000` |
 | `wording` | `language` | the language of 「The service's own words」 | `ko` |
 | `wording` | `time_zone` | the time zone dates are written in | `Asia/Seoul` |
 | `console` | `dir` | the bundle build's folder: `module.js`, `style.css`, `words.json`, `layer.json` and every chunk the module loads | `console` |

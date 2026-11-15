@@ -43,8 +43,13 @@ fn scratch(name: &str) -> PathBuf {
   folder
 }
 
+// The watcher opens a dropped connection again after a short wait, so the test does not wait the five seconds
+// a deployment does.
 fn settings(folder: &Path) -> Settings {
-  let environment = HashMap::from([("BMO_MAIL_SERVER__TOKEN".to_owned(), "test-token".to_owned())]);
+  let environment = HashMap::from([
+    ("BMO_MAIL_SERVER__TOKEN".to_owned(), "test-token".to_owned()),
+    ("BMO_MAIL_WATCHER__RETRY_MS".to_owned(), "50".to_owned()),
+  ]);
 
   Settings::read(folder, Some(environment)).expect("the settings read")
 }
