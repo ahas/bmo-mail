@@ -252,27 +252,28 @@ async fn a_message_that_arrives_while_both_connections_drop_is_still_said() {
 
   let (stop, stopping) = tokio::sync::watch::channel(false);
   let watching = tokio::spawn(bmo_mail::watcher::watch(Arc::clone(&standing), stopping));
-  let said = async {
+  // The watcher says the arrival first and lets it go after, so the wait ends only once both are done.
+  let settled = async {
     loop {
       let kinds: Vec<String> = sqlx::query_scalar("SELECT kind FROM events ORDER BY id")
         .fetch_all(&pool)
         .await
         .expect("the events read");
+      let owed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM arrivals")
+        .fetch_one(&pool)
+        .await
+        .expect("the arrivals count");
 
-      if kinds.iter().any(|kind| kind == "message.created") {
+      if kinds.iter().any(|kind| kind == "message.created") && owed == 0 {
         return kinds;
       }
 
       tokio::time::sleep(Duration::from_millis(100)).await;
     }
   };
-  let kinds = tokio::time::timeout(Duration::from_secs(30), said)
+  let kinds = tokio::time::timeout(Duration::from_secs(30), settled)
     .await
-    .expect("the arrival is said in time");
-  let owed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM arrivals")
-    .fetch_one(&pool)
-    .await
-    .expect("the arrivals count");
+    .expect("the arrival is said and then let go in time");
   let last: i64 = sqlx::query_scalar("SELECT last_uid FROM marks")
     .fetch_one(&pool)
     .await
@@ -286,7 +287,6 @@ async fn a_message_that_arrives_while_both_connections_drop_is_still_said() {
   let _ = watching.await;
 
   assert_eq!(last, 11, "the mark moved past the message");
-  assert_eq!(owed, 0, "the arrival was let go once said");
   assert!(data.contains("Hello"), "the event carries the message: {data}");
   assert!(kinds.contains(&"folder.changed".to_owned()) || kinds.len() == 1, "{kinds:?}");
   assert!(server.lock().unwrap().connections >= 4, "both connections were opened again");
