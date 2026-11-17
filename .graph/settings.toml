@@ -1,8 +1,0 @@
-repository = "bmo-mail"
-base = false
-
-[coverage]
-# The package's src/ and the console bundle under client/, but the OpenAPI types generated for the screen,
-# which only restate docs/openapi.json.
-layout = "bmo-next"
-unindexed = ["client/shared/openapi.ts"]

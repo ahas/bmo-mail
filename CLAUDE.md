@@ -65,9 +65,6 @@ structure (archive document #301, 「원칙」).
 - `Cargo.toml` is the only manifest at the root, one crate split into its own modules, and no directory is
   named after its parent.
 - The console plugin bundle stands in `client/`, a project of its own.
-- **`.graph/` is the code dependency graph,** written only by `bmo graph` run in this checkout; a change that
-  moves a feature's files updates its node in the checkout. Its area files are generated and untracked, so a
-  fresh checkout builds them again, while `settings.toml` is the repository's configuration and stays tracked.
 - Tests live in `tests/`, one test target, `tests/main.rs`, each file of tests a module of it (bmo-chat's
   `docs/conventions.md`, 「Rust builds」); no test module stands in `src/`. The repository carries the
   personal-data check there beside the behaviour tests standing so far (README.md).

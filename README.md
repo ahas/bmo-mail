@@ -38,7 +38,6 @@ held to. The build check is `cargo check --all-targets` and the bundle's typeche
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
 | `tests/` | The repository-wide personal-data check, `personal_data.rs`, and the behaviour tests that stand |
-| `.graph/` | The code graph: its settings and its nodes, one feature to a node |
 
 At the root stand the Cargo manifest, `VERSION`, `LICENSE`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the
