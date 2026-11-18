@@ -67,7 +67,8 @@ structure (archive document #301, 「원칙」).
 - The console plugin bundle stands in `client/`, a project of its own.
 - Tests live in `tests/`, one test target, `tests/main.rs`, each file of tests a module of it (bmo-chat's
   `docs/conventions.md`, 「Rust builds」); no test module stands in `src/`. The repository carries the
-  personal-data check there beside the behaviour tests standing so far (README.md).
+  behaviour tests standing so far there (README.md); the testbed's `personal-data` check holds the
+  personal-data rule.
 
 ## The stages of a change
 

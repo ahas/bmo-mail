@@ -4,6 +4,5 @@
 mod accounts;
 mod console;
 mod import;
-mod personal_data;
 mod watcher;
 mod words;

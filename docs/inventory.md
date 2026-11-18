@@ -7,7 +7,7 @@ Nothing here was copied with its history.
 
 The behaviour tests are deferred: none is carried, written or run in this phase. They are written and run
 here once the minimal services stand on the new repositories. The deferred tests are listed below so that
-work knows what the old behaviour was held to. The repository carries the personal-data check alone
+work knows what the old behaviour was held to. The testbed's `personal-data` check holds the personal-data rule
 (`PERSONAL-DATA.md`).
 
 ## How the set was listed

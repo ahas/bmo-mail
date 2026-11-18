@@ -10,8 +10,8 @@ states.
 
 ## Tests
 
-The repository carries the repository-wide personal-data check in `tests/personal_data.rs`
-(`PERSONAL-DATA.md`), the old archive's import in `tests/import.rs`, the accounts in `tests/accounts.rs`:
+The testbed's `personal-data` check holds the personal-data rule (`PERSONAL-DATA.md`). The repository
+carries the old archive's import in `tests/import.rs`, the accounts in `tests/accounts.rs`:
 their routes, one owner key never reaching another's, the sealing of their secrets and the accounts file's
 import, the watcher over a dropped connection in `tests/watcher.rs`, the console face in `tests/console.rs`: the
 served manifest read through the vendored bmo-ui release's own reading and how far the console's credential and
@@ -37,7 +37,7 @@ held to. The build check is `cargo check --all-targets` and the bundle's typeche
 | `client/` | The console plugin bundle: the mail screen, a project of its own |
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
-| `tests/` | The repository-wide personal-data check, `personal_data.rs`, and the behaviour tests that stand |
+| `tests/` | The behaviour tests that stand |
 
 At the root stand the Cargo manifest, `VERSION`, `LICENSE`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the
