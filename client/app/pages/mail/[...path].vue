@@ -188,23 +188,26 @@
         <MailComposer ref="composer" :accounts="accounts ?? []" :narrow="narrow" @sent="onSent" @saved="onDraftSaved" />
 
         <!-- The settings hold a form, so while it holds changes every way of closing them asks first
-             (docs/web.md, 「Forms」). -->
-        <UDrawer v-if="narrow" v-model:open="settingsOpen" :title="$t('mail.action.settings')" :ui="FULL_SHEET" :dismissible="settingsGuard.dismissible.value" @close:prevent="void settingsGuard.leave()">
+             (bmo-ui's docs/components.md, "Forms"). The drawer and the modal are left to dismiss
+             themselves and every leave reaches the guard through their open state alone, so the open
+             state is never bound both ways: an outside focus they hold off on their own, such as a
+             select handing the focus back to its control, is no request to leave and asks nothing. -->
+        <UDrawer v-if="narrow" :open="settingsOpen" :title="$t('mail.action.settings')" :ui="FULL_SHEET" @update:open="onSettingsOpen">
           <template #body>
             <MailSettingsBody v-model:dirty="settingsDirty" :api="api" :labels="labels" :folders="folders" @labels="refreshAll" @settings="loadSettings" />
           </template>
         </UDrawer>
         <UModal
           v-else
-          v-model:open="settingsOpen"
+          :open="settingsOpen"
           :title="$t('mail.action.settings')"
           :description="address"
-          :dismissible="settingsGuard.dismissible.value"
           :ui="{ content: 'sm:max-w-3xl h-[85dvh] flex flex-col', body: 'flex min-h-0 flex-1 flex-col p-0 sm:p-0' }"
-          @close:prevent="void settingsGuard.leave()"
+          @update:open="onSettingsOpen"
         >
           <template #close="{ ui }">
-            <ShellClose :class="ui.close()" @close="void settingsGuard.leave()" />
+            <!-- Pressed, it reaches the guard through the modal's own close alone, so it asks only once. -->
+            <ShellClose :class="ui.close()" />
           </template>
           <template #body>
             <MailSettingsBody v-model:dirty="settingsDirty" :api="api" :labels="labels" :folders="folders" @labels="refreshAll" @settings="loadSettings" />
@@ -313,6 +316,13 @@ const accountsOpen = ref(false);
 const settingsOpen = ref(false);
 const settingsDirty = ref(false);
 const settingsGuard = useCloseGuard(settingsOpen, () => settingsDirty.value, t);
+
+// The settings' drawer or modal asking to stand or to close: standing is taken at once, closing asks the
+// guard, which asks first while the form holds changes.
+function onSettingsOpen(standing: boolean): void {
+  if (standing) settingsOpen.value = true;
+  else void settingsGuard.leave();
+}
 const spamAsk = ref(false);
 const spamSenders = ref(false);
 const acting = ref(false);

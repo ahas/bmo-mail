@@ -8,9 +8,10 @@
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="flex min-h-10 items-center gap-2 border-b border-default px-3">
       <span :class="MAIL_FIELD_LABEL">{{ $t("mail.label.sender") }}</span>
-      <USelect
+      <ChoiceSelect
         :model-value="draft.from.address"
         :items="props.accounts.map((one) => ({ label: one.address, value: one.address }))"
+        value-key="value"
         variant="none"
         class="min-w-0 flex-1"
         :aria-label="$t('mail.label.sender')"

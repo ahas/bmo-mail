@@ -39,10 +39,12 @@
   </UModal>
 
   <!-- The docked panel stands on the page body itself, clear of the layout that sizes the page's
-       own parts. -->
+       own parts, and takes no stacking order of its own: it stands over the app's root, which comes
+       before it in the body, and under whatever the component library floats there while it is open —
+       its own selects' lists and menus, a dialog — which comes after it. -->
   <Teleport v-else-if="open" to="body">
   <section
-    class="fixed right-4 bottom-0 z-40 flex w-[576px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-t-lg border border-b-0 border-default bg-default shadow-xl"
+    class="fixed right-4 bottom-0 flex w-[576px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-t-lg border border-b-0 border-default bg-default shadow-xl"
     :class="minimized ? '' : 'h-[min(640px,85dvh)]'"
     :aria-label="$t('mail.action.compose')"
   >

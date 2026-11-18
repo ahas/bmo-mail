@@ -37,7 +37,7 @@
 
       <form v-else-if="kind !== null" class="flex flex-col gap-3" @submit.prevent="add">
         <UFormField :label="$t('mail.label.account_kind')">
-          <USelect v-model="chosenKind" :items="kindItems" class="w-full" />
+          <ChoiceSelect v-model="chosenKind" :items="kindItems" value-key="value" class="w-full" />
         </UFormField>
 
         <template v-if="kind.signIn === 'password'">

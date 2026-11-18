@@ -379,7 +379,13 @@ flowchart TD
   subject, body, attachments, and the read-receipt switch. Each field's label stands in a column of
   its own, wide enough to hold the longest of them on one line, and the field takes the rest of the
   row; an address too long for its row is cut inside its own chip rather than carrying the row past
-  its edge.
+  its edge. From and every select of the settings are bmo-ui's one select.
+- **An address field** holds its addresses as chips, each taken out by its own button, and after them
+  bmo-ui's one select, which finds the known addresses for the words typed and takes an address it
+  does not hold as typed. Typing on the field opens it with what was typed. A comma, a semicolon, or
+  Enter with no known address highlighted ends the address typed and makes it a chip; leaving the
+  field makes what was typed one; pasting several addresses makes a chip of each; Backspace with
+  nothing typed takes the last chip back out, and Enter with nothing typed lets none go.
 - **Cc and bcc open from the to field.** They start folded away, stand open while either holds an
   address, and fold away again when the body is written in with both of them empty.
 - **The body is rich text** written in the screen's own mail editor, sent as HTML with a plain-text
@@ -504,15 +510,18 @@ flowchart TD
     chosen is read by mark read instead. Unread only is a state the button itself shows, since a
     list holding only part of what it names must say so wherever it is read.
   - With a selection: state (read or unread, star), place (trash, report spam or not spam, move)
-    and labels. Each group is three icons or fewer with tooltips; move opens the console's menu of
-    the places mail can go, and labels a popover of checkboxes, both at the button. In trash and
-    spam, delete forever takes the place of trash. A change of state or labels leaves the selection
+    and labels. Each group is three icons or fewer with tooltips; move and labels are each bmo-ui's
+    one select at its button (bmo-ui's `docs/components.md`, "Choosing a value"), so either list
+    searches once it is long: move lists the places mail can go and moves the selection to the one
+    chosen, and labels lists every label, checked where all of the selection has it and half-marked
+    where only some does, choosing one putting it on all of it and taking a checked one off taking it
+    off all of it. In trash and spam, delete forever takes the place of trash. A change of state or labels leaves the selection
     chosen for the next action; a change of place empties it.
   - **The bar gathers by the room it has**, which is this panel's and not the window's: this list
     stands beside a thread and is often narrower than a phone on a wide screen. Short of that room
     the bar keeps the select-all checkbox and its menu, and folds refresh, mark all read and unread
-    only into one more menu; with a selection it keeps trash and mark read and folds star,
-    spam, move and labels into the same one menu a phone's row carries. The reading is bmo-ui's
+    only into one more menu; with a selection it keeps trash, mark read and the move and label
+    selects and folds star and spam into the same one menu a phone's row carries. The reading is bmo-ui's
     action bar's, so the bar takes the same shape wherever it ends up this narrow.
   - At the right end: the range shown (`1–50 / 1,213`, tabular) with previous and next. In a list
     narrower than its cells need, the range steps aside while anything is chosen, so every action
@@ -561,8 +570,8 @@ flowchart TD
     chooses every row it passes and carries the list along at its top and bottom edges. A list
     already choosing is held again on any row: that row is chosen, what was chosen stays, and the
     drag carries on from there — so the list is scrolled and held as many times as the choosing
-    takes. The toolbar becomes the select-all checkbox, the selection's count, trash, mark read, one
-    menu with the rest, and end choosing at the far end. The checkbox is the first thing in the row,
+    takes. The toolbar becomes the select-all checkbox, the selection's count, trash, mark read, the
+    move and label selects, one menu with the rest, and end choosing at the far end. The checkbox is the first thing in the row,
     so it stands on the same vertical line as the marks down the rows it speaks for, and it is the
     same one the wide toolbar carries, so the whole page is taken or given up at either width.
   - Compose is the same create button, floating at the bottom right while no thread stands over

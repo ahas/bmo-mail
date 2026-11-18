@@ -35,6 +35,14 @@ export interface MoveTarget {
   folderName: string;
 }
 
+// What a new choice of labels changes on the chosen mail, against the labels all of it has: each label
+// chosen that not all of it has goes on, each one all of it had that is no longer chosen comes off.
+export function labelChanges(all: ReadonlySet<string>, chosen: readonly string[]): { id: string; on: boolean }[] {
+  const now = new Set(chosen);
+
+  return [...chosen.filter((id) => !all.has(id)).map((id) => ({ id, on: true })), ...[...all].filter((id) => !now.has(id)).map((id) => ({ id, on: false }))];
+}
+
 // The drag type chosen conversations travel under from a wide list to the mail nav's folders and labels.
 export const MAIL_DRAG = "application/x-mail-conversations";
 
@@ -354,6 +362,17 @@ export const LABEL_COLORS: readonly string[] = ["#ef4444", "#f97316", "#eab308",
 // An address as a field shows it and a completion offers it.
 export function addressText(person: { name?: string | null; address: string }): string {
   return person.name == null || person.name === "" ? person.address : `${person.name} <${person.address}>`;
+}
+
+// The keys that end one address typed into an address field, as in every mail client.
+export function endsAddress(key: string): boolean {
+  return key === "," || key === ";";
+}
+
+// Whether words typed or pasted into an address field hold more than one address, or one ended by a
+// separator, and so are taken as addresses at once rather than left to be typed on.
+export function typedAddresses(words: string): boolean {
+  return /[,;\n]/.test(words.trim()) || readAddresses(words).length > 1;
 }
 
 // What was typed into an address field, read as addresses: `Name <a@b>` or a bare address, split at

@@ -64,14 +64,14 @@
 
           <div class="flex flex-col gap-2 rounded-md border border-default p-3">
             <div class="flex flex-wrap items-center gap-2">
-              <USelect v-model="form.field" :items="FIELD_ITEMS" class="w-32" :aria-label="$t('mail.aria.rule_field')" />
+              <ChoiceSelect v-model="form.field" :items="FIELD_ITEMS" value-key="value" class="w-32" :aria-label="$t('mail.aria.rule_field')" />
               <UInput v-if="form.field === 'header'" v-model="form.header" :placeholder="$t('mail.placeholder.header_name')" class="w-40" :aria-label="$t('mail.placeholder.header_name')" />
               <UInput v-model="form.contains" :placeholder="$t('mail.placeholder.contains')" class="min-w-40 flex-1" :aria-label="$t('mail.placeholder.contains')" />
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <USelect v-model="form.action" :items="ACTION_ITEMS" class="w-40" :aria-label="$t('mail.aria.rule_action')" />
-              <USelect v-if="form.action === 'label'" v-model="form.label" :items="props.labels.map((one) => ({ label: one.name, value: one.id }))" :placeholder="$t('mail.label.labels')" class="w-40" :aria-label="$t('mail.label.labels')" />
-              <USelect v-if="form.action === 'move'" v-model="form.folder" :items="props.folders.map((one) => ({ label: one.shortName, value: one.name }))" :placeholder="$t('mail.label.folders')" class="w-40" :aria-label="$t('mail.label.folders')" />
+              <ChoiceSelect v-model="form.action" :items="ACTION_ITEMS" value-key="value" class="w-40" :aria-label="$t('mail.aria.rule_action')" />
+              <ChoiceSelect v-if="form.action === 'label'" v-model="form.label" :items="props.labels.map((one) => ({ label: one.name, value: one.id }))" value-key="value" :placeholder="$t('mail.label.labels')" class="w-40" :aria-label="$t('mail.label.labels')" />
+              <ChoiceSelect v-if="form.action === 'move'" v-model="form.folder" :items="props.folders.map((one) => ({ label: one.shortName, value: one.name }))" value-key="value" :placeholder="$t('mail.label.folders')" class="w-40" :aria-label="$t('mail.label.folders')" />
             </div>
             <div class="flex flex-wrap justify-end gap-2">
               <UButton color="neutral" variant="outline" :label="$t('mail.action.spam_header_rule')" :loading="busy === 'presets'" @click="addPresets" />

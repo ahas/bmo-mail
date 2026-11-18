@@ -6,8 +6,8 @@
        its columns and has its edges dragged to set the widths; where a row stacks instead there is
        no header. The list stands newest first. On a phone the search shares its row with the folder button,
        and choosing turns the row into the select-all checkbox, the count, the move-to-Trash and
-       mark-read buttons and one menu with the rest; a finger held on a row starts choosing and
-       dragging on from it chooses every row it passes. The select-all checkbox is the same one the
+       mark-read buttons, the move and label selects and one menu with the rest; a finger held on a row
+       starts choosing and dragging on from it chooses every row it passes. The select-all checkbox is the same one the
        wide toolbar carries, so the choice is
        taken whole at either width.
 
@@ -15,7 +15,7 @@
        beside a thread and is often narrower than a phone on a wide screen, and a bar that asked the
        window would stand its whole row of actions there and run off its own edge. Short of that
        room it keeps what is reached for first — the choosing control, and with something chosen
-       move-to-Trash and mark-read — and folds the rest into one menu. -->
+       move-to-Trash, mark-read and the move and label selects — and folds the rest into one menu. -->
   <div class="relative flex min-h-0 flex-1 flex-col" :style="{ '--mail-from': `${fromWidth}px`, '--mail-date': `${dateWidth}px` }">
     <div class="flex shrink-0 items-center gap-2 border-b border-default p-3">
       <UButton
@@ -71,6 +71,8 @@
               @click="emit('act', state.anyUnread ? 'read' : 'unread')"
             />
           </UTooltip>
+          <MailToolChoice v-bind="moveChoice" :disabled="props.selected.size === 0" @update:model-value="moveTo" />
+          <MailLabelChoice :disabled="props.selected.size === 0" :labels="props.labels" :all="labelState.all" :some="labelState.some" @toggle="(id, on) => emit('label', id, on)" />
           <UDropdownMenu :items="narrowMenu" :content="{ align: 'end' }">
             <UTooltip :text="$t('common.action.more')">
               <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-more-vert" :aria-label="$t('common.action.more')" :disabled="props.selected.size === 0" />
@@ -168,21 +170,10 @@
                 @click="emit('act', props.role === 'junk' ? 'not-spam' : 'spam')"
               />
             </UTooltip>
-            <UDropdownMenu :items="moveMenu" :content="{ align: 'start' }">
-              <UTooltip :text="$t('mail.action.move')">
-                <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-drive-file-move-outline" :aria-label="$t('mail.action.move')" />
-              </UTooltip>
-            </UDropdownMenu>
+            <MailToolChoice v-bind="moveChoice" @update:model-value="moveTo" />
           </div>
           <div>
-            <UPopover :content="{ align: 'start' }">
-              <UTooltip :text="$t('mail.label.labels')">
-                <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-label-outline" :aria-label="$t('mail.label.labels')" :disabled="props.labels.length === 0" />
-              </UTooltip>
-              <template #content>
-                <MailLabelChoice :labels="props.labels" :all="labelState.all" :some="labelState.some" @toggle="(id, on) => emit('label', id, on)" />
-              </template>
-            </UPopover>
+            <MailLabelChoice :labels="props.labels" :all="labelState.all" :some="labelState.some" @toggle="(id, on) => emit('label', id, on)" />
           </div>
         </template>
 
@@ -204,6 +195,8 @@
               @click="emit('act', state.anyUnread ? 'read' : 'unread')"
             />
           </UTooltip>
+          <MailToolChoice v-bind="moveChoice" @update:model-value="moveTo" />
+          <MailLabelChoice :labels="props.labels" :all="labelState.all" :some="labelState.some" @toggle="(id, on) => emit('label', id, on)" />
           <UDropdownMenu :items="narrowMenu" :content="{ align: 'start' }">
             <UTooltip :text="$t('common.action.more')">
               <UButton color="neutral" variant="ghost" size="sm" square icon="i-material-symbols-more-vert" :aria-label="$t('common.action.more')" />
@@ -565,22 +558,28 @@ const listMenu = computed<DropdownMenuItem[][]>(() => [
   ],
 ]);
 
-// Where the chosen mail can be moved: the inbox, the Trash folder, and the mailbox's other folders.
-const moveMenu = computed<DropdownMenuItem[]>(() =>
-  props.moveTargets.map((target) => ({ label: target.label, icon: target.icon, onSelect: () => emit("move", target) }))
-);
+// Where the chosen mail can be moved: the inbox, the Trash folder, and the mailbox's other folders, as
+// the move select's choices, chosen once and then gone, since a move is an act and not a value held.
+const moveChoice = computed(() => ({
+  icon: "i-material-symbols-drive-file-move-outline",
+  label: t("mail.action.move"),
+  items: props.moveTargets.map((target) => ({ label: target.label, icon: target.icon, value: target.key })),
+  valueKey: "value",
+  modelValue: undefined
+}));
 
-// Everything a phone's choosing row folds into its one menu.
+function moveTo(key: string): void {
+  const target = props.moveTargets.find((one) => one.key === key);
+
+  if (target !== undefined) emit("move", target);
+}
+
+// What a gathered row folds into its one menu: the selection's state and the spam report. Move and
+// labels keep their own selects beside it, since each picks from a list that searches once it is long.
 const narrowMenu = computed<DropdownMenuItem[][]>(() => [
   [
     { label: state.value.allStarred ? t("mail.action.unstar") : t("mail.action.star"), icon: "i-material-symbols-star-outline", onSelect: () => emit("act", state.value.allStarred ? "unstar" : "star") },
     { label: props.role === "junk" ? t("mail.action.not_spam") : t("mail.action.report_spam"), icon: "i-material-symbols-report-outline", onSelect: () => emit("act", props.role === "junk" ? "not-spam" : "spam") },
   ],
-  props.moveTargets.map((target) => ({ label: t("mail.action.move_to_named", { name: target.label }), icon: target.icon, onSelect: () => emit("move", target) })),
-  props.labels.map((label) => ({
-    label: labelState.value.all.has(label.id) ? t("mail.action.remove_label_named", { name: label.name }) : t("mail.action.add_label_named", { name: label.name }),
-    icon: "i-material-symbols-label-outline",
-    onSelect: () => emit("label", label.id, !labelState.value.all.has(label.id)),
-  })),
 ]);
 </script>
