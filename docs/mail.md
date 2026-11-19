@@ -382,10 +382,11 @@ flowchart TD
   its edge. From and every select of the settings are bmo-ui's one select.
 - **An address field** holds its addresses as chips, each taken out by its own button, and after them
   bmo-ui's one select, which finds the known addresses for the words typed and takes an address it
-  does not hold as typed. Typing on the field opens it with what was typed. A comma, a semicolon, or
-  Enter with no known address highlighted ends the address typed and makes it a chip; leaving the
-  field makes what was typed one; pasting several addresses makes a chip of each; Backspace with
-  nothing typed takes the last chip back out, and Enter with nothing typed lets none go.
+  does not hold as typed. Typing on the field opens it with what was typed. A comma or a semicolon,
+  however the keyboard writes it, or Enter with no known address highlighted ends the address typed
+  and makes it a chip; leaving the field makes what was typed one; pasting several addresses makes a
+  chip of each; Backspace with nothing typed takes the last chip back out, and Enter with nothing
+  typed lets none go.
 - **Cc and bcc open from the to field.** They start folded away, stand open while either holds an
   address, and fold away again when the body is written in with both of them empty.
 - **The body is rich text** written in the screen's own mail editor, sent as HTML with a plain-text

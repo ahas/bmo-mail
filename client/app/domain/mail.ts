@@ -364,16 +364,8 @@ export function addressText(person: { name?: string | null; address: string }): 
   return person.name == null || person.name === "" ? person.address : `${person.name} <${person.address}>`;
 }
 
-// The keys that end one address typed into an address field, as in every mail client.
-export function endsAddress(key: string): boolean {
-  return key === "," || key === ";";
-}
-
-// Whether words typed or pasted into an address field hold more than one address, or one ended by a
-// separator, and so are taken as addresses at once rather than left to be typed on.
-export function typedAddresses(words: string): boolean {
-  return /[,;\n]/.test(words.trim()) || readAddresses(words).length > 1;
-}
+// The characters that end one address typed into an address field, as in every mail client.
+export const ADDRESS_SEPARATORS: string[] = [",", ";"];
 
 // What was typed into an address field, read as addresses: `Name <a@b>` or a bare address, split at
 // commas and semicolons. A piece that is not an address is left out.

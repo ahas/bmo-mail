@@ -165,7 +165,7 @@ for (const width of WIDTHS) {
     });
   }, DRIVING_MS);
 
-  test(`at ${width.name}, an address field makes chips of what is typed, ended, left, pasted or found, Backspace takes one back and Enter on nothing none`, async () => {
+  test(`at ${width.name}, an address field makes chips of what is typed, ended on any keyboard, left, pasted or found, Backspace takes one back and Enter on nothing none`, async () => {
     const state = standIn();
 
     state.known = [{ name: "Fay", address: "fay@example.com", usedCount: 3, lastUsedAt: 0, position: 1 }];
@@ -198,10 +198,16 @@ for (const width of WIDTHS) {
       await page.keyboard.press("Enter");
       await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com"]);
 
+      // Ended by a comma a phone's keyboard writes, naming no key as it writes it.
+      await search(page).pressSequentially("hal@example.com");
+      await page.keyboard.insertText(",");
+      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "hal@example.com"]);
+      expect(await search(page).inputValue()).toBe("");
+
       // Left typed as the field is left.
       await search(page).pressSequentially("dee@example.com");
       await closes(page);
-      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "dee@example.com"]);
+      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "hal@example.com", "dee@example.com"]);
 
       // Several pasted at once.
       await opens(page, field);
@@ -211,24 +217,24 @@ for (const width of WIDTHS) {
         data.setData("text", "eve@example.com, gus@example.com");
         input.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
       });
-      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "dee@example.com", "eve@example.com", "gus@example.com"]);
+      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "hal@example.com", "dee@example.com", "eve@example.com", "gus@example.com"]);
 
       // Backspace with nothing typed takes the last back out.
       await search(page).focus();
       await page.keyboard.press("Backspace");
-      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "dee@example.com", "eve@example.com"]);
+      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "hal@example.com", "dee@example.com", "eve@example.com"]);
 
       // A known address found for the words typed and taken from the list.
       await search(page).pressSequentially("fay");
       await choice(page, "Fay <fay@example.com>").click();
       await closes(page);
-      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "dee@example.com", "eve@example.com", "Fay <fay@example.com>"]);
+      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "hal@example.com", "dee@example.com", "eve@example.com", "Fay <fay@example.com>"]);
 
       // Enter with nothing typed lets no address go.
       await opens(page, field);
       await search(page).focus();
       await page.keyboard.press("Enter");
-      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "dee@example.com", "eve@example.com", "Fay <fay@example.com>"]);
+      await chipsAre(["ann@example.com", "bob@example.com", "cy@example.com", "hal@example.com", "dee@example.com", "eve@example.com", "Fay <fay@example.com>"]);
     });
   }, DRIVING_MS);
 }
