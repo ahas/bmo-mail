@@ -492,6 +492,9 @@ guards them, and this section states only what mail supplies and chooses within 
   no screen; a build or a declaration the face refuses stops the service at start, naming what is at fault.
 - **The layer it is built on** is the bmo-ui release bmo-chat's `shared-versions.toml` pins, vendored in
   `client/vendor/` as the release verb wrote it. The bundle's own install, typecheck and build use that copy.
+  The component library stands at the exact version that release names, and the install applies the layer's
+  own patches for it, its primitives and its icons, kept in `client/patches/`: a patch applies to the exact
+  version it names alone.
 - **bmo-text's TypeScript package stands in `client/vendor/` too,** packed with `bun pm pack` from a scratch
   export (`git archive`) of bmo-text's committed main and named by the commit it was packed from, so a clone of
   this repository installs, typechecks and builds the bundle with no other checkout beside it.
