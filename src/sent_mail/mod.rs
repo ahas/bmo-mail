@@ -160,40 +160,57 @@ async fn owner_account(settings: &Settings, http: &reqwest::Client) -> Result<Op
     .map_err(|why| format!("the account service could not be asked: {why}"))
 }
 
-/// The account's own machine: for the owner's account the node `outlook.owner_node` names, where it names one;
-/// else the node agency's record names, where the record is the account's alone. `owner` is the owner's account
-/// where it was read already.
-async fn own_node(
+/// Where an account's sent mail is read: its own node, and the account agency's node records, the node service
+/// and bmo-ms-teams know it by.
+struct Place {
+  node: String,
+  account: String,
+}
+
+/// The account's place. The owner's account is known by the account `outlook.owner_account` names and reads on
+/// the node `outlook.owner_node` names, each where it names one; every account's node is otherwise the one
+/// agency's record names under the account it is known by, where the record is that account's alone. `owner` is
+/// the owner's account where it was read already.
+async fn place(
   settings: &Settings,
   http: &reqwest::Client,
   agency: &Agency,
   account: &str,
   owner: Option<&str>,
-) -> Result<String, String> {
-  let owner_node = settings.outlook.owner_node.trim();
-
-  if !owner_node.is_empty() {
-    let owner = match owner {
-      Some(owner) => Some(owner.to_owned()),
-      None => owner_account(settings, http).await?,
-    };
-
-    if owner.as_deref() == Some(account) {
-      return Ok(owner_node.to_owned());
+) -> Result<Place, String> {
+  let named_node = settings.outlook.owner_node.trim();
+  let named_account = settings.outlook.owner_account.trim();
+  let is_owner = if named_node.is_empty() && named_account.is_empty() {
+    false
+  } else {
+    match owner {
+      Some(owner) => owner == account,
+      None => owner_account(settings, http).await?.as_deref() == Some(account),
     }
+  };
+  let known_by = if is_owner && !named_account.is_empty() { named_account } else { account }.to_owned();
+
+  if is_owner && !named_node.is_empty() {
+    return Ok(Place {
+      node: named_node.to_owned(),
+      account: known_by,
+    });
   }
 
   match agency
-    .person_node(account)
+    .person_node(&known_by)
     .await
     .map_err(|why| format!("agency could not be asked: {why}"))?
   {
-    None => Err(format!("the account {account} has no machine of its own")),
+    None => Err(format!("the account {known_by} has no machine of its own")),
     Some(record) if record.shared => Err(format!(
-      "the account {account}'s node {} is shared with other accounts, so it is no machine of its own",
+      "the account {known_by}'s node {} is shared with other accounts, so it is no machine of its own",
       record.node
     )),
-    Some(record) => Ok(record.node),
+    Some(record) => Ok(Place {
+      node: record.node,
+      account: known_by,
+    }),
   }
 }
 
@@ -223,7 +240,7 @@ pub async fn read(
       (owner.clone(), Some(owner))
     }
   };
-  let node = own_node(settings, &http, &agency, &account, owner.as_deref()).await?;
+  let Place { node, account } = place(settings, &http, &agency, &account, owner.as_deref()).await?;
 
   let (road, mut messages) = match outlook::read(&settings.node, &http, &node, &account, &day).await {
     Ok(messages) => (Road::Outlook, messages),

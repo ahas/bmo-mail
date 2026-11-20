@@ -220,7 +220,8 @@ async fn graph_messages(
 }
 
 /// The stand-in served on a free port of this machine, with a data root whose settings name it for every
-/// upstream and `u4` as the owner's node; the server ends with the test's runtime.
+/// upstream, `u4` as the owner's node and `9` as the account it knows him by; the server ends with the test's
+/// runtime.
 async fn stand_in(name: &str, outlook: Outlook, teams: Teams) -> (Shared, PathBuf) {
   let upstreams = Arc::new(Mutex::new(Upstreams {
     outlook,
@@ -271,7 +272,7 @@ fn data_root(name: &str, address: &str) -> PathBuf {
       "[agency]\naddress = \"{address}\"\ntoken_file = \"agency.token\"\n\
        [receiver]\naddress = \"{address}\"\ntoken_file = \"receiver.token\"\n\
        [account_service]\naddress = \"{address}\"\ntoken = \"{ACCOUNTS_TOKEN}\"\n\
-       [outlook]\nowner_node = \"u4\"\n\
+       [outlook]\nowner_node = \"u4\"\nowner_account = \"9\"\n\
        [node]\naddress = \"{address}\"\ntoken_file = \"node.token\"\n\
        [ms_teams]\naddress = \"{address}\"\ntoken_file = \"teams.token\"\n\
        [graph]\naddress = \"{address}/v1.0\"\n"
@@ -404,16 +405,25 @@ async fn a_machine_shared_with_other_accounts_is_refused_before_any_road() {
 }
 
 #[tokio::test]
-async fn the_deployments_own_caller_reads_the_owners_account_on_the_owners_node() {
-  let (upstreams, root) =
-    stand_in("owner", Outlook::Answers(json!({ "standing": true, "messages": [] })), Teams::Hands).await;
+async fn the_owner_is_read_on_his_node_under_the_account_it_knows_him_by() {
+  let (upstreams, root) = stand_in(
+    "owner",
+    Outlook::Answers(json!({ "standing": false, "reason": "no Outlook is running" })),
+    Teams::Hands,
+  )
+  .await;
 
   let result = answer(&call(&root, "bmo", json!({})), morning()).await;
 
   assert_eq!(result["structuredContent"]["node"], json!("u4"), "{result}");
   let upstreams = upstreams.lock().expect("the stand-in's record opens");
   let (node, body, _) = &upstreams.runs[0];
-  assert_eq!((node.as_str(), &body["account"]), ("u4", &json!("4")));
+  assert_eq!(
+    (node.as_str(), &body["account"]),
+    ("u4", &json!("9")),
+    "the run names the account his node knows"
+  );
+  assert_eq!(upstreams.page_tokens[0].0["account"], json!(9), "the page token names the same account");
 }
 
 #[tokio::test]

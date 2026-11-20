@@ -648,6 +648,11 @@ flowchart TD
   account's alone. An account with no record, or whose record shares the node with other accounts, has no
   machine of its own and is refused saying so before any machine is asked anything, since the Outlook and the
   Teams page on a shared machine are another person's session.
+- **Whom the machine and the Teams page are asked for.** Every account is asked for by its own account, but
+  the owner's: agency keeps no node record for the administrator's account, so the owner's node is bound in
+  agency, and his Teams page placed in bmo-ms-teams, under an account of their own. The setting
+  `outlook.owner_account` names that account beside his node, and the run on his node and his page token are
+  asked under it, so the node service finds it among his node's owners.
 - **Two roads, tried in order.** A road that does not stand hands the read to the next, and the answer names
   the road it came from. Where neither stands, the call is refused with each road's reason.
   1. **Outlook on the machine.** A command runs on the node through the node service's runs route, made as

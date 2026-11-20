@@ -36,6 +36,7 @@ token = "accounts-token"
 
 [outlook]
 owner_node = "pc-1"
+owner_account = "12"
 
 [node]
 address = "http://127.0.0.1:3410"

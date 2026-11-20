@@ -135,6 +135,10 @@ pub struct Outlook {
   /// The node the owner's account reads on; empty where its agency record is read as any account's.
   #[serde(default)]
   pub owner_node: String,
+  /// The account the owner is known by to agency's node records, the node service and bmo-ms-teams; empty where
+  /// it is his own.
+  #[serde(default)]
+  pub owner_account: String,
 }
 
 /// Microsoft Graph, which the hosted tool reads a person's sent items from with their page token.
