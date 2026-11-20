@@ -4,7 +4,8 @@ Mail as one service with its own API: each login account's own mailboxes, added 
 and watched through an adapter for each kind of account, IMAP and submission first. It threads and pages lists
 itself, runs filter rules as mail arrives, finds sender logos, holds a sent message for the account's undo
 span so it can be taken back, and says on its own event stream what came and what changed. It calls no other
-service. A coding harness takes it through its MCP server, `bmo-mail mcp`, and the `bmo-mail` skill; a console
+service. Its hosted tool, `bmo/mail_sent`, reads what a person sent on a day from the Outlook or the Teams page
+on their own PC, through agency, the receiver, the account service, the node service and bmo-ms-teams. A coding harness takes it through its MCP server, `bmo-mail mcp`, and the `bmo-mail` skill; a console
 takes its screen through the bundle in `client/`, which the service serves with its manifest, as `docs/api.md`
 states.
 
@@ -16,7 +17,10 @@ their routes, one owner key never reaching another's, the sealing of their secre
 import, the watcher over a dropped connection in `tests/watcher.rs`, the console face in `tests/console.rs`: the
 served manifest read through the vendored bmo-ui release's own reading and how far the console's credential and
 the service's token reach, and the screen's words in `tests/words.rs`: every key the screen writes is its own
-pack's or one the release's `wording-keys` module lists. `cargo test` runs them all. The console plugin bundle
+pack's or one the release's `wording-keys` module lists, and the hosted tool in `tests/sent_mail.rs`, called as
+the tool host calls it against stand-ins of agency, the node service, bmo-ms-teams and Graph: whose person and which
+machine, the two roads in their order, the token each upstream is asked with, the refusals, and the schemas its
+folder keeps. `cargo test` runs them all. The console plugin bundle
 carries its browser tests in `client/tests/`: the screen stands on its own in a small Nuxt host there, served by
 the client's dev server and driven with the mouse in Chromium against a stand-in of the service that keeps what
 the screen changes, and `tests/browser/mail-drag.test.ts` carries a list row onto a folder and a label of the mail
@@ -30,10 +34,11 @@ held to. The build check is `cargo check --all-targets` and the bundle's typeche
 | Folder | Holds |
 |---|---|
 | `src/` | The service, its client, its OpenAPI document and its MCP server, with its command, one crate split into its own modules |
-| `examples/` | `openapi`, which prints the OpenAPI document as `docs/openapi.json` keeps it |
+| `examples/` | `openapi`, which prints the OpenAPI document as `docs/openapi.json` keeps it, and `tool_schemas`, which writes the hosted tool's schemas into its folder |
 | `migrations/` | The store, its tables made by these statements in order |
 | `wording/` | The service's own words, one file to a language |
 | `plugin/` | The harness plugin's skill, `skills/bmo-mail/` |
+| `tools/` | The hosted tool, `sent-mail/`: its manifest, its schemas and its manual |
 | `client/` | The console plugin bundle: the mail screen, a project of its own |
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |

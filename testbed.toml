@@ -11,6 +11,10 @@ languages = ["cargo", "bun"]
 # A fresh tree gets the client's locked packages through the same frozen install its check step runs.
 setup = ["cd client && bun install --frozen-lockfile"]
 
+[tools]
+# The hosted tool, checked by the command its tool.toml names (docs/api.md, 「The hosted tool」).
+dir = "tools"
+
 [projects]
 # The console plugin bundle under client/ is a project of its own: its manifest stands outside any package
 # workspace. Bun runs its check script in the suite: the install, the typecheck and the browser tests, one file
@@ -72,6 +76,28 @@ env_links = [{ link = "settings.local.toml", target = "env/mail.toml" }]
 units = ["deploy/*.service"]
 # Answers 0 once the service the deployed settings name answers ready (docs/api.md, 「Health」).
 health = "~/.local/share/bmo-mail/deploy/bin/bmo-mail health"
+
+# The hosted tool is placed in its folder's .placed/: the binary the release's bin/ holds, its manifest, the schemas
+# and the manual beside it (docs/api.md, 「The hosted tool」).
+[[deploy.step]]
+id = "place-tools"
+phase = "before-flip"
+command = '''
+set -eu
+rm -rf tools/sent-mail/.placed
+mkdir -p tools/sent-mail/.placed
+cp bin/bmo-mail tools/sent-mail/tool.toml tools/sent-mail/*.json tools/sent-mail/manual.md tools/sent-mail/.placed/
+'''
+
+# The tool is registered with the tool host once the service answers ready, as this service's own, so a person's
+# supervisor reaches it with `bmo use bmo/mail_sent`.
+[[deploy.step]]
+id = "register-tools"
+phase = "after-health"
+command = '''
+set -eu
+bmo pocket put tools/sent-mail/.placed --placed --service bmo-mail --allow room.tools
+'''
 
 [deploy.console]
 # The service brings the mail screen to a console; once it is up the deployment probes its console face

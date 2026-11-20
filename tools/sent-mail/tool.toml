@@ -1,0 +1,22 @@
+# The mail service's hosted tool (docs/api.md, 「The hosted tool」): one entry, `bmo/mail_sent`, which reads what the
+# caller's own person sent on one day, on that person's own machine: from the classic Outlook running there, else
+# through Microsoft Graph with the token their own Teams page holds. Subjects, recipients and times alone.
+
+[tool]
+name = "sent-mail"
+protocol = 1
+language = "rust"
+build = 'cargo build --release --bin bmo-mail && cp "$BMO_CARGO_TARGET/release/bmo-mail" "$BMO_TOOL_OUT/"'
+check = 'cargo test --test main sent_mail::'
+run = ["bmo-mail", "tool"]
+
+[[entry]]
+namespace = "bmo"
+name = "mail_sent"
+title = "Read your person's sent mail"
+description = "Read what your own person sent on one day (subject, recipients and time of each message, never a body or an attachment), from the classic Outlook running on their own PC, else through Microsoft Graph with the token their own Teams page holds. Only your own account's person, only on their own machine."
+manual = "manual.md"
+input = "input.json"
+output = "output.json"
+hints = { read_only = true, destructive = false, open_world = true, idempotent = true }
+capabilities = ["room.tools"]

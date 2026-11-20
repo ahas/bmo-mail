@@ -16,6 +16,10 @@ const DEFAULTS: &str = include_str!("../settings.toml");
 pub const SETTINGS_FILE: &str = "settings.toml";
 /// The file a deployment overrides it with.
 pub const LOCAL_SETTINGS_FILE: &str = "settings.local.toml";
+/// The data root's folder the deployment's settings stand in, as the hosted tool reads them.
+pub const DEPLOYED_FOLDER: &str = "env";
+/// The deployment's settings file there, each release's `settings.local.toml`.
+pub const DEPLOYED_FILE: &str = "mail.toml";
 /// The environment variable naming the settings folder.
 pub const SETTINGS_FOLDER: &str = "BMO_MAIL_SETTINGS";
 /// What every environment variable that sets a key begins with.
@@ -35,6 +39,13 @@ pub struct Settings {
   pub watcher: Watcher,
   pub wording: Wording,
   pub console: Console,
+  pub agency: Upstream,
+  pub receiver: Upstream,
+  pub account_service: Upstream,
+  pub outlook: Outlook,
+  pub node: Upstream,
+  pub ms_teams: Upstream,
+  pub graph: Graph,
 }
 
 /// The HTTP server.
@@ -104,6 +115,35 @@ pub struct Console {
   pub token: String,
 }
 
+/// A unit the hosted tool calls (`docs/api.md`, 「The hosted tool」): its address and the token it presents
+/// there, given itself or as the file holding it. An address or a token left empty is none, and the tool's road
+/// through that unit does not stand.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Upstream {
+  #[serde(default)]
+  pub address: String,
+  /// The token itself; it stands before the file where both are given.
+  #[serde(default)]
+  pub token: String,
+  #[serde(default)]
+  pub token_file: Option<PathBuf>,
+}
+
+/// Where the Outlook road reads the owner's own account.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Outlook {
+  /// The node the owner's account reads on; empty where its agency record is read as any account's.
+  #[serde(default)]
+  pub owner_node: String,
+}
+
+/// Microsoft Graph, which the hosted tool reads a person's sent items from with their page token.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Graph {
+  /// Its address, its version included.
+  pub address: String,
+}
+
 /// The service's own words (`docs/api.md`, 「The service's own words」).
 #[derive(Clone, Debug, Deserialize)]
 pub struct Wording {
@@ -122,18 +162,35 @@ impl Settings {
   /// The settings read from `dir`, then from `environment` where it is given and from the process's own
   /// environment where it is not, with every relative path read from `dir`.
   pub fn read(dir: &Path, environment: Option<HashMap<String, String>>) -> Result<Self, SettingsError> {
+    Self::layered(dir, &[dir.join(SETTINGS_FILE), dir.join(LOCAL_SETTINGS_FILE)], environment)
+  }
+
+  /// The settings the hosted tool reads (`docs/api.md`, 「The hosted tool」): the defaults, then the data root's
+  /// `env/mail.toml`, the deployment's own local settings, with every relative path read from that folder.
+  pub fn deployed(data_root: &Path) -> Result<Self, SettingsError> {
+    let folder = data_root.join(DEPLOYED_FOLDER);
+    let local = folder.join(DEPLOYED_FILE);
+
+    Self::layered(&folder, &[local], Some(HashMap::new()))
+  }
+
+  /// The defaults, then each of `files` that stands, in order, then the environment, with every relative path
+  /// read from `dir`.
+  fn layered(
+    dir: &Path,
+    files: &[PathBuf],
+    environment: Option<HashMap<String, String>>,
+  ) -> Result<Self, SettingsError> {
     let environment = Environment::with_prefix(ENVIRONMENT_PREFIX)
       .prefix_separator("_")
       .separator("__")
       .try_parsing(true)
       .source(environment);
-    let mut settings: Self = Config::builder()
-      .add_source(File::from_str(DEFAULTS, FileFormat::Toml))
-      .add_source(File::from(dir.join(SETTINGS_FILE)).format(FileFormat::Toml).required(false))
-      .add_source(File::from(dir.join(LOCAL_SETTINGS_FILE)).format(FileFormat::Toml).required(false))
-      .add_source(environment)
-      .build()?
-      .try_deserialize()?;
+    let layers = files.iter().fold(
+      Config::builder().add_source(File::from_str(DEFAULTS, FileFormat::Toml)),
+      |layers, file| layers.add_source(File::from(file.as_path()).format(FileFormat::Toml).required(false)),
+    );
+    let mut settings: Self = layers.add_source(environment).build()?.try_deserialize()?;
 
     settings.folder = dir.to_path_buf();
     settings.store.path = dir.join(&settings.store.path);
@@ -149,6 +206,19 @@ impl Settings {
       .key_file
       .filter(|file| !file.as_os_str().is_empty())
       .map(|file| dir.join(file));
+    for upstream in [
+      &mut settings.agency,
+      &mut settings.receiver,
+      &mut settings.account_service,
+      &mut settings.node,
+      &mut settings.ms_teams,
+    ] {
+      upstream.token_file = upstream
+        .token_file
+        .take()
+        .filter(|file| !file.as_os_str().is_empty())
+        .map(|file| dir.join(file));
+    }
 
     Ok(settings)
   }

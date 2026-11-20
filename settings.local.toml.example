@@ -20,3 +20,27 @@ key_file = "/srv/bmo-mail/env/mail-secrets.key"
 
 [staging]
 dir = "/srv/bmo-mail/mail-staging"
+
+# The hosted tool's upstreams, each with the token file it presents there.
+[agency]
+address = "http://127.0.0.1:13104"
+token_file = "/srv/bmo-mail/env/agency.token"
+
+[receiver]
+address = "http://127.0.0.1:3405"
+token_file = "/srv/bmo-mail/env/receiver.token"
+
+[account_service]
+address = "http://127.0.0.1:3400"
+token = "accounts-token"
+
+[outlook]
+owner_node = "pc-1"
+
+[node]
+address = "http://127.0.0.1:3410"
+token_file = "/srv/bmo-mail/env/mail-node.token"
+
+[ms_teams]
+address = "http://127.0.0.1:3420"
+token_file = "/srv/bmo-mail/env/ms-teams-mail-caller.token"

@@ -7,3 +7,4 @@ client/.nuxt/
 client/tests/host/.nuxt/
 client/.output/
 .graph/
+tools/*/.placed/

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mail_sent input",
+  "description": "What the tool is asked.",
+  "type": "object",
+  "properties": {
+    "day": {
+      "description": "The calendar date to read, `YYYY-MM-DD`, in the service's time zone; today there where it is left out.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    }
+  },
+  "additionalProperties": false
+}

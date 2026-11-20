@@ -49,3 +49,39 @@ token = ""
 language = "ko"
 # The time zone the service's own words write dates in.
 time_zone = "Asia/Seoul"
+
+# The hosted tool's upstreams (docs/api.md, 「The hosted tool」). Each address and token file has no default: a
+# deployment names its own, and a road whose upstream is not named does not stand. Each takes its token as
+# `token` itself or as `token_file`; a token file is read at each call, its surrounding whitespace dropped.
+[agency]
+# Agency's control address, where the tool reads whose account a caller acts for and which node is its own.
+address = ""
+token_file = ""
+
+[receiver]
+# The receiver's address, where the tool reads the owner's sender for a caller that acts for no account.
+address = ""
+token_file = ""
+
+[account_service]
+# The account service's address, where the tool reads the account the owner's sender is linked to.
+address = ""
+token_file = ""
+
+[outlook]
+# The node the owner's account reads its sent mail on; empty, its agency record is read as any account's.
+owner_node = ""
+
+[node]
+# The node service's address, where the tool runs the Outlook read as the caller bmo-mail.
+address = ""
+token_file = ""
+
+[ms_teams]
+# bmo-ms-teams's address, where the tool asks a person's page token as one of its callers.
+address = ""
+token_file = ""
+
+[graph]
+# Microsoft Graph's address, its version included.
+address = "https://graph.microsoft.com/v1.0"

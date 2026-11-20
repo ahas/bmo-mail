@@ -361,6 +361,7 @@ dependencies = [
  "config",
  "ego-tree",
  "encoding_rs",
+ "flate2",
  "futures",
  "hickory-resolver",
  "inventory",

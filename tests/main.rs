@@ -4,5 +4,6 @@
 mod accounts;
 mod console;
 mod import;
+mod sent_mail;
 mod watcher;
 mod words;

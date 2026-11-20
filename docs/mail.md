@@ -20,6 +20,9 @@ flowchart TD
   Service -->|events| Console
 ```
 
+Beside the service stands its hosted tool, which reads what a person sent from their own machine and touches
+neither the service nor its store (「A person's sent mail, read on their own machine」).
+
 ## Scope
 
 - **Accounts:** each owner's own list of mail accounts, added, changed and removed from the screen
@@ -39,6 +42,9 @@ flowchart TD
   - New mail refreshing the open list, and a notice on whatever console page is open, raised by the
     console from the kind the bundle's manifest names.
   - A small set of desktop keyboard shortcuts.
+- **A person's own sent mail, read on their own machine:** the hosted tool that tells a person's BMO what
+  that person sent on a day, from the Outlook or the Teams page they are signed in to on their own PC
+  (「A person's sent mail, read on their own machine」). It reads no account of this service.
 - **Left to the mail server (its operator's work, outside this repository):**
   - Judging spam by content. The service files mail into spam by its own rules and by a spam
     verdict header a filter on the server wrote; it does not classify content itself.
@@ -610,6 +616,64 @@ flowchart TD
   stands in the list toolbar's range.
 - **Every word the screen shows** is the bundle's own language pack (`docs/api.md`, 「The console
   plugin bundle」); a refusal of a route is shown by its code in the pack's words.
+
+## A person's sent mail, read on their own machine
+
+The hosted tool `bmo/mail_sent` answers what one person sent on one day: each message's subject, its
+recipients and when it was sent, never a body or an attachment. It reads the mail of the caller's own person,
+on that person's own machine, in the session they are signed in to there. Nothing here reads a whole company's
+mail, no application is registered with the company's tenant, and no account of this service is involved. How
+it is called is `docs/api.md`, 「The hosted tool」.
+
+```mermaid
+flowchart TD
+  BMO["a person's BMO"] -->|bmo/mail_sent| Tool["the tool: bmo-mail tool"]
+  Tool -->|"whose account, which node"| Agency[agency]
+  Tool -->|"the owner's account, for the deployment's own callers"| Owner["the receiver and the account service"]
+  Tool -->|"a run, as the caller bmo-mail"| Node[the node service]
+  Node -->|the hub| PC["the person's PC: the running Outlook"]
+  Tool -->|"a page token, for the account"| Teams[bmo-ms-teams]
+  Teams -->|"a look"| Page["the person's PC: their Teams page"]
+  Tool -->|"the person's token"| Graph[Microsoft Graph]
+```
+
+- **Whose mail.** The caller is the agent the tool session is held by. The account it acts for is the
+  `ownerAccount` agency gives the supervisor of that name, else the role agent of that name. A caller agency
+  names no account for is the deployment's own, and acts for the owner's account: the account the account
+  service links to the receiver's owner sender. Where that link stands nowhere, the call is refused saying so.
+  No argument names a person: a caller reads its own person's mail and nobody else's.
+- **Which machine.** The owner's account reads on the node the setting `outlook.owner_node` names, where it
+  names one, since the owner's own record may be one he shares with accounts of his own. Any other account's
+  machine is the node agency's record of a person's node names for it, and only where that record is the
+  account's alone. An account with no record, or whose record shares the node with other accounts, has no
+  machine of its own and is refused saying so before any machine is asked anything, since the Outlook and the
+  Teams page on a shared machine are another person's session.
+- **Two roads, tried in order.** A road that does not stand hands the read to the next, and the answer names
+  the road it came from. Where neither stands, the call is refused with each road's reason.
+  1. **Outlook on the machine.** A command runs on the node through the node service's runs route, made as
+     the caller `bmo-mail` for the account, so the node service judges again that the node lets `bmo-mail`
+     run there and that the node is the account's own. The command attaches to a classic Outlook that is
+     already running, through the object it registers for other programs, and never starts one: where no
+     Outlook runs, or the running one cannot be attached to, it says so and the machine is left as it was.
+     Attached, it walks the default mailbox's sent folder newest first, from the day's end back to its start,
+     and reads each mail item's subject, the moment it was sent and its recipients: each one's name, its
+     address, an Exchange recipient's SMTP address where Outlook holds one, and whether it was a to, a cc or
+     a bcc. The answer comes back compressed and encoded as plain characters, so a day of many messages fits
+     the hub's ceiling on a command's output and no code page bends a subject.
+  2. **Microsoft Graph with the person's Teams page token.** bmo-ms-teams's page token road hands over a Graph
+     access token read from the person's own Teams page on their own machine, for one of the scopes that read
+     mail, asked with the caller token that road gives this service. The tool asks Graph for the messages
+     of the person's own sent items folder sent within the day, reading the same fields, and follows Graph's
+     pages to the last. The token serves this read alone: it is kept nowhere and written nowhere.
+- **The day** is a calendar date in the time zone the setting `wording.time_zone` names, today where none is
+  given, from its midnight to the next. The messages are answered in the order they were sent.
+- **Nothing is kept.** The answer goes to the caller alone: no store row, event or log line carries a
+  subject, a name or an address, and a refusal names the account and the node, never a message.
+- **What the machine needs:** classic Outlook running and signed in, or the Teams page standing and signed in
+  (bmo-ms-teams's `docs/design.md`, 「The page token road」); and the node's callers naming `bmo-mail`
+  (the node service's `docs/nodes.md`, 「A node's callers」). Outlook's guard over a program reading
+  addresses is the machine's own setting: where it would ask the person, the command waits on that question
+  until the hub's ceiling ends it, and the read goes on to Graph.
 
 ## A stand-in mail server
 

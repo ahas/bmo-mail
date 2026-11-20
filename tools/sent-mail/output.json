@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mail_sent output",
+  "description": "A day's sent mail of the caller's own person.",
+  "type": "object",
+  "properties": {
+    "day": {
+      "description": "The day read, `YYYY-MM-DD`.",
+      "type": "string"
+    },
+    "road": {
+      "$ref": "#/$defs/Road"
+    },
+    "node": {
+      "description": "The person's node it was read on.",
+      "type": "string"
+    },
+    "messages": {
+      "description": "The messages, in the order they were sent.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SentMessage"
+      }
+    }
+  },
+  "required": [
+    "day",
+    "road",
+    "node",
+    "messages"
+  ],
+  "$defs": {
+    "Road": {
+      "description": "The road a day's sent mail was read on.",
+      "oneOf": [
+        {
+          "description": "The running classic Outlook on the person's machine.",
+          "type": "string",
+          "const": "outlook"
+        },
+        {
+          "description": "Microsoft Graph, with the token the person's own Teams page holds.",
+          "type": "string",
+          "const": "graph"
+        }
+      ]
+    },
+    "SentMessage": {
+      "description": "One message sent: its subject, when it was sent and to whom; never its body or its attachments.",
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "sentAt": {
+          "description": "When it was sent, in epoch milliseconds.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Recipient"
+          }
+        }
+      },
+      "required": [
+        "subject",
+        "sentAt",
+        "recipients"
+      ]
+    },
+    "Recipient": {
+      "description": "One recipient of a sent message.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "address": {
+          "description": "The address, an Exchange recipient's SMTP address where one is held; none where the road gave none.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/RecipientKind"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ]
+    },
+    "RecipientKind": {
+      "description": "Whether a recipient was written to, copied or blind-copied.",
+      "type": "string",
+      "enum": [
+        "to",
+        "cc",
+        "bcc"
+      ]
+    }
+  }
+}

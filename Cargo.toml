@@ -38,6 +38,8 @@ config = { version = "0.15", default-features = false, features = ["toml"] }
 ego-tree = "0.11.0"
 # A body's charset read as text, an unknown one as UTF-8.
 encoding_rs = "0.8.42"
+# The Outlook road's answer, gzipped on the person's machine so a day of many messages fits the hub's ceiling.
+flate2 = "1.1.10"
 futures = "0.3.31"
 # A sender domain's BIMI record.
 hickory-resolver = "0.26.3"

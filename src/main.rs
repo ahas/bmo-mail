@@ -40,6 +40,8 @@ enum Word {
   /// How a console reaches the service, as one JSON object the testbed's console probe reads; it prints both
   /// credentials, so only the deployment runs it.
   ConsoleReach,
+  /// Answers one call of the hosted tool, protocol 1, read on standard input, on standard output.
+  Tool,
   /// The nouns this command carries for a host to dispatch, one a line: none.
   Nouns,
   /// Moves the old archive's seven mail tables from the item's export into this service's store (TODO #1923).
@@ -78,6 +80,19 @@ async fn main() -> ExitCode {
 
   if let Word::Nouns = command.word {
     NOUNS.iter().for_each(|noun| println!("{noun}"));
+    return ExitCode::SUCCESS;
+  }
+
+  // The hosted tool reads the deployment's settings from the data root its call's record names.
+  if let Word::Tool = command.word {
+    let mut input = String::new();
+
+    if let Err(why) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input) {
+      eprintln!("bmo-mail: the call could not be read: {why}");
+      return ExitCode::FAILURE;
+    }
+    println!("{}", bmo_mail::sent_mail::call::answer(&input, chrono::Utc::now()).await);
+
     return ExitCode::SUCCESS;
   }
 
@@ -127,7 +142,9 @@ async fn main() -> ExitCode {
       Ok(())
     }
     Word::Nouns => Ok(()),
-    Word::Import { .. } => unreachable!("the import is answered before the settings are read"),
+    Word::Import { .. } | Word::Tool => {
+      unreachable!("the import and the tool are answered before the settings are read")
+    }
   };
 
   match done {

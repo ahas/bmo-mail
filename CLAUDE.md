@@ -27,10 +27,11 @@ structure (archive document #301, 「원칙」).
 
 ## Boundaries
 
-- **No other unit is called.** The console in front of the service checks the sign-in, hands the screen's
-  requests on, relays the event stream and rings the push; the service checks its bearer token and listens
-  on a loopback address (`docs/api.md`, 「Who checks what」). Every other unit is reached through its API,
-  never through its code, its tables or its files.
+- **The service calls no other unit.** The console in front of the service checks the sign-in, hands the
+  screen's requests on, relays the event stream and rings the push; the service checks its bearer token and
+  listens on a loopback address (`docs/api.md`, 「Who checks what」). The hosted tool alone calls agency, the
+  receiver, the account service, the node service and bmo-ms-teams (`docs/api.md`, 「The hosted tool」). Every other unit is reached through its
+  API, never through its code, its tables or its files.
 - **A client of another service is one module named for that service** under `src/clients/`, holding only
   the calls this repository makes, so it can be swapped for that service's own client.
 - **Dependencies:** crates from the registry pinned in `Cargo.toml`, and among other repositories only the

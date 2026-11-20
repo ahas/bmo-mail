@@ -2,8 +2,8 @@
 
 Fixed at 0.1.0-rev.3.
 
-Every route this service answers, its event stream, its command, its client, its harness plugin, its store, its
-settings, the words it writes and the console plugin bundle it serves. The service is an upstream: a coding
+Every route this service answers, its event stream, its command, its client, its harness plugin, its hosted
+tool, its store, its settings, the words it writes and the console plugin bundle it serves. The service is an upstream: a coding
 harness takes it as its first entry point through its MCP server, and a console takes its screen through the
 bundle its manifest names. It follows the common wire format and the API design of bmo-chat's `docs/conventions.md`, and states
 here only what is its own. What mail does is `docs/mail.md`; this document says how it is asked.
@@ -395,6 +395,7 @@ back; neither wait gives up.
   testbed's console probe asks it (bmo-testbed's `docs/declaration.md`, `[deploy.console]`): `address`,
   `http://` and the settings' `server.listen`, `consoleToken`, the settings' `console.token`, and `token`, the
   settings' `server.token`. It prints both credentials, so only the deployment runs it.
+- **`bmo-mail tool`** answers one call of the hosted tool on standard input and output (「The hosted tool」).
 - **`bmo-mail nouns`** prints nothing: the command carries no noun of its own for a host to dispatch.
 
 ## The client
@@ -431,9 +432,46 @@ The plugin `bmo-mail`: the MCP server `bmo-mail mcp` starts on standard input an
 | `mail_draft_update` | `PATCH /accounts/{accountName}/drafts/{draftId}` | `accountName`, `draftId`; the fields to change |
 | `mail_send` | `POST /accounts/{accountName}/sends` | `accountName`, `draftId`; `sendAt` |
 
+## The hosted tool
+
+The tool `sent-mail` under `tools/`, in the tool host's manifest format, protocol 1, a process per call (bmo-pocket's
+`docs/api.md`, 「The call protocol」): its `tool.toml`, the schemas its entry names and its manual. Its one entry,
+**`bmo/mail_sent`**, reads what the caller's own person sent on one day, on that person's own machine
+(`docs/mail.md`, 「A person's sent mail, read on their own machine」).
+
+- **Its executable is this service's binary,** run as `bmo-mail tool`. It reads the call and its session record
+  on standard input and writes one tool result on standard output. It never calls the service and opens no store.
+- **It is placed and registered by this repository's deployment:** the release's binary is copied with the
+  manifest, the schemas and the manual into the tool's `.placed/` folder before the flip, and registered as this
+  service's own with the tool host once the service answers ready, allowing `room.tools`, the capability a
+  supervisor's record holds. Both steps stand in `testbed.toml`.
+- **Its settings** are the deployment's: the defaults built into the binary, then the data root's
+  `env/mail.toml`, the file each release links as `settings.local.toml`, the data root read from the record's
+  variable `BMO_DATA_DIR`. A relative path there is read from the data root's `env/`. A call whose record names
+  no data root, or whose settings do not read, is refused saying so.
+- **The argument:** `day`, the calendar date `YYYY-MM-DD` in the time zone `wording.time_zone` names; today
+  there where it is left out. Nothing names a person or a node.
+- **The answer,** as structured content and as a person's reading, one line a message: `day`; `road`,
+  `outlook` or `graph`, the road it was read on; `node`, the person's node; and `messages`, in the order they
+  were sent, each `subject`, `sentAt` in epoch milliseconds and `recipients`, each `name`, `address` (null
+  where the road gave none) and `kind`, `to`, `cc` or `bcc`.
+- **A refusal is a tool result marked an error,** its English sentence saying why: the owner's account the
+  deployment's own caller acts for is linked nowhere; the account has no machine of its own; agency, the
+  receiver or the account service could not be asked; a setting the call needs is not
+  given or its token file does not read; the day is not a date; or neither road stood, with each road's reason.
+
+| Reached | How |
+|---|---|
+| agency | `GET /supervisors/{supervisorName}`, else `GET /role-agents`, for the account the caller acts for; `GET /person-nodes` for that account's node |
+| the receiver | `GET /owner`, the owner's sender, where the caller acts for no account or `outlook.owner_node` is named |
+| the account service | `GET /senders/{senderId}/user`, the account the owner's sender is linked to |
+| the node service | `POST /nodes/{nodeName}/runs`, as the caller `bmo-mail` with the token of its own, the command in `powershell`, the day's bounds handed as variables |
+| bmo-ms-teams | `POST /page-tokens`, as its caller with the token of its own, for the account and the scopes `Mail.ReadBasic`, `Mail.Read` and `Mail.ReadWrite` |
+| Microsoft Graph | the messages of the person's `sentitems` folder sent within the day, with the page token |
+
 ## What the service reaches
 
-It calls no other service.
+The service calls no other service; its hosted tool calls the units 「The hosted tool」 names.
 
 - **The servers each account names,** through its kind's adapter: for `imap-smtp` the IMAP and submission
   servers, over TLS but where a TLS name is `-`.
@@ -469,6 +507,21 @@ the settings folder.
 | `wording` | `time_zone` | the time zone dates are written in | `Asia/Seoul` |
 | `console` | `dir` | the bundle build's folder: `module.js`, `style.css`, `words.json`, `layer.json` and every chunk the module loads | `console` |
 | `console` | `token` | the console's credential, which reaches the console face and the routes the screen uses | none: no console face is served |
+| `agency` | `address` | agency's control address, which the hosted tool asks whose account a caller acts for and which node is that account's | none: the tool reads no one's mail |
+| `agency` | `token_file` | the file holding the token the tool presents to agency | none |
+| `receiver` | `address`, `token_file` | the receiver, which the hosted tool asks for the owner's sender | none: the deployment's own callers read no one's mail |
+| `account_service` | `address`, `token_file` | the account service, which the hosted tool asks for the account the owner's sender is linked to | none: the deployment's own callers read no one's mail |
+| `outlook` | `owner_node` | the node the owner's account reads its sent mail on | none: its agency record is read as any account's |
+| `node` | `address` | the node service's address, where the hosted tool makes its runs | none: the Outlook road does not stand |
+| `node` | `token_file` | the file holding the token the node service's configuration gives the caller `bmo-mail` | none |
+| `ms_teams` | `address` | bmo-ms-teams's address, where the hosted tool asks a page token | none: the Graph road does not stand |
+| `ms_teams` | `token_file` | the file holding the token bmo-ms-teams's configuration gives this service as a page token caller | none |
+| `graph` | `address` | Microsoft Graph's address, its version included | `https://graph.microsoft.com/v1.0` |
+
+Each of `agency`, `receiver`, `account_service`, `node` and `ms_teams` takes its token either as `token` itself or as
+`token_file`, the file holding it; `token` stands first where both are given. A token file's surrounding
+whitespace is dropped, and the file is read at each call, so a token changed where it is kept is taken up at
+once.
 
 ## The console plugin bundle
 
