@@ -135,6 +135,7 @@ async fn the_served_manifest_reads_through_the_vendored_release() {
   assert_eq!(read["name"], "mail");
   assert_eq!(read["role"], "member");
   assert_eq!(read["pushKinds"], json!(["message.created"]));
+  assert_eq!(read["pushPlaces"], json!({ "message.created": "/mail/{accountName}/inbox/{threadId}" }));
   assert_eq!(read["sidebarUnread"], json!({ "path": "/summary", "field": "unreadCount" }));
 }
 

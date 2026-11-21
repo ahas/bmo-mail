@@ -534,7 +534,8 @@ guards them, and this section states only what mail supplies and chooses within 
 - **The declaration** is `src/console.json`, every manifest field the service decides: the bundle `mail`, its
   menu title `mail.title.screen`, the icon `i-material-symbols-mail-outline`, its screens under `/mail`, the
   service `mail`, the API prefix `/`, the role `member`, the owner key asked, the event stream read, no
-  WebSocket, the notice kind `message.created`, and the sidebar count read from `GET /summary`'s `unreadCount`.
+  WebSocket, the notice kind `message.created` with the place its notice opens, `/mail/{accountName}/inbox/{threadId}`,
+  the message's conversation in its account's inbox, and the sidebar count read from `GET /summary`'s `unreadCount`.
   It names no share read.
 - **The bundle build's folder** is the setting `console.dir`. `bun run bundle` in `client/` builds the screen
   with bmo-ui's bundle build into `client/.output/console`, or the folder `BMO_MAIL_CONSOLE_OUT` names: the

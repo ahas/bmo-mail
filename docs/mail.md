@@ -244,7 +244,9 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 - **Notices on any other page** are the console's: the bundle's manifest names `message.created` among
   its notice kinds and gives it words in its pack, and a console that raises notices raises one for each
   such event on a page other than the mail screen on that account. A message from the account itself,
-  or one already read, is passed over. Pressing the notice opens the thread.
+  or one already read, is passed over. The manifest names the place a new mail's notice opens,
+  `/mail/<account>/inbox/<thread>` filled from the message's `accountName` and `threadId`, so pressing the
+  notice opens its conversation in that account's inbox.
 
 ## Push
 
@@ -476,7 +478,8 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   under the manifest's title and icon, and the screen draws no bar of its own. Found without that offer it draws its
   own bar, named and marked the same.
 - **Addresses:** `/mail/<account>/<view>` and `/mail/<account>/<view>/<thread>`, where the account is
-  the address's local part and a view is a folder role, `starred`, `label/<id>`, `folder/<name>` or
+  the account's name, its address's local part unless it was given another, the thread is the conversation's
+  `threadId`, and a view is a folder role, `starred`, `label/<id>`, `folder/<name>` or
   `search?q=`. Opening a thread is a history step, so a shared link opens the same thread.
 - **Desktop (1440px):** three regions side by side behind Splitters, each scrolling on its own:
   1. **Mail nav** — the account switch (each account with its unread mark), the folder roles,

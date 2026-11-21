@@ -120,7 +120,7 @@ and `side-parts`, and its components.
 | `client/shared/types.ts` | `MailSummary`, `MailAccountSummary`, `MailSummaryMessage` | the summary and the account in `src/wire.rs`, generated into `client/shared/openapi.ts` for the screen |
 | `client/shared/types.ts` | `PushPayload` | not carried: the console words a notice from the bundle's pack |
 | `client/shared/config.ts` | `MAIL_PUSH` | the bundle's declared notice kind, `message.created` |
-| `client/shared/paths.ts` | `mailThreadPath` | not carried: a notice's address is the console's |
+| `client/shared/paths.ts` | `mailThreadPath` | not carried: the bundle's manifest names the thread's place for the notice kind, and the console fills it from the message |
 | `client/shared/links.ts` | `linkParts`, which the screen's frame reads | the bundle, on bmo-text's `web-address` |
 | `client/app/domain/settings.ts` | `useMailColumns`, the list's column widths kept in the browser | the bundle's own domain module, `mail-columns` |
 | `client/app/domain/avatars.ts` | `identityMark` and the tones and initial it draws with, the letter an address wears without a logo | the bundle's own domain module, `mail-avatars` |

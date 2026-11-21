@@ -10,5 +10,6 @@
   "events": true,
   "websocket": false,
   "pushKinds": ["message.created"],
+  "pushPlaces": { "message.created": "/mail/{accountName}/inbox/{threadId}" },
   "sidebarUnread": { "path": "/summary", "field": "unreadCount" }
 }
