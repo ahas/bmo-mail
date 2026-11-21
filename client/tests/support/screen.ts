@@ -15,7 +15,7 @@ export interface Screen {
   close: () => Promise<void>;
 }
 
-// How long the dev server may take to answer the screen's page, which it builds on the first ask.
+// How long the dev server may take to answer the screen's page, and to build what a browser's first load of it asks.
 const READY_MS = 180_000;
 
 function freePort(): Promise<number> {
@@ -51,6 +51,19 @@ async function ready(origin: string, exited: () => boolean): Promise<void> {
   throw new Error(`The mail client's dev server did not answer ${origin}/mail/ in time.`);
 }
 
+// The screen's page loaded once in a browser of its own, which has the dev server build the modules the page
+// asks for, a build it makes on a browser's first ask alone: on a loaded machine that build outlasts a test's own
+// wait on its first page, so it is taken here, within the standing's bound, before any test opens one.
+async function warmed(browser: Browser, origin: string): Promise<void> {
+  const page = await browser.newPage();
+
+  try {
+    await page.goto(`${origin}/mail/`, { waitUntil: "load", timeout: READY_MS });
+  } finally {
+    await page.close();
+  }
+}
+
 export async function standScreen(): Promise<Screen> {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -84,6 +97,13 @@ export async function standScreen(): Promise<Screen> {
     await ready(origin, () => exited);
 
     const browser = await chromium.launch();
+
+    try {
+      await warmed(browser, origin);
+    } catch (failure) {
+      await browser.close();
+      throw failure;
+    }
 
     return {
       origin,
