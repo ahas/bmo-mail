@@ -561,7 +561,9 @@ guards them, and this section states only what mail supplies and chooses within 
   the `wording-keys` module of the vendored release lists, which the console answers; a test holds every key
   the screen's code writes to the pack and that list. The screen's name
   stands under `mail.title.screen`, and the words a console raises a notice of a declared kind in under
-  `mail.notice.<kind>`, a `title` and a `body` that takes the message's `{from}` and `{subject}`. The screen
+  `mail.notice.<kind>`, a `title` and a `body` each taking a field of the message the event carries: a new
+  message's title is its `{subject}` and its body its `{from}`, so no separator stands between two fields that
+  may be empty, and a console says a message with no subject by the screen's own name. The screen
   shows a refusal by the key `mail.error.<code>`, a kind of account by `mail.account_kind.<kind>` and each of
   its fields by `mail.account_field.<field>`, so a kind the service declares is named without the screen
   knowing it.

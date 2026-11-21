@@ -297,8 +297,8 @@
     "notice": {
       "message": {
         "created": {
-          "body": "{from}: {subject}",
-          "title": "새 메일"
+          "body": "{from}",
+          "title": "{subject}"
         }
       }
     },

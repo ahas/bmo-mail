@@ -157,3 +157,45 @@ fn the_screen_asks_only_its_own_words_and_the_layers() {
     "trees beside the bundle's namespace in the pack"
   );
 }
+
+/// Each word a console raises a notice of a declared kind in takes one field of the member the event carries and
+/// nothing beside it, so no separator stands between fields of which one may be empty (`docs/api.md`, 「The console
+/// plugin bundle」, the wording): a new message's title is its subject and its body its sender.
+#[test]
+fn a_notice_word_takes_one_field_alone() {
+  let declaration: Value =
+    serde_json::from_str(bmo_mail::console::DECLARATION).expect("the declaration is JSON");
+  let kinds = declaration["pushKinds"].as_array().expect("the declaration names its notice kinds");
+
+  for path in locales() {
+    let pack: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("the pack reads"))
+      .expect("the pack is JSON");
+
+    for kind in kinds {
+      let kind = kind.as_str().expect("a kind is text");
+      let mut words = &pack[namespace()]["notice"];
+
+      for part in kind.split('.') {
+        words = &words[part];
+      }
+
+      for role in ["title", "body"] {
+        let word = words[role].as_str().unwrap_or_else(|| panic!("{path} gives {kind} a {role}"));
+
+        assert!(
+          word.starts_with('{') && word.ends_with('}') && word.matches('{').count() == 1,
+          "{path}: the {role} of {kind} takes one field alone, not {word:?}"
+        );
+      }
+    }
+  }
+
+  let created = &serde_json::from_str::<Value>(
+    &std::fs::read_to_string(client().join("i18n").join("locales").join("ko.json"))
+      .expect("the pack reads"),
+  )
+  .expect("the pack is JSON")[namespace()]["notice"]["message"]["created"];
+
+  assert_eq!(created["title"], "{subject}");
+  assert_eq!(created["body"], "{from}");
+}
