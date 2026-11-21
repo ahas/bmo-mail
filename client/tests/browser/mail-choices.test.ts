@@ -39,7 +39,7 @@ afterAll(async () => {
 // A page of the screen's inbox at one width, its list read, handed to `drive` and closed with its context however
 // `drive` ends.
 async function onScreen(state: StandIn, width: Width, drive: (page: Page) => Promise<void>): Promise<void> {
-  const context = await screen.browser.newContext({ viewport: width.viewport, hasTouch: width.touch, isMobile: width.touch });
+  const context = await screen.context({ viewport: width.viewport, hasTouch: width.touch, isMobile: width.touch });
 
   try {
     await standBehind(context, state);

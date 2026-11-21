@@ -31,7 +31,7 @@ afterAll(async () => {
 // A page of the screen at one of its views, wide enough for the list's rows to be carried, its list read, handed
 // to `drive` and closed with its context however `drive` ends.
 async function onScreen(state: StandIn, view: string, drive: (page: Page) => Promise<void>): Promise<void> {
-  const context = await screen.browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const context = await screen.context({ viewport: { width: 1400, height: 900 } });
 
   try {
     await standBehind(context, state);

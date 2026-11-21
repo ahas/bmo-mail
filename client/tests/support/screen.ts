@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 
 import { chromium } from "playwright-core";
 
-import type { Browser } from "playwright-core";
+import type { Browser, BrowserContext, BrowserContextOptions } from "playwright-core";
 
 // The mail screen standing on its own for a browser test: the client's Nuxt project served by its dev server
 // on a free loopback port, the screen's page at `/mail`, and a headless Chromium to drive it. The dev server
@@ -12,8 +12,15 @@ import type { Browser } from "playwright-core";
 export interface Screen {
   origin: string;
   browser: Browser;
+  /** A browser context of the screen whose every wait on the page is bounded by `PAGE_MS`. */
+  context: (options?: BrowserContextOptions) => Promise<BrowserContext>;
   close: () => Promise<void>;
 }
+
+// How long a wait on the page may take, a page's load and its network going idle among them. The dev server hands
+// the screen's modules over one by one, so on a loaded machine one load of the page takes well past the driver's
+// own thirty seconds; a test's own bound stays the ceiling.
+const PAGE_MS = 90_000;
 
 // How long the dev server may take to answer the screen's page, and to build what a browser's first load of it asks.
 const READY_MS = 180_000;
@@ -108,6 +115,14 @@ export async function standScreen(): Promise<Screen> {
     return {
       origin,
       browser,
+      context: async (options) => {
+        const context = await browser.newContext(options);
+
+        context.setDefaultTimeout(PAGE_MS);
+        context.setDefaultNavigationTimeout(PAGE_MS);
+
+        return context;
+      },
       close: async () => {
         await browser.close();
         await stop();
