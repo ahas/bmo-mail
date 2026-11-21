@@ -9,7 +9,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 
 import words from "../../i18n/locales/ko.json";
 import { ACCOUNT, standBehind, standIn } from "../support/mail-stand-in";
-import { standScreen } from "../support/screen";
+import { drivingBound, standScreen } from "../support/screen";
 
 import type { StandIn } from "../support/mail-stand-in";
 import type { Locator, Page } from "playwright-core";
@@ -17,9 +17,11 @@ import type { Screen } from "../support/screen";
 
 let screen: Screen;
 
-// What a test may take at most, a bound and never a wait: the dev server builds the screen on its first page.
+// What standing the screen may take at most, a bound and never a wait: the dev server builds the screen on its
+// first page.
 const STANDING_MS = 300_000;
-const DRIVING_MS = 120_000;
+// Each test loads the screen once.
+const DRIVING_MS = drivingBound(1);
 
 const WIDTHS = [
   { name: "a wide window", viewport: { width: 1280, height: 900 }, touch: false },
@@ -51,7 +53,7 @@ async function onScreen(state: StandIn, width: Width, drive: (page: Page) => Pro
     await drive(page);
     expect(state.unanswered).toEqual([]);
   } finally {
-    await context.close();
+    await screen.release(context);
   }
 }
 

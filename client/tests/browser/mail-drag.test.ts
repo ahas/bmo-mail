@@ -8,7 +8,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 
 import words from "../../i18n/locales/ko.json";
 import { ACCOUNT, standBehind, standIn } from "../support/mail-stand-in";
-import { standScreen } from "../support/screen";
+import { drivingBound, standScreen } from "../support/screen";
 
 import type { StandIn } from "../support/mail-stand-in";
 import type { Screen } from "../support/screen";
@@ -16,9 +16,9 @@ import type { Locator, Page } from "playwright-core";
 
 let screen: Screen;
 
-// What a test may take at most, a bound and never a wait: the dev server builds the screen on its first page.
+// What standing the screen may take at most, a bound and never a wait: the dev server builds the screen on its
+// first page. Each test is bounded by the loads of the screen it makes.
 const STANDING_MS = 300_000;
-const DRIVING_MS = 120_000;
 
 beforeAll(async () => {
   screen = await standScreen();
@@ -42,7 +42,7 @@ async function onScreen(state: StandIn, view: string, drive: (page: Page) => Pro
     await drive(page);
     expect(state.unanswered).toEqual([]);
   } finally {
-    await context.close();
+    await screen.release(context);
   }
 }
 
@@ -130,7 +130,7 @@ test("a row carried onto a folder moves there alone, the folder marked while it 
     await listShows(page, ["thread-m1", "thread-m2"]);
     expect(conversation(state, "m3").folderName).toBe("Trash");
   });
-}, DRIVING_MS);
+}, drivingBound(4));
 
 test("chosen rows carried onto a label all take it, and the open view takes no drop", async () => {
   const state = standIn();
@@ -160,7 +160,7 @@ test("chosen rows carried onto a label all take it, and the open view takes no d
     await listShows(page, ["thread-m1", "thread-m2", "thread-m3"]);
     expect(conversation(state, "m1").folderName).toBe("INBOX");
   });
-}, DRIVING_MS);
+}, drivingBound(3));
 
 test("a rule carried by its handle below the last lands there with a line marking it, moves down by its button, and a reload reads the order", async () => {
   const state = standIn();
@@ -202,4 +202,4 @@ test("a rule carried by its handle below the last lands there with a line markin
     expect(await order()).toEqual(["gamma", "beta", "alpha"]);
     expect(state.rules.map((one) => one.id)).toEqual([3, 2, 1]);
   });
-}, DRIVING_MS);
+}, drivingBound(2));

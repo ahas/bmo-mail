@@ -14,13 +14,27 @@ export interface Screen {
   browser: Browser;
   /** A browser context of the screen whose every wait on the page is bounded by `PAGE_MS`. */
   context: (options?: BrowserContextOptions) => Promise<BrowserContext>;
+  /** A context closed, where its browser still stands; one whose browser went has nothing left to close. */
+  release: (context: BrowserContext) => Promise<void>;
   close: () => Promise<void>;
 }
 
 // How long a wait on the page may take, a page's load and its network going idle among them. The dev server hands
 // the screen's modules over one by one, so on a loaded machine one load of the page takes well past the driver's
-// own thirty seconds; a test's own bound stays the ceiling.
+// own thirty seconds.
 const PAGE_MS = 90_000;
+
+// What a test spends between its loads of the page at most: the driving itself, which takes seconds.
+const DRIVING_SPARE_MS = 30_000;
+
+/**
+ * What a test that loads the screen `loads` times may take at most: each load within `PAGE_MS`, and the driving
+ * between them. A test past its bound has bun put down every process its file started, the dev server among them,
+ * so the bound is the loads' and not a guess at one machine's speed.
+ */
+export function drivingBound(loads: number): number {
+  return loads * PAGE_MS + DRIVING_SPARE_MS;
+}
 
 // How long the dev server may take to answer the screen's page, and to build what a browser's first load of it asks.
 const READY_MS = 180_000;
@@ -122,6 +136,9 @@ export async function standScreen(): Promise<Screen> {
         context.setDefaultNavigationTimeout(PAGE_MS);
 
         return context;
+      },
+      release: async (context) => {
+        if (context.browser()?.isConnected() === true) await context.close();
       },
       close: async () => {
         await browser.close();
