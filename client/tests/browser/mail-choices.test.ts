@@ -8,8 +8,9 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 
 import words from "../../i18n/locales/ko.json";
+import { CLOSING_MS, STANDING_MS, drivingBound } from "../support/bounds";
 import { ACCOUNT, standBehind, standIn } from "../support/mail-stand-in";
-import { drivingBound, standScreen } from "../support/screen";
+import { standScreen } from "../support/screen";
 
 import type { StandIn } from "../support/mail-stand-in";
 import type { Locator, Page } from "playwright-core";
@@ -17,9 +18,6 @@ import type { Screen } from "../support/screen";
 
 let screen: Screen;
 
-// What standing the screen may take at most, a bound and never a wait: the dev server builds the screen on its
-// first page.
-const STANDING_MS = 300_000;
 // Each test loads the screen once.
 const DRIVING_MS = drivingBound(1);
 
@@ -36,7 +34,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await screen?.close();
-});
+}, CLOSING_MS);
 
 // A page of the screen's inbox at one width, its list read, handed to `drive` and closed with its context however
 // `drive` ends.
