@@ -199,3 +199,123 @@ fn a_notice_word_takes_one_field_alone() {
   assert_eq!(created["title"], "{subject}");
   assert_eq!(created["body"], "{from}");
 }
+
+/// The words of one pack, every key under the bundle's namespace in the order the pack holds it, each with its word.
+fn leaves(tree: &Value, prefix: &str, into: &mut Vec<(String, String)>) {
+  for (key, value) in tree.as_object().expect("a pack's tree is an object") {
+    let path = format!("{prefix}{key}");
+
+    match value {
+      Value::String(word) => into.push((path, word.clone())),
+      _ => leaves(value, &format!("{path}."), into),
+    }
+  }
+}
+
+/// The names a word's `{name}` placeholders take, sorted.
+fn placeholders(word: &str) -> Vec<String> {
+  let mut names: Vec<String> = word
+    .split('{')
+    .skip(1)
+    .filter_map(|after| after.split_once('}').map(|(name, _)| name.to_owned()))
+    .collect();
+
+  names.sort();
+  names
+}
+
+/// The screen speaks Korean, English, Japanese and Simplified Chinese (`docs/api.md`, 「The console plugin bundle」,
+/// the wording), each pack holding every key the Korean one does, in the same order, each a word with the same
+/// placeholders.
+#[test]
+fn every_pack_holds_the_same_words() {
+  let packs: Vec<(String, Vec<(String, String)>)> = locales()
+    .into_iter()
+    .map(|path| {
+      let pack: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("the pack reads"))
+        .expect("the pack is JSON");
+      let mut words = Vec::new();
+      leaves(&pack, "", &mut words);
+
+      (
+        Path::new(&path).file_stem().expect("a pack is a file").to_string_lossy().into_owned(),
+        words,
+      )
+    })
+    .collect();
+
+  let mut shipped: Vec<&str> = packs.iter().map(|(locale, _)| locale.as_str()).collect();
+  shipped.sort();
+  assert_eq!(shipped, ["en", "ja", "ko", "zh-CN"]);
+
+  let korean = &packs.iter().find(|(locale, _)| locale == "ko").expect("the Korean pack stands").1;
+  let keys: Vec<&str> = korean.iter().map(|(key, _)| key.as_str()).collect();
+
+  for (locale, words) in &packs {
+    let held: Vec<&str> = words.iter().map(|(key, _)| key.as_str()).collect();
+    assert_eq!(held, keys, "the {locale} pack holds the Korean pack's keys in its order");
+
+    for ((key, word), (_, reference)) in words.iter().zip(korean) {
+      assert!(!word.trim().is_empty(), "{locale}: {key} has a word");
+      assert_eq!(
+        placeholders(word),
+        placeholders(reference),
+        "{locale}: {key} takes the Korean word's placeholders"
+      );
+    }
+  }
+}
+
+/// The service's own words in a language, read from a settings folder that holds no file for it, so the words
+/// shipped in it stand (`docs/api.md`, 「The service's own words」).
+fn shipped_words(language: &str) -> bmo_mail::wording::Wording {
+  let folder = std::env::temp_dir().join(format!("bmo-mail-words-{}-{language}", std::process::id()));
+  std::fs::create_dir_all(&folder).expect("the scratch folder is made");
+
+  let environment = std::collections::HashMap::from([
+    ("BMO_MAIL_SERVER__TOKEN".to_owned(), "test-token".to_owned()),
+    ("BMO_MAIL_WORDING__LANGUAGE".to_owned(), language.to_owned()),
+  ]);
+  let settings = bmo_mail::settings::Settings::read(&folder, Some(environment)).expect("the settings read");
+  let wording = bmo_mail::wording::Wording::load(&settings).expect("the words load");
+
+  let _ = std::fs::remove_dir_all(&folder);
+  wording
+}
+
+/// The repository's own words file for a language, as TOML.
+fn words_file(language: &str) -> toml::Value {
+  let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("wording").join(format!("{language}.toml"));
+
+  toml::from_str(&std::fs::read_to_string(path).expect("the words file reads"))
+    .expect("the words file is TOML")
+}
+
+/// Korean, English, Japanese and Simplified Chinese are shipped, each its own words writing a date in its own
+/// locale; a language none is shipped in writes the Korean words.
+#[test]
+fn the_service_writes_in_each_shipped_language() {
+  let mut dates = Vec::new();
+
+  for language in ["ko", "en", "ja", "zh-CN"] {
+    let wording = shipped_words(language);
+
+    assert_eq!(
+      wording.forward.header,
+      words_file(language)["forward"]["header"]
+        .as_str()
+        .expect("the file names a forward header"),
+      "the {language} words"
+    );
+    dates.push(wording.date(0));
+  }
+
+  dates.sort();
+  dates.dedup();
+  assert_eq!(dates.len(), 4, "each language writes a date its own way: {dates:?}");
+  assert_eq!(
+    shipped_words("fr").forward.header,
+    shipped_words("ko").forward.header,
+    "an unshipped language writes Korean"
+  );
+}

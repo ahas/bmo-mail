@@ -1,0 +1,22 @@
+# The service's own words in Japanese (docs/api.md, 「The service's own words」): what it writes into a message.
+# A value holding {name} takes that value.
+
+# The locale dates are written in, and how.
+locale = "ja_JP"
+date = "%Y年%-m月%-d日(%a) %H:%M"
+
+
+[reply]
+attribution = "{date} {from}:"
+
+[forward]
+header = "---------- 転送されたメッセージ ---------"
+from = "送信者: {from}"
+date = "日付: {date}"
+subject = "件名: {subject}"
+to = "宛先: {to}"
+cc = "Cc: {cc}"
+
+[receipt]
+subject = "開封確認: {subject}"
+body = "{account} さんがこのメールを開封しました: {subject}"

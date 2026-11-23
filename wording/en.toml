@@ -1,0 +1,22 @@
+# The service's own words in English (docs/api.md, 「The service's own words」): what it writes into a message.
+# A value holding {name} takes that value.
+
+# The locale dates are written in, and how.
+locale = "en_US"
+date = "%a, %b %-d, %Y at %-I:%M %p"
+
+
+[reply]
+attribution = "On {date}, {from} wrote:"
+
+[forward]
+header = "---------- Forwarded message ---------"
+from = "From: {from}"
+date = "Date: {date}"
+subject = "Subject: {subject}"
+to = "To: {to}"
+cc = "Cc: {cc}"
+
+[receipt]
+subject = "Read: {subject}"
+body = "{account} opened this message: {subject}"

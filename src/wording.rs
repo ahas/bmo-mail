@@ -1,6 +1,6 @@
 //! The service's own words (`docs/api.md`, 「The service's own words」): what it writes into a message, in the
 //! language the settings name. Each language is one TOML file, `wording/<language>.toml`
-//! under the settings folder; the repository's own file for the shipped language is built in, so a service
+//! under the settings folder; the repository's own files for the shipped languages are built in, so a service
 //! started where none stands still writes.
 
 use chrono::{Locale, TimeZone, Utc};
@@ -9,8 +9,16 @@ use serde::Deserialize;
 
 use crate::settings::Settings;
 
-/// The shipped language's words, as the repository's own file states them.
-const SHIPPED: &str = include_str!("../wording/ko.toml");
+/// The shipped languages' words, each as the repository's own file states it.
+const SHIPPED: [(&str, &str); 4] = [
+  ("ko", include_str!("../wording/ko.toml")),
+  ("en", include_str!("../wording/en.toml")),
+  ("ja", include_str!("../wording/ja.toml")),
+  ("zh-CN", include_str!("../wording/zh-CN.toml")),
+];
+
+/// The language whose shipped words stand where the settings name a language none is shipped in.
+const DEFAULT_LANGUAGE: &str = "ko";
 
 /// The line over a quoted reply.
 #[derive(Clone, Debug, Deserialize)]
@@ -69,12 +77,14 @@ pub enum WordingError {
 }
 
 impl Wording {
-  /// The words of the settings' language: its file under the settings folder, else the shipped words.
+  /// The words of the settings' language: its file under the settings folder, else the words shipped in it,
+  /// else the Korean words shipped.
   pub fn load(settings: &Settings) -> Result<Self, WordingError> {
-    let file = settings.folder.join("wording").join(format!("{}.toml", settings.wording.language));
+    let language = &settings.wording.language;
+    let file = settings.folder.join("wording").join(format!("{language}.toml"));
     let (text, source) = match std::fs::read_to_string(&file) {
       Ok(text) => (text, file.display().to_string()),
-      Err(_) => (SHIPPED.to_owned(), "the shipped words".to_owned()),
+      Err(_) => (shipped(language).to_owned(), "the shipped words".to_owned()),
     };
 
     Self::read(&text, &source, &settings.wording.time_zone)
@@ -103,6 +113,15 @@ impl Wording {
 
     utc.with_timezone(&self.time_zone).format_localized(&self.date, self.locale).to_string()
   }
+}
+
+/// The words shipped in a language, else the default language's.
+fn shipped(language: &str) -> &'static str {
+  let words = |wanted: &str| SHIPPED.iter().find(|(shipped, _)| *shipped == wanted).map(|(_, text)| *text);
+
+  words(language)
+    .or_else(|| words(DEFAULT_LANGUAGE))
+    .expect("the default language's words are shipped")
 }
 
 /// A value with each `{name}` it holds replaced by the value given for it.

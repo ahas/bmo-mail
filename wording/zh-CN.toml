@@ -1,0 +1,22 @@
+# The service's own words in Simplified Chinese (docs/api.md, 「The service's own words」): what it writes into a
+# message. A value holding {name} takes that value.
+
+# The locale dates are written in, and how.
+locale = "zh_CN"
+date = "%Y年%-m月%-d日 %H:%M"
+
+
+[reply]
+attribution = "{from} 于 {date} 写道："
+
+[forward]
+header = "---------- 转发的邮件 ---------"
+from = "发件人：{from}"
+date = "日期：{date}"
+subject = "主题：{subject}"
+to = "收件人：{to}"
+cc = "抄送：{cc}"
+
+[receipt]
+subject = "已读：{subject}"
+body = "{account} 已阅读此邮件：{subject}"

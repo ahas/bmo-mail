@@ -136,6 +136,7 @@
 </template>
 
 <script setup lang="ts">
+import { countText } from "bmo-ui/app/domain/numbers";
 import { mailFailure } from "../domain/mail-refusals";
 import { LABEL_COLORS } from "../domain/mail";
 import { AsyncMailEditor } from "../domain/mail-editor-load";
@@ -406,7 +407,7 @@ function runRules(): Promise<void> {
     async () => {
       const result = await props.api.runRules(roleFolder(props.folders, "inbox") ?? "INBOX");
 
-      ran.value = t("mail.message.rules_ran", { n: result.movedCount.toLocaleString("ko-KR") });
+      ran.value = t("mail.message.rules_ran", { n: countText(result.movedCount) });
       emit("labels");
     },
     t("mail.error.rule_apply_failed"),

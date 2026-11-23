@@ -12,7 +12,7 @@
     >
       <span class="w-40 shrink-0 truncate text-sm font-semibold text-highlighted">{{ sender }}</span>
       <span class="min-w-0 flex-1 truncate text-sm text-muted">{{ props.message.snippet || subjectText($t, props.message.subject) }}</span>
-      <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(props.message.at) }}</span>
+      <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(locale, props.message.at) }}</span>
     </button>
 
     <div v-else class="flex flex-col gap-3 px-4 py-3">
@@ -26,8 +26,8 @@
             </p>
             <p class="truncate text-sm text-muted">{{ $t("mail.label.to_line", { recipients }) }}</p>
           </div>
-          <UTooltip :text="mailDateLong(props.message.at)">
-            <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(props.message.at) }}</span>
+          <UTooltip :text="mailDateLong(locale, props.message.at)">
+            <span class="shrink-0 text-sm tabular-nums text-muted">{{ mailDate(locale, props.message.at) }}</span>
           </UTooltip>
         </button>
         <div class="flex shrink-0 items-center gap-1">
@@ -72,7 +72,7 @@ import { attachmentsOf, partSize, receiptAnswered } from "../../shared/mail";
 import type { MailMessage } from "../../shared/mail";
 
 const props = defineProps<{ message: MailMessage; account: string; address: string; open: boolean; showImages: boolean }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const emit = defineEmits<{
   toggle: [];

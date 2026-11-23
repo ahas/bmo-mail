@@ -320,7 +320,7 @@
         <span v-for="one in shown" :key="one.key" class="text-sm whitespace-nowrap" :class="{ 'font-semibold': one.unread }">{{ sendersLine($t, one, props.address) }}</span>
       </div>
       <div ref="measureDate" class="flex flex-col items-start">
-        <span v-for="one in shown" :key="one.key" class="text-sm tabular-nums whitespace-nowrap" :class="{ 'font-semibold': one.unread }">{{ mailDate(one.at) }}</span>
+        <span v-for="one in shown" :key="one.key" class="text-sm tabular-nums whitespace-nowrap" :class="{ 'font-semibold': one.unread }">{{ mailDate(locale, one.at) }}</span>
       </div>
     </div>
   </div>
@@ -339,7 +339,7 @@ import type { DropdownMenuItem } from "@nuxt/ui";
 
 export type MailListAction = "read" | "unread" | "star" | "unstar" | "trash" | "delete" | "spam" | "not-spam";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const props = defineProps<{
   conversations: MailConversation[] | null;
   // How many messages the folder holds, where the view is one folder and holds back nothing.

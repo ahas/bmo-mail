@@ -64,8 +64,8 @@
       <UIcon v-if="props.conversation.hasAttachments" name="i-material-symbols-attach-file" class="size-4 shrink-0 text-muted" :aria-label="$t('mail.aria.has_attachment')" />
       <span v-else class="size-4 shrink-0" aria-hidden="true" />
 
-      <UTooltip :text="mailDateLong(props.conversation.at)">
-        <span class="shrink-0 text-end text-sm tabular-nums" :style="{ width: 'var(--mail-date)' }" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(props.conversation.at) }}</span>
+      <UTooltip :text="mailDateLong(locale, props.conversation.at)">
+        <span class="shrink-0 text-end text-sm tabular-nums" :style="{ width: 'var(--mail-date)' }" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(locale, props.conversation.at) }}</span>
       </UTooltip>
     </template>
 
@@ -85,7 +85,7 @@
           <UIcon v-if="props.conversation.unread" name="i-material-symbols-circle" class="size-2 shrink-0 text-primary" :aria-label="$t('mail.label.unread')" />
           <p class="min-w-0 flex-1 truncate text-base" :class="{ 'font-semibold': props.conversation.unread }">{{ senders }}</p>
           <UIcon v-if="props.conversation.hasAttachments" name="i-material-symbols-attach-file" class="size-4 shrink-0 text-muted" :aria-label="$t('mail.aria.has_attachment')" />
-          <span class="shrink-0 text-sm tabular-nums" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(props.conversation.at) }}</span>
+          <span class="shrink-0 text-sm tabular-nums" :class="{ 'font-semibold': props.conversation.unread }">{{ mailDate(locale, props.conversation.at) }}</span>
         </div>
         <div class="flex min-w-0 items-center gap-2">
           <span v-for="label in rowLabels" :key="label.id" class="max-w-24 shrink-0 truncate rounded-sm px-1.5 text-sm leading-6 text-inverted" :style="{ backgroundColor: label.colour }">{{ label.name }}</span>
@@ -136,7 +136,7 @@ const emit = defineEmits<{
   star: [];
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const senders = computed(() => sendersLine(t, props.conversation, props.account));
 // The avatar stands for whoever the row leads with, which is the newest message's sender.
 const senderAddress = computed(() => props.conversation.from[0]?.address ?? "");

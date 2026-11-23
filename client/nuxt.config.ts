@@ -1,7 +1,8 @@
 // The Nuxt project the mail screen is typed and prepared in (docs/api.md, "The console plugin bundle"): the
 // screen's page, components, domain modules and language pack on the bmo-ui layer, standing as a console does,
-// one unprefixed locale. `nuxi prepare` writes the declarations the bundle build reads which names Nuxt imports
-// and registers by itself.
+// four unprefixed locales, Korean, English, Japanese and Simplified Chinese, of which the console names the one
+// shown. `nuxi prepare` writes the declarations the bundle build reads which names Nuxt imports and registers by
+// itself.
 export default defineNuxtConfig({
   extends: ["bmo-ui"],
   modules: ["@nuxtjs/i18n"],
@@ -10,7 +11,15 @@ export default defineNuxtConfig({
   i18n: {
     strategy: "no_prefix",
     defaultLocale: "ko",
-    locales: [{ code: "ko", language: "ko-KR", file: "ko.json" }]
+    // The console names the locale a screen shows; the project itself reads no browser's language, so the
+    // screen stands in the default one wherever it is typed and tested.
+    detectBrowserLanguage: false,
+    locales: [
+      { code: "ko", language: "ko-KR", file: "ko.json" },
+      { code: "en", language: "en-US", file: "en.json" },
+      { code: "ja", language: "ja-JP", file: "ja.json" },
+      { code: "zh-CN", language: "zh-CN", file: "zh-CN.json" }
+    ]
   },
   compatibilityDate: "2025-09-01",
   devtools: { enabled: false }

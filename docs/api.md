@@ -365,8 +365,9 @@ A message the service itself moved into an inbox is not new mail and makes no `m
 
 The words the service writes into a message are its own pack: one TOML file to a language,
 `wording/<language>.toml` under the settings folder, chosen by the setting `wording.language`. The repository
-ships `wording/ko.toml` and builds it in, so a service whose settings folder holds no file for its language
-writes the shipped words. A key holding `{name}` takes that value.
+ships four and builds them in: Korean `ko`, English `en`, Japanese `ja` and Simplified Chinese `zh-CN`. A
+service whose settings folder holds no file for its language writes the words shipped in it, and the Korean
+ones where none are. A key holding `{name}` takes that value.
 
 | Key | Where it is written |
 |---|---|
@@ -584,8 +585,10 @@ guards them, and this section states only what mail supplies and chooses within 
   TipTap extensions its editor is built with, and DOMPurify, all carried in the module.
 - **What it calls:** the routes above, at the address bmo-ui's relay module answers for the service `mail`,
   and the event stream the same way, its bodies read through the types generated from `docs/openapi.json`.
-- **Wording:** the words are the language pack, `client/i18n/locales/ko.json`, one JSON file to a locale,
-  holding the bundle's namespace `mail` alone. Beside them the screen asks only the layer's own keys, those
+- **Wording:** the words are the language pack under `client/i18n/locales/`, one JSON file to a locale: Korean
+  `ko`, English `en`, Japanese `ja` and Simplified Chinese `zh-CN`, each holding the bundle's namespace `mail`
+  alone and every key the others hold, with the same placeholders, which a test holds. The screen shows the
+  locale the console names, and writes its dates in it and its figures as the layer does. Beside them the screen asks only the layer's own keys, those
   the `wording-keys` module of the vendored release lists, which the console answers; a test holds every key
   the screen's code writes to the pack and that list. The screen's name
   stands under `mail.title.screen`, and the words a console raises a notice of a declared kind in under

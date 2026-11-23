@@ -1,3 +1,5 @@
+import { countText } from "bmo-ui/app/domain/numbers";
+
 import { identityMark } from "./mail-avatars";
 
 import type { FolderRole, MailAccount, MailAccountKind, MailConversation, MailFolder, MailLabel, MailMailbox, MailMessage } from "../../shared/mail";
@@ -157,25 +159,26 @@ export function viewFolder(view: MailViewKey, folders: readonly MailFolder[]): M
   return null;
 }
 
-// A date on a row: the time for today, the month and day for this year, the whole date before.
-export function mailDate(at: number, now: number = Date.now()): string {
+// A date on a row, in the screen's locale: the time for today, the month and day for this year, the whole
+// date before.
+export function mailDate(locale: string, at: number, now: number = Date.now()): string {
   const date = new Date(at);
   const today = new Date(now);
 
   if (date.toDateString() === today.toDateString()) {
-    return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit" }).format(date);
+    return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(date);
   }
 
   if (date.getFullYear() === today.getFullYear()) {
-    return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" }).format(date);
+    return new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(date);
   }
 
-  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "numeric", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(locale, { year: "numeric", month: "numeric", day: "numeric" }).format(date);
 }
 
-// The full date, for a message's header and a date's tooltip.
-export function mailDateLong(at: number): string {
-  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short" }).format(new Date(at));
+// The full date in the screen's locale, for a message's header and a date's tooltip.
+export function mailDateLong(locale: string, at: number): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short" }).format(new Date(at));
 }
 
 // A person as a row names them: their name, or the part of the address before `@`; the account
@@ -194,7 +197,7 @@ export function sendersLine(t: Translate, conversation: Pick<MailConversation, "
   const names = conversation.from.map((person) => personName(t, person, self));
   const line = names.length === 0 ? t("mail.label.no_sender_mark") : names.slice(0, 3).join(", ");
 
-  return conversation.count > 1 ? `${line} (${conversation.count.toLocaleString("ko-KR")})` : line;
+  return conversation.count > 1 ? `${line} (${countText(conversation.count)})` : line;
 }
 
 // A subject as a row shows it, with a mark where the message has none.
@@ -205,13 +208,13 @@ export function subjectText(t: Translate, subject: string): string {
 // The range the toolbar shows: which messages of the view this page holds, of how many where the view is
 // one folder and its count is known.
 export function rangeText(offset: number, shown: number, total: number | null): string {
-  const of = total === null ? "" : ` / ${total.toLocaleString("ko-KR")}`;
+  const of = total === null ? "" : ` / ${countText(total)}`;
 
   if (shown === 0) {
     return `0${of}`;
   }
 
-  return `${(offset + 1).toLocaleString("ko-KR")}–${(offset + shown).toLocaleString("ko-KR")}${of}`;
+  return `${countText(offset + 1)}–${countText(offset + shown)}${of}`;
 }
 
 // How many messages a page asks for: the service pages by fifty messages.
@@ -400,8 +403,8 @@ export function readAddresses(typed: string): MailMailbox[] {
 
 // A size as an attachment chip shows it.
 export function sizeText(bytes: number): string {
-  if (bytes < 1024) return `${bytes.toLocaleString("ko-KR")} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024).toLocaleString("ko-KR")} KB`;
+  if (bytes < 1024) return `${countText(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${countText(Math.round(bytes / 1024))} KB`;
 
-  return `${(bytes / 1024 / 1024).toLocaleString("ko-KR", { maximumFractionDigits: 1 })} MB`;
+  return `${countText(Math.round((bytes / 1024 / 1024) * 10) / 10)} MB`;
 }
