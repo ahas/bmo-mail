@@ -10,15 +10,15 @@ use mail_send::smtp::message::Message;
 use mail_send::{Credentials, SmtpClient, SmtpClientBuilder};
 use smtp_proto::{EXT_START_TLS, EhloResponse};
 
-use crate::adapters::imap_smtp::{MailAccount, MailEndpoint};
+use crate::adapters::servers::{MailAccount, MailEndpoint, MailStream};
 use crate::imap::folders::{ensure_role_folder, folders_of, searched_folders};
 use crate::imap::search::Search;
-use crate::imap::session::{MailSession, MailStream};
+use crate::imap::session::MailSession;
 use crate::imap::{append_landing, store_flags, uid_search};
-use crate::mail::{DraftKind, FolderRole, MailAddress, MailRef};
+use crate::mail::{Draft, DraftKind, FolderRole, MailAddress, MailRef};
 use crate::routes::requests::{Asked, MailFault};
-use crate::writing::compose::{Purpose, build_message, new_message_id};
-use crate::writing::drafts::{discard_draft, draft_named, resolve_attachments};
+use crate::writing::compose::{Purpose, ResolvedAttachment, build_message, new_message_id};
+use crate::writing::drafts::{PartSource, discard_draft, draft_named, resolve_attachments};
 
 /// The submission port that speaks TLS from the first byte; any other with a TLS name is upgraded with
 /// STARTTLS.
@@ -133,6 +133,37 @@ pub async fn submission_limit(endpoint: &MailEndpoint) -> Option<u64> {
   Some(capabilities.size as u64).filter(|size| *size > 0)
 }
 
+/// How long the submission server's size is trusted before it is asked again.
+const LIMIT_KEPT: Duration = Duration::from_secs(60 * 60);
+
+/// The size an account's submission server takes, and when it was asked.
+#[derive(Debug, Default)]
+pub struct SendingLimit {
+  known: std::sync::Mutex<Option<(Option<u64>, std::time::Instant)>>,
+}
+
+impl SendingLimit {
+  fn known(&self) -> Option<Option<u64>> {
+    let known = *self.known.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    known.filter(|(_, at)| at.elapsed() < LIMIT_KEPT).map(|(limit, _)| limit)
+  }
+
+  /// The size the submission server takes, asked once an hour.
+  pub async fn of(&self, smtp: &MailEndpoint) -> Option<u64> {
+    if let Some(limit) = self.known() {
+      return limit;
+    }
+
+    let limit = submission_limit(smtp).await;
+
+    *self.known.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) =
+      Some((limit, std::time::Instant::now()));
+
+    limit
+  }
+}
+
 /// Marks the message a reply answered or a forward carried, wherever in the mailbox it is.
 async fn mark_original(session: &MailSession, message_id: &str, flag: &str) -> Result<(), MailFault> {
   let search = Search::Header("message-id".to_owned(), message_id.to_owned());
@@ -152,6 +183,70 @@ async fn mark_original(session: &MailSession, message_id: &str, flag: &str) -> R
   Ok(())
 }
 
+/// A draft made ready to go: its recipients, its attachments read, the `Message-ID` it goes out under, when
+/// it was built and the message as it is sent.
+pub struct Outgoing {
+  pub recipients: Vec<MailAddress>,
+  pub attachments: Vec<ResolvedAttachment>,
+  pub message_id: String,
+  pub at: chrono::DateTime<chrono::Utc>,
+  pub raw: Vec<u8>,
+}
+
+impl Outgoing {
+  /// The envelope's recipients.
+  pub fn envelope(&self) -> Vec<String> {
+    self.recipients.iter().map(|one| one.address.clone()).collect()
+  }
+}
+
+/// Builds the message a draft sends, its attachments read from where they stand. A draft with no recipient,
+/// and a message past the size the submission server takes, are refused.
+pub async fn outgoing(
+  source: &dyn PartSource,
+  staging: &Path,
+  limit: Option<u64>,
+  draft: &Draft,
+) -> Result<Outgoing, MailFault> {
+  let recipients: Vec<_> = draft.to.iter().chain(&draft.cc).chain(&draft.bcc).cloned().collect();
+
+  if recipients.is_empty() {
+    return Err(Asked::rule("no-recipients", "a message to send has no recipient").into());
+  }
+
+  let attachments = resolve_attachments(source, staging, &draft.attachments).await?;
+  let message_id = new_message_id(&draft.from);
+  let at = chrono::Utc::now();
+  let raw = build_message(draft, &attachments, Purpose::Send, Some(&message_id), at.timestamp())
+    .map_err(MailFault::server)?;
+
+  if let Some(limit) = limit
+    && raw.len() as u64 > limit
+  {
+    return Err(Asked::too_large("the encoded message is past the size the server takes").into());
+  }
+
+  Ok(Outgoing {
+    recipients,
+    attachments,
+    message_id,
+    at,
+    raw,
+  })
+}
+
+/// The message a reply answered or a forward carried, by its message ID, and the flag it is marked with once
+/// the draft is sent; none for a new message.
+pub fn original_mark(draft: &Draft) -> Option<(&str, &'static str)> {
+  let original = draft.original.as_deref()?;
+
+  match draft.kind {
+    DraftKind::New => None,
+    DraftKind::Reply => Some((original, "\\Answered")),
+    DraftKind::Forward => Some((original, "$Forwarded")),
+  }
+}
+
 /// Sends the draft a `Message-ID` names now, read where it stands at that moment, so a change made while the
 /// send waited goes with it; then keeps its copy in the sent folder, removes the draft and marks the message
 /// it answered or carried. Answers the recipients.
@@ -164,45 +259,29 @@ pub async fn send_draft(
 ) -> Result<Vec<MailAddress>, MailFault> {
   let draft = draft_named(session, draft_id).await?;
   let at: MailRef = draft.saved.clone().ok_or_else(|| MailFault::server("the draft stands nowhere"))?;
-  let recipients: Vec<_> = draft.to.iter().chain(&draft.cc).chain(&draft.bcc).cloned().collect();
+  let going = outgoing(session, staging, limit, &draft).await?;
 
-  if recipients.is_empty() {
-    return Err(Asked::rule("no-recipients", "a message to send has no recipient").into());
-  }
+  submit(smtp, &session.account, &draft.from, &going.envelope(), &going.raw).await?;
 
-  let attachments = resolve_attachments(session, staging, &draft.attachments).await?;
-  let message_id = new_message_id(&draft.from);
-  let now = chrono::Utc::now();
-  let raw = build_message(&draft, &attachments, Purpose::Send, Some(&message_id), now.timestamp())
-    .map_err(MailFault::server)?;
-
-  if let Some(limit) = limit
-    && raw.len() as u64 > limit
-  {
-    return Err(Asked::too_large("the encoded message is past the size the server takes").into());
-  }
-
-  let to: Vec<String> = recipients.iter().map(|one| one.address.clone()).collect();
-
-  submit(smtp, &session.account, &draft.from, &to, &raw).await?;
-
-  let copy = build_message(&draft, &attachments, Purpose::SentCopy, Some(&message_id), now.timestamp())
-    .map_err(MailFault::server)?;
+  let copy = build_message(
+    &draft,
+    &going.attachments,
+    Purpose::SentCopy,
+    Some(&going.message_id),
+    going.at.timestamp(),
+  )
+  .map_err(MailFault::server)?;
   let sent = ensure_role_folder(session, FolderRole::Sent).await?;
-  let internal_date = now.format("%d-%b-%Y %H:%M:%S +0000").to_string();
+  let internal_date = going.at.format("%d-%b-%Y %H:%M:%S +0000").to_string();
   let mut connection = session.connection().await?;
   let appended = append_landing(connection.session(), &sent, "\\Seen", Some(&internal_date), &copy).await;
 
   connection.settle(appended)?;
   discard_draft(session, &at).await?;
 
-  if let Some(original) = &draft.original
-    && draft.kind != DraftKind::New
-  {
-    let flag = if draft.kind == DraftKind::Reply { "\\Answered" } else { "$Forwarded" };
-
+  if let Some((original, flag)) = original_mark(&draft) {
     mark_original(session, original, flag).await?;
   }
 
-  Ok(recipients)
+  Ok(going.recipients)
 }

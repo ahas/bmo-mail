@@ -162,6 +162,9 @@ pub struct AccountKind {
   /// The adapter's name, which an account names its kind by.
   pub name: String,
   pub sign_in: SignIn,
+  /// Whether its mailbox moves mail between folders: a move, spam and not spam, trash and deleting for good.
+  /// The screen draws none of them for an account whose kind does not.
+  pub moves: bool,
   /// What a person writes to add an account of it, in the order a form shows them.
   pub fields: Vec<KindField>,
 }

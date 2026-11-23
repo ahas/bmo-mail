@@ -180,7 +180,7 @@ pub async fn append_landing(
     return Err(MailFault::server("the mail server refused the message"));
   }
 
-  let stream: &mut Box<dyn crate::imap::session::MailStream> = session.as_mut();
+  let stream: &mut Box<dyn crate::adapters::servers::MailStream> = session.as_mut();
 
   stream.write_all(content).await.map_err(MailFault::server)?;
   stream.write_all(b"\r\n").await.map_err(MailFault::server)?;

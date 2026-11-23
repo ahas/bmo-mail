@@ -1787,6 +1787,7 @@
           "flag-not-settable",
           "unknown-label",
           "unknown-folder",
+          "not-offered",
           "failed",
           "upstream-failed"
         ],
@@ -3379,6 +3380,10 @@
           "signIn": {
             "$ref": "#/components/schemas/SignIn"
           },
+          "moves": {
+            "type": "boolean",
+            "description": "Whether its mailbox moves mail between folders: a move, spam and not spam, trash and deleting for good.\nThe screen draws none of them for an account whose kind does not."
+          },
           "fields": {
             "type": "array",
             "items": {
@@ -3390,6 +3395,7 @@
         "required": [
           "name",
           "signIn",
+          "moves",
           "fields"
         ],
         "description": "A kind of account: the adapter that reaches its mailbox, as that adapter declares it."

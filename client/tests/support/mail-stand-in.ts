@@ -1,9 +1,10 @@
 import type { BrowserContext, Route } from "playwright-core";
 
-import type { Draft, DraftPatch, MailAccount, MailAddress, MailFolder, MailLabel, MailMessage, MailRule, MailSettings } from "../../shared/mail";
+import type { Draft, DraftPatch, FolderRole, MailAccount, MailAccountKind, MailAddress, MailFolder, MailLabel, MailMessage, MailRule, MailSettings } from "../../shared/mail";
 
-// A stand-in for the mail service behind the screen's relay address (docs/api.md): one account holding the
-// role folders and the folders of its own a test names, the labels it names, a few messages in the inbox, three
+// A stand-in for the mail service behind the screen's relay address (docs/api.md): one account of a kind that
+// declares whether its mailbox moves mail between folders, holding the role folders a test names and the folders
+// of its own it names, the labels it names, a few messages in the inbox, three
 // filter rules, the known addresses it names and the drafts the composer writes. It keeps what the screen
 // changes, so a page loaded again reads what an earlier one saved, and it answers only the routes the list, the
 // nav, the settings and the composer ask; any other is answered 404 and counted, so a test sees a route the
@@ -20,6 +21,11 @@ const ROLE_FOLDERS: Array<Pick<MailFolder, "name" | "role">> = [
 ];
 
 export interface StandIn {
+  // Whether the account's kind moves mail between folders, as the kinds the service declares say; null where the
+  // service declares no kind at all.
+  moves: boolean | null;
+  // The role folders the mailbox holds.
+  roles: FolderRole[];
   messages: MailMessage[];
   rules: MailRule[];
   labels: MailLabel[];
@@ -61,6 +67,8 @@ export function standIn(): StandIn {
   const now = Date.UTC(2026, 10, 1, 9);
 
   return {
+    moves: null,
+    roles: ROLE_FOLDERS.map((one) => one.role!),
     messages: [message("m1", "First note", now), message("m2", "Second note", now - 60_000), message("m3", "Third note", now - 120_000)],
     rules: [rule(1, "alpha"), rule(2, "beta"), rule(3, "gamma")],
     labels: [{ id: "work", name: "Work", colour: "blue", position: 1 }],
@@ -85,8 +93,13 @@ const SETTINGS: MailSettings = { signature: "", undoSendMs: 0, readReceipts: fal
 
 const page = <T>(items: T[]) => ({ items, more: false });
 
+// The kinds the service declares: the account's own alone, where it declares any.
+function kinds(state: StandIn): MailAccountKind[] {
+  return state.moves === null ? [] : [{ name: ACCOUNT_BODY.kind, signIn: "password", moves: state.moves, fields: [] }];
+}
+
 function folders(state: StandIn): MailFolder[] {
-  return [...ROLE_FOLDERS, ...state.folders.map((name) => ({ name, role: null }))].map((folder, index) => ({
+  return [...ROLE_FOLDERS.filter((one) => state.roles.includes(one.role!)), ...state.folders.map((name) => ({ name, role: null }))].map((folder, index) => ({
     accountName: ACCOUNT,
     name: folder.name,
     shortName: folder.name,
@@ -110,7 +123,7 @@ function answer(state: StandIn, method: string, path: string, query: URLSearchPa
 
   if (method === "GET" && path === "/accounts") return { status: 200, body: page([ACCOUNT_BODY]) };
   if (method === "GET" && path === "/summary") return { status: 200, body: { accounts: [ACCOUNT_BODY], unreadCount: 0 } };
-  if (method === "GET" && path === "/account-kinds") return { status: 200, body: page([]) };
+  if (method === "GET" && path === "/account-kinds") return { status: 200, body: page(kinds(state)) };
   // No sender has a logo, which the service answers as it does a domain it found none for.
   if (method === "GET" && parts[0] === "avatars") return { status: 404, body: { code: "not-found", error: "No logo." } };
   if (parts[0] !== "accounts" || parts[1] !== ACCOUNT) return null;

@@ -4,6 +4,9 @@
       "imapHost": "IMAP 서버",
       "imapPort": "IMAP 포트",
       "imapTlsName": "IMAP 인증서 이름",
+      "pop3Host": "POP3 서버",
+      "pop3Port": "POP3 포트",
+      "pop3TlsName": "POP3 인증서 이름",
       "smtpHost": "SMTP 서버",
       "smtpPort": "SMTP 포트",
       "smtpTlsName": "SMTP 인증서 이름",
@@ -12,6 +15,7 @@
     },
     "account_kind": {
       "imap-smtp": "IMAP/SMTP",
+      "pop3-smtp": "POP3/SMTP",
       "gmail": "Gmail",
       "graph": "Microsoft 365"
     },
@@ -147,6 +151,7 @@
       "not_sent": "보내지 못했습니다.",
       "not_spam_failed": "받은편지함으로 옮기지 못했습니다.",
       "not-found": "찾을 수 없습니다.",
+      "not-offered": "이 계정에서는 할 수 없는 작업입니다.",
       "not-ready": "메일 서비스가 아직 계정을 저장할 수 없습니다.",
       "outside-trash": "영구 삭제는 스팸과 휴지통에서만 할 수 있습니다.",
       "picture_insert_failed": "사진을 삽입하지 못했습니다.",

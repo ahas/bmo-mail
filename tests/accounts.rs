@@ -147,7 +147,10 @@ async fn the_routes_add_change_and_remove_an_owners_accounts() {
   let one = MailClient::new(&address, TOKEN).acting_for(OWNER, Role::Member);
   let kinds = one.account_kinds().await.expect("the kinds answer");
 
-  assert_eq!(kinds.items.iter().map(|kind| kind.name.as_str()).collect::<Vec<_>>(), ["imap-smtp"]);
+  assert_eq!(
+    kinds.items.iter().map(|kind| kind.name.as_str()).collect::<Vec<_>>(),
+    ["imap-smtp", "pop3-smtp"]
+  );
   assert_eq!(
     refused(anybody.accounts(&ListQuery::default()).await.unwrap_err()),
     (403, "forbidden".into())

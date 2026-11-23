@@ -17,8 +17,17 @@ use crate::secrets::Secrets;
 use crate::wire::Fields;
 
 /// The tables whose rows are an account's, by its id written as text in `account`.
-pub const ACCOUNT_TABLES: [&str; 7] =
-  ["labels", "rules", "settings", "spam_senders", "marks", "arrivals", "addresses"];
+pub const ACCOUNT_TABLES: [&str; 9] = [
+  "labels",
+  "rules",
+  "settings",
+  "spam_senders",
+  "marks",
+  "arrivals",
+  "addresses",
+  "pop3_messages",
+  "drafts",
+];
 
 /// The longest a name may be.
 const NAME_LONGEST: usize = 64;

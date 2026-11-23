@@ -70,7 +70,7 @@ pub struct MailMessage {
 }
 
 /// A part of a message.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MailPart {
   /// The part's number in the message, as a fetch asks for it.
   pub part: String,
@@ -100,7 +100,7 @@ pub struct OpenedPart {
 }
 
 /// A message's parts, sorted: the text body, the HTML body, the attachments and the inline pictures.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MailParts {
   pub text: Option<MailPart>,
   pub html: Option<MailPart>,

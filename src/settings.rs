@@ -37,6 +37,7 @@ pub struct Settings {
   pub secrets: Secrets,
   pub staging: Staging,
   pub watcher: Watcher,
+  pub pop3: Pop3,
   pub wording: Wording,
   pub console: Console,
   pub agency: Upstream,
@@ -101,6 +102,20 @@ impl Watcher {
   /// The first wait before a dropped watch connection is opened again.
   pub fn retry(&self) -> Duration {
     Duration::from_millis(self.retry_ms)
+  }
+}
+
+/// The POP3 accounts (`docs/mail.md`, 「A POP3 account」).
+#[derive(Clone, Debug, Deserialize)]
+pub struct Pop3 {
+  /// How often, in milliseconds, a POP3 account's watcher opens a session to look for new mail.
+  pub poll_ms: u64,
+}
+
+impl Pop3 {
+  /// How often a POP3 account's watcher looks for new mail.
+  pub fn poll(&self) -> Duration {
+    Duration::from_millis(self.poll_ms)
   }
 }
 

@@ -509,6 +509,11 @@ export interface components {
             /** @description The adapter's name, which an account names its kind by. */
             name: string;
             signIn: components["schemas"]["SignIn"];
+            /**
+             * @description Whether its mailbox moves mail between folders: a move, spam and not spam, trash and deleting for good.
+             *     The screen draws none of them for an account whose kind does not.
+             */
+            moves: boolean;
             /** @description What a person writes to add an account of it, in the order a form shows them. */
             fields: components["schemas"]["KindField"][];
         };

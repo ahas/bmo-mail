@@ -6,7 +6,7 @@ use mail_builder::headers::address::Address;
 use mail_builder::headers::content_type::ContentType;
 use mail_builder::mime::{BodyPart, MimePart};
 
-use crate::adapters::imap_smtp::MailEndpoint;
+use crate::adapters::servers::MailEndpoint;
 use crate::imap::messages::{change_flags, read_message};
 use crate::imap::session::MailSession;
 use crate::mail::{MailMessage, MailRef};

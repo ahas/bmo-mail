@@ -6,13 +6,16 @@ use std::path::Path;
 
 use mail_parser::{Address, HeaderName, MessageParser, MimeHeaders};
 
+use crate::adapters::Pending;
 use crate::imap::conversation::id_key;
 use crate::imap::folders::{ensure_role_folder, folders_of, role_folders};
 use crate::imap::messages::{open_part, read_message};
 use crate::imap::search::Search;
 use crate::imap::session::MailSession;
 use crate::imap::{append_landing, expunge, flag_name, store_flags, uid_fetch, uid_search};
-use crate::mail::{AttachmentRef, Draft, DraftKind, FolderRole, MailAddress, MailRef};
+use crate::mail::{
+  AttachmentRef, Draft, DraftKind, FolderRole, MailAddress, MailMessage, MailRef, OpenedPart,
+};
 use crate::members::{bare_id, mailbox};
 use crate::routes::requests::{Asked, MailFault};
 use crate::wire;
@@ -22,9 +25,21 @@ use crate::writing::compose::{
 };
 use crate::writing::staging::read_staged;
 
-/// Every attachment's bytes: a staged file from the staging folder, a part from the server.
+/// What a draft's attachments that are parts of a message are read from: the mailbox the message stands in.
+pub trait PartSource: Sync {
+  /// A part of a message, whole, its transfer encoding undone; none where the message or the part is gone.
+  fn open_part<'a>(&'a self, at: &'a MailRef, part: &'a str) -> Pending<'a, Option<OpenedPart>>;
+}
+
+impl PartSource for MailSession {
+  fn open_part<'a>(&'a self, at: &'a MailRef, part: &'a str) -> Pending<'a, Option<OpenedPart>> {
+    Box::pin(open_part(self, at, part))
+  }
+}
+
+/// Every attachment's bytes: a staged file from the staging folder, a part from the mailbox.
 pub async fn resolve_attachments(
-  session: &MailSession,
+  source: &dyn PartSource,
   staging: &Path,
   refs: &[AttachmentRef],
 ) -> Result<Vec<ResolvedAttachment>, MailFault> {
@@ -55,7 +70,7 @@ pub async fn resolve_attachments(
           folder: folder.clone(),
           uid: *uid,
         };
-        let Some(opened) = open_part(session, &at, part).await? else {
+        let Some(opened) = source.open_part(&at, part).await? else {
           return Err(MailFault::server(format!("the attachment {filename} is no longer on the server")));
         };
 
@@ -188,6 +203,13 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Option<Dr
   let (Some(source), Some(message)) = (source, message) else {
     return Ok(None);
   };
+
+  Ok(draft_of(&source, &message, at, &session.account.address))
+}
+
+/// A saved draft read back from the whole message it is saved as and that message as the mailbox reads it, its
+/// attachments the parts of the saved copy at `at`; `account` is who it is from where it names nobody.
+pub fn draft_of(source: &[u8], message: &MailMessage, at: &MailRef, account: &str) -> Option<Draft> {
   let parser = MessageParser::new()
     .with_mime_headers()
     .with_address_headers()
@@ -197,9 +219,7 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Option<Dr
     .header_text(HeaderName::Other(DRAFT_KIND_HEADER.into()))
     .header_text(HeaderName::Other(DRAFT_ORIGINAL_HEADER.into()))
     .header_raw(HeaderName::DispositionNotificationTo);
-  let Some(parsed) = parser.parse(&source) else {
-    return Ok(None);
-  };
+  let parsed = parser.parse(source)?;
   let text_header = |name: &str| {
     parsed
       .header(HeaderName::Other(name.to_owned().into()))
@@ -230,13 +250,13 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Option<Dr
       .unwrap_or_default()
   };
 
-  Ok(Some(Draft {
+  Some(Draft {
     from: parsed
       .from()
       .and_then(|from| from.first())
       .and_then(|one| one.address())
       .map(str::to_lowercase)
-      .unwrap_or_else(|| session.account.address.clone()),
+      .unwrap_or_else(|| account.to_owned()),
     to: addresses(parsed.to()),
     cc: addresses(parsed.cc()),
     bcc: addresses(parsed.bcc()),
@@ -262,7 +282,7 @@ pub async fn open_draft(session: &MailSession, at: &MailRef) -> Result<Option<Dr
     message_id: parsed.message_id().map(|id| format!("<{}>", bare_id(id))),
     saved: Some(at.clone()),
     changed_at: message.listed.date,
-  }))
+  })
 }
 
 /// The draft a `Message-ID` names, opened, or a 404.

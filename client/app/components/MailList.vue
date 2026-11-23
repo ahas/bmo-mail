@@ -15,7 +15,10 @@
        beside a thread and is often narrower than a phone on a wide screen, and a bar that asked the
        window would stand its whole row of actions there and run off its own edge. Short of that
        room it keeps what is reached for first — the choosing control, and with something chosen
-       move-to-Trash, mark-read and the move and label selects — and folds the rest into one menu. -->
+       move-to-Trash, mark-read and the move and label selects — and folds the rest into one menu.
+
+       On an account whose kind moves no mail between folders, nothing that would is drawn at any
+       width: no trash or delete forever, no spam or not spam, and no move select. -->
   <div class="relative flex min-h-0 flex-1 flex-col" :style="{ '--mail-from': `${fromWidth}px`, '--mail-date': `${dateWidth}px` }">
     <div class="flex shrink-0 items-center gap-2 border-b border-default p-3">
       <UButton
@@ -56,7 +59,7 @@
           <RollingSentence class="text-sm" :keypath="'mail.label.count'" :figures="{ n: props.selected.size }" />
         </div>
         <div class="ms-auto">
-          <UTooltip :text="trashLabel">
+          <UTooltip v-if="props.moves" :text="trashLabel">
             <UButton color="neutral" variant="ghost" size="sm" square :icon="trashIcon" :aria-label="trashLabel" :disabled="props.selected.size === 0" @click="emit('act', inTrashOrJunk ? 'delete' : 'trash')" />
           </UTooltip>
           <UTooltip :text="state.anyUnread ? $t('mail.action.mark_read') : $t('mail.action.mark_unread')">
@@ -71,7 +74,7 @@
               @click="emit('act', state.anyUnread ? 'read' : 'unread')"
             />
           </UTooltip>
-          <MailToolChoice v-bind="moveChoice" :disabled="props.selected.size === 0" @update:model-value="moveTo" />
+          <MailToolChoice v-if="props.moves" v-bind="moveChoice" :disabled="props.selected.size === 0" @update:model-value="moveTo" />
           <MailLabelChoice :disabled="props.selected.size === 0" :labels="props.labels" :all="labelState.all" :some="labelState.some" @toggle="(id, on) => emit('label', id, on)" />
           <UDropdownMenu :items="narrowMenu" :content="{ align: 'end' }">
             <UTooltip :text="$t('common.action.more')">
@@ -155,7 +158,7 @@
               />
             </UTooltip>
           </div>
-          <div>
+          <div v-if="props.moves">
             <UTooltip :text="trashLabel">
               <UButton color="neutral" variant="ghost" size="sm" square :icon="trashIcon" :aria-label="trashLabel" @click="emit('act', inTrashOrJunk ? 'delete' : 'trash')" />
             </UTooltip>
@@ -181,7 +184,7 @@
              hand reaches for first, and the rest in the one menu a phone's choosing row already
              carries. -->
         <div v-else-if="!props.narrow && props.selected.size > 0">
-          <UTooltip :text="trashLabel">
+          <UTooltip v-if="props.moves" :text="trashLabel">
             <UButton color="neutral" variant="ghost" size="sm" square :icon="trashIcon" :aria-label="trashLabel" @click="emit('act', inTrashOrJunk ? 'delete' : 'trash')" />
           </UTooltip>
           <UTooltip :text="state.anyUnread ? $t('mail.action.mark_read') : $t('mail.action.mark_unread')">
@@ -195,7 +198,7 @@
               @click="emit('act', state.anyUnread ? 'read' : 'unread')"
             />
           </UTooltip>
-          <MailToolChoice v-bind="moveChoice" @update:model-value="moveTo" />
+          <MailToolChoice v-if="props.moves" v-bind="moveChoice" @update:model-value="moveTo" />
           <MailLabelChoice :labels="props.labels" :all="labelState.all" :some="labelState.some" @toggle="(id, on) => emit('label', id, on)" />
           <UDropdownMenu :items="narrowMenu" :content="{ align: 'start' }">
             <UTooltip :text="$t('common.action.more')">
@@ -348,6 +351,9 @@ const props = defineProps<{
   more: boolean;
   labels: MailLabel[];
   moveTargets: MoveTarget[];
+  // Whether the account's mailbox moves mail between folders; where it does not, the list draws nothing
+  // that would: trash, delete forever, spam and not spam, and the move select.
+  moves: boolean;
   view: string;
   title: string;
   // The folder role the list's actions work from, when it is one folder's list.
@@ -574,12 +580,15 @@ function moveTo(key: string): void {
   if (target !== undefined) emit("move", target);
 }
 
-// What a gathered row folds into its one menu: the selection's state and the spam report. Move and
-// labels keep their own selects beside it, since each picks from a list that searches once it is long.
+// What a gathered row folds into its one menu: the selection's state and, where the account moves mail,
+// the spam report. Move and labels keep their own selects beside it, since each picks from a list that
+// searches once it is long.
 const narrowMenu = computed<DropdownMenuItem[][]>(() => [
   [
     { label: state.value.allStarred ? t("mail.action.unstar") : t("mail.action.star"), icon: "i-material-symbols-star-outline", onSelect: () => emit("act", state.value.allStarred ? "unstar" : "star") },
-    { label: props.role === "junk" ? t("mail.action.not_spam") : t("mail.action.report_spam"), icon: "i-material-symbols-report-outline", onSelect: () => emit("act", props.role === "junk" ? "not-spam" : "spam") },
+    ...(props.moves
+      ? [{ label: props.role === "junk" ? t("mail.action.not_spam") : t("mail.action.report_spam"), icon: "i-material-symbols-report-outline", onSelect: () => emit("act", props.role === "junk" ? "not-spam" : "spam") }]
+      : []),
   ],
 ]);
 </script>

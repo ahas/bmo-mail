@@ -15,6 +15,7 @@ flowchart TD
   Console --> Service
   Service --> Adapter[the account's adapter]
   Adapter --> IMAP[mail server: IMAP]
+  Adapter --> POP3[mail server: POP3]
   Adapter --> SMTP[mail server: submission]
   Service --> Store[the service's store]
   Service -->|events| Console
@@ -61,6 +62,10 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   - Swipe actions on a phone. The console reads a sideways skim as scrolling everywhere else, and
     the sidebar drawer refuses horizontal drags for the same reason.
   - Several composers open at once, templates, encryption, a contacts manager, creating folders.
+  - On a `pop3-smtp` account (「A POP3 account」): moving mail between folders, spam and not spam,
+    trash, deleting for good, and a copy of each message sent. A POP3 server holds the inbox alone, with
+    no sent, spam or trash folder to move into or copy to; the routes refuse a move, and the screen offers
+    none of them on such an account.
 
 ## The mail server
 
@@ -81,6 +86,10 @@ neither the service nor its store (「A person's sent mail, read on their own ma
     lives only in Dovecot's index and is lost when the index is rebuilt. Every keyword counts —
     `$Forwarded`, `$Junk`, `$NotJunk` and `$MDNSent` as much as a label's — so an account has at
     most 26 labels less those four, and the service refuses a label past that.
+- **A POP3 server,** for an account of the kind `pop3-smtp`: POP3 over TLS (RFC 1939) signed in with `USER`
+  and `PASS`, and `UIDL`, which the service tells a new message from one it has seen by; a server that does
+  not answer `UIDL` is refused at sign-in. `TOP` is used where the server answers it, and the whole message
+  read where it does not. Submission is the same as for an IMAP account.
 - **What the service never assumes:** that Postfix copies sent mail into `Sent` (the service appends
   the copy itself), that the server filters or runs Sieve at delivery, or that a second client
   leaves flags alone.
@@ -100,13 +109,18 @@ neither the service nor its store (「A person's sent mail, read on their own ma
     password. Its fields are the IMAP host and port, the submission host and port, the name each
     certificate is checked against (the host where none is written; `-` for a plain connection, which
     only a stand-in server uses), the login (the address where none is written) and the password.
+  - `pop3-smtp`: a mail server reached over POP3 and submission, signed in with a login and a password,
+    for a mailbox whose server offers no IMAP. Its fields are those of `imap-smtp` with the POP3 host and
+    port in place of the IMAP ones, and the POP3 server's certificate name read the same way. What its
+    mailbox offers is 「A POP3 account」.
   - `gmail` (the Gmail API) and `graph` (Microsoft Graph): a provider signed in through its own
     authorization page, the service keeping the tokens it hands back. Their contract stands in
     `docs/api.md`, 「Accounts」; until an adapter of the kind is built into the service, the service
     does not declare the kind and no account of it can be added.
 - **Adding an account signs in first.** The service checks the account against its servers — for
   `imap-smtp` a login to IMAP and to submission — and keeps it only when they took it; an account
-  whose sign-in failed is refused, and nothing of it is kept. Changing an account's address, settings
+  whose sign-in failed is refused, and nothing of it is kept. For `pop3-smtp` the sign-in is a login to
+  POP3 that answers `UIDL`, then to submission. Changing an account's address, settings
   or password signs in again the same way.
 - **An account's name** is the local part of its address unless the person gives it another. It is
   unique among one owner's accounts and matched without regard to case; the routes and the screen's
@@ -122,9 +136,14 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   not ready. A key file named but missing or unreadable, a key that does not open the accounts kept, or
   a store holding accounts while no key file is named, stops the service at start rather than leave
   accounts it cannot open.
+- **Choosing how a mailbox is reached is choosing the kind.** An account names one kind, chosen when it is
+  added, and the kinds are offered in their names' order, `imap-smtp` first. An account changes its
+  servers, its login and its password within its kind; reaching the same mailbox by another protocol is
+  removing the account and adding it again as the other kind.
 - **Removing an account** forgets it and everything the store holds for it — its labels, rules,
-  settings, spam senders, the watcher's mark and the known addresses — takes back its sends still
-  waiting, and lets its connections go. Its mailbox on the server is untouched.
+  settings, spam senders, the watcher's mark, the known addresses and a POP3 account's messages and
+  drafts — takes back its sends still waiting, and lets its connections go. Its mailbox on the server
+  is untouched.
 
 ### The accounts file, imported once
 
@@ -147,7 +166,7 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 
 ## Where each piece of state lives
 
-- **On the mail server,** so any other client sees the same thing:
+- **On the mail server,** for an IMAP account, so any other client sees the same thing:
   - Read state is `\Seen`, star is `\Flagged`, replied is `\Answered`, forwarded is `$Forwarded`,
     a draft is `\Draft`.
   - A label on a message is an IMAP keyword of the service's own form (`bmo_` and a short id), since
@@ -167,6 +186,10 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   - The arrivals the watcher took that are still owed their `message.created`.
   - Known addresses: every address written to or received from, with its name and when it was
     last used, for completion.
+  - For a POP3 account, each message the maildrop holds: its `UIDL`, the number the service gave it,
+    when it arrived, its size, its head, its flags and labels, and, once it was read whole, its parts
+    and its snippet; and its drafts, each the whole message as it was last saved, until it is sent or
+    thrown away (「A POP3 account」).
   - Sender logos: one row per sender domain holding the picture found there or nothing found, and
     when the looking was done.
 - **In the staging folder** the setting `staging.dir` names: a file posted to a draft until the draft
@@ -176,8 +199,10 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 - **In the browser the reading was done in:** how wide the list's sender and date columns were
   dragged. Everything else about how a list stands is in the address instead, so it travels with a
   link.
-- **Nowhere:** message bodies are never copied out of the mail server. Every list and every thread
-  is read from IMAP when it is asked for.
+- **Nowhere:** the bodies and attachments of mail the server holds are never copied out of it. Every list
+  and every thread of an IMAP account is read from IMAP when it is asked for, and every body of a POP3
+  account from POP3. A POP3 account's drafts are the one message the store holds whole, since its server
+  has nowhere to keep them, and a message sent is kept nowhere.
 
 ## Connections and the watcher
 
@@ -226,6 +251,79 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   watchers also follow the store every minute.
 - A flag or an expunge the server reports on the inbox only says that the inbox changed, as
   `folder.changed`.
+
+## A POP3 account
+
+POP3 hands over the messages of one maildrop and nothing else: no folder but the inbox, no flag, no search
+and no `IDLE`. A `pop3-smtp` account's mailbox is that maildrop read by the service, with what POP3 does not
+hold kept in the store under the account, and its writing is the same as any account's, over the same
+submission server, with its drafts kept in the store.
+
+- **One connection at a time, opened for each piece of work.** A POP3 server locks the maildrop for the
+  session that holds it and shows that session the maildrop as it stood at its login. So every read and
+  every poll opens a session, signs in, does its work, and ends it with `QUIT`; nothing holds a session
+  between them, and the watcher and the routes take turns at it. A session is opened, waited on and
+  probed as every connection to a mail server is (「Connections and the watcher」).
+- **Nothing is deleted from the server.** The service never sends `DELE`, so `QUIT` leaves the maildrop
+  exactly as it was. No setting offers deleting: the service keeps no copy of a body, so a message taken
+  off the server would be gone from every view.
+- **The messages are known by `UIDL`.** Each session reads the maildrop's `UIDL` list and brings the store's
+  list up to date with it:
+  - A `UIDL` the store does not know is a message come since: its head is read with `TOP` and it is
+    kept with a number the service gives it, which no other message of any account is ever given again.
+    That number is its UID in its id (`docs/api.md`, 「Keys」), so its id stands as long as it stays on
+    the server.
+  - A `UIDL` the maildrop no longer lists is a message another client took off the server: it is
+    forgotten, with its flags and labels.
+  - A list brought up to date less than ten seconds before is taken as it stands, so a screen that reads
+    the summary, the folders and a page at once signs in once.
+- **When it arrived** is the date of the head's topmost `Received` line, the delivering server's own, else
+  its `Date`, else when the service first saw it. A list is ordered by it.
+- **Two folders: the inbox and the drafts.** The inbox is the maildrop; the drafts folder, `Drafts` with
+  the drafts role, is the service's own and holds the account's drafts kept in the store. Each stands
+  with its counts read from the store. There is no sent, spam or trash folder. Flags and labels are the
+  service's own, kept on the message's or the draft's row: read, star, answered, forwarded, a label's
+  keyword and the rest are set and taken off as on an IMAP account, and no other client sees them.
+- **Mail stays where it is.** A message never moves between the two folders or out of them: a move, a
+  report of spam and not spam, trash and deleting for good are refused, and the screen offers none of
+  them (「The screen」). A view across folders — starred, a label, a search — reads both folders.
+- **A list and a search** are read from the heads the store keeps, a page cut out of them the way an IMAP
+  page is. A search reads its operators against the heads and the flags, and its remaining words against
+  the subject and the addresses, never the text, since reading the text would fetch every message whole.
+- **A message read whole** is fetched with `RETR` and read as an IMAP message's parts are: its parts
+  numbered as IMAP numbers them, its bodies decoded by their charset, an attachment or an inline picture
+  served by its number or its content id. The first time a message is read whole its parts and its snippet
+  are kept on its row, so the list shows them after; a message not yet read whole stands in the list with
+  neither, and with no attachment mark.
+- **A message past 20 MiB, the most the POP3 client reads in one answer,** stands in the list from its
+  head, or with no head at all on a server that does not answer `TOP`, and is answered `upstream-failed`
+  when it is opened. The session the answer spent is opened again, so the messages after it are read as
+  ever, and the watcher handles it from its head like any other arrival.
+- **The watcher polls.** Every `pop3.poll_ms`, a minute by default, it opens a session, and a message the
+  store did not hold before is new mail. Each message above the high-water mark, oldest first, is read
+  whole once and handled as an IMAP arrival is (「Connections and the watcher」): the rules run over it, the
+  mark moves past it, it is kept as an arrival owed its event, and its sender is recorded; then the
+  arrivals are said as `message.created` and the inbox as `folder.changed`. The mark is the service's own
+  number, under one UID validity for every POP3 account, since no number is given twice. A rule's label,
+  star and read actions are carried out on the message's row; its move, spam and trash actions, and an
+  always-spam sender, are passed over, so the message stays in the inbox and is new mail.
+- **On start**, a first poll with no mark keeps the heads of every message the maildrop holds and sets the
+  mark past the newest, handling nothing older; a poll that fails is said in the journal, and the next
+  one is made at the interval all the same, the journal saying once when the server answers again.
+- **A draft is kept in the store,** since a POP3 server holds no drafts folder. It is the whole message as
+  it was last saved, under the `Message-ID` it keeps across every save (「Writing」), and it stands in the
+  drafts folder from the moment the composer opens it, so the composer, a harness and the drafts folder
+  name the same draft by it. A save replaces the kept message in one write, so a save that fails leaves
+  the one before. Its attachments, its pictures and a forwarded original's attachments are parts of it as
+  on a server's draft; the size cap is the submission server's `SIZE`, as on any account.
+- **Sending** goes as on any account: the send waits for the undo span, then goes over submission as the
+  account, its original is marked answered or forwarded on its row, its recipients become known
+  addresses, and the draft is taken out of the store. A service that stops during the wait leaves the
+  draft in the drafts folder.
+- **No copy of a sent message is kept.** A POP3 server has no sent folder to append one to, and keeping
+  every message the account writes would make the store a mailbox of its own. A conversation therefore
+  shows what came to the inbox, and a reply sent from the service stands only with its recipients.
+- **A read receipt** is sent over submission as on any account, and `$MDNSent` is set on the message's row.
 
 ## Reaching the open tabs
 
@@ -372,7 +470,8 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 
 ## Search
 
-- One box, over the account open in the screen. Gmail's operators are understood and turned into
+- One box, over the account open in the screen. On a POP3 account it reads the heads the store keeps
+  (「A POP3 account」). Gmail's operators are understood and turned into
   an IMAP search: `from:`, `to:`, `subject:`, `label:`, `in:`, `is:unread`, `is:read`,
   `is:starred`, `has:attachment`, `before:` and `after:` with a date. The remaining words search
   the whole text.
@@ -432,7 +531,8 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   attachments, and marks it `$Forwarded`.
 - **A draft stands on the server from its start.** Opening the composer starts the draft, saved in
   the drafts folder at once under a `Message-ID` it keeps across every save, so the composer, a
-  harness and any other client name the same draft by it.
+  harness and any other client name the same draft by it. A POP3 account's drafts folder is the
+  service's own, in the store (「A POP3 account」).
 - **Attachments** are posted to the draft as they are added: the file waits in the staging folder
   until the draft carrying it is saved, and from then on it is a part of the saved draft. A
   forwarded original's attachments are parts of the draft from its start. The total is capped so the
@@ -444,9 +544,9 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 - **Sending** saves the draft, then the send waits in the service for the account's undo span, ten
   seconds until the settings say otherwise, while a notice on the island offers undo send for exactly
   that long. Taking it back reopens the draft. After the wait the service sends it over submission,
-  appends the copy to the sent folder read, deletes the draft and records the recipients as known
-  addresses. A service that stops during the wait leaves the draft in drafts, never a half-sent
-  message.
+  appends the copy to the sent folder read where the account has one (a POP3 account has none), deletes
+  the draft and records the recipients as known addresses. A service that stops during the wait leaves
+  the draft in drafts, never a half-sent message.
 
 ## Read receipts
 
@@ -468,6 +568,9 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 - **Reporting spam** moves the selection to spam and sets `$Junk`; its dialog can add the senders to
   the always-spam list. **Not spam** moves it back to the inbox and sets `$NotJunk`.
 - A rule can be run over the folder that is open, for the mail that came before it existed.
+- **On a POP3 account** a rule's label, star and read actions are carried out and its moves are passed
+  over, as are the always-spam senders (「A POP3 account」); the screen offers neither there (「The
+  screen」).
 - **The rules' order is set in the settings:** a rule is carried by the pointer to another place, a handle on
   its left showing it can be, a line marking where it will land, or moved one place up or down by its buttons.
 
@@ -508,6 +611,12 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   straight away when it is opened again, read behind it rather than under a skeleton. A skeleton is
   for a first reading alone.
 - **A conversation in drafts** opens in the composer, to be written on, rather than as a thread.
+- **The screen offers only what the open account's kind does.** A kind declares whether its mailbox moves
+  mail between folders (`docs/api.md`, 「Accounts」), and the screen reads that and never a kind's name.
+  On an account whose kind does not, a POP3 account's, nothing that moves mail is drawn: trash, delete
+  forever, report spam and not spam, the move select, the drop of a row onto a folder, the `#` key, a
+  rule's move, spam and trash actions with the ready rule for a spam verdict header, and the always-spam
+  senders with the spam dialog that adds to them. Everything else stands as on any account, writing among it.
 - **Every toolbar is bmo-ui's toolbar row:** the list's, the thread's and the editor's. A button in
   one is the component library's small button at its own size, centred in the row, its hover and
   press filling only its own rounded shape; the select-all checkbox stands with its words as one
@@ -689,9 +798,10 @@ flowchart TD
   stand-in: a throwaway Dovecot container of the 2.3 line, declared as the real server declares its
   folders, with example accounts on the reserved `standin.example` domain, and an SMTP stand-in that
   hands mail for those addresses to the container and relays nothing anywhere.
-- **The stand-in is deferred with the tests** (`docs/inventory.md`). It is written again here when the
-  tests are. Until then a development instance runs with no account, or with accounts added for a mail
-  server set up for it.
+- **The Dovecot stand-in is deferred** (`docs/inventory.md`). The suite carries stand-ins of its own,
+  each a server on this machine for its test alone: an IMAP stand-in for the watcher over a dropped
+  connection, and a POP3 and a submission stand-in for a POP3 account. A development instance runs with
+  no account, or with accounts added for a mail server set up for it.
 
 ## Outside this repository
 
@@ -701,7 +811,9 @@ What the mail server's operator does by hand, in this order:
    by the service's user alone — and name the administrator's owner key in `accounts.administrator`.
    Keep the key file beside the store's backups: a store without its key opens no account.
 2. Confirm the IMAP server's per-user connection limit leaves room for two connections per account
-   from the service besides the account's other clients.
+   from the service besides the account's other clients. For a POP3 account, set every other client of
+   the mailbox to leave mail on the server: a message another client takes off it is gone from the
+   service too.
 3. Put a content spam filter at delivery — Postfix delivering through Dovecot's LDA or LMTP with
    Sieve lets it tag or file mail — so the spam-header rule has a verdict to read.
 4. With Sieve at delivery, vacation auto-reply becomes possible; it is a later item of its own.

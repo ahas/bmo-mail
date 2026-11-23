@@ -102,7 +102,7 @@ impl Route for ChangeMessage {
     body: Some(schema::<MessagePatch>),
     status: 200,
     answer: Answer::Json(schema::<Message>),
-    codes: &["not-found", "flag-not-settable", "unknown-label", "unknown-folder"],
+    codes: &["not-found", "flag-not-settable", "unknown-label", "unknown-folder", "not-offered"],
     guard: Guard::Screen,
   };
 

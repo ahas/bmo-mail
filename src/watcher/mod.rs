@@ -3,6 +3,8 @@
 //! An account added, changed or removed starts, restarts or stops its watcher at once, and the store is read
 //! again every minute besides; the staging folder is swept every hour.
 
+pub mod marks;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};

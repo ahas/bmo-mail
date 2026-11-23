@@ -22,8 +22,8 @@ use crate::imap::{
 };
 use crate::labels::label_id_of;
 use crate::mail::{
-  FolderRole, MailAddress, MailFolder, MailFolderState, MailListMessage, MailMessage, MailPart, MailRef,
-  OpenedPart,
+  FolderRole, MailAddress, MailFolder, MailFolderState, MailListMessage, MailMessage, MailPart, MailParts,
+  MailRef, OpenedPart,
 };
 use crate::routes::requests::{Asked, MailFault};
 
@@ -134,15 +134,28 @@ fn read_row(folder: &str, fetch: &Fetch) -> Option<MailMessage> {
   let uid = fetch.uid?;
   let flags: Vec<String> = fetch.flags().map(|flag| flag_name(&flag)).collect();
   let heads = heads(fetch.header());
-  let parts = message_parts(fetch.bodystructure());
-  let key = conversation_key(heads.message_id.as_deref(), &heads.in_reply_to, &heads.references)
-    .unwrap_or_else(|| format!("{folder}\u{0}{uid}"));
   let date = fetch
     .internal_date()
     .map(|date| date.timestamp_millis())
     .filter(|date| *date != 0)
     .or(heads.date)
     .unwrap_or(0);
+
+  Some(message_of(folder, uid, &flags, heads, message_parts(fetch.bodystructure()), date))
+}
+
+/// A message without its bodies, from the flags it carries, its headers, its parts and when it reached its
+/// folder.
+pub fn message_of(
+  folder: &str,
+  uid: u32,
+  flags: &[String],
+  heads: Heads,
+  parts: MailParts,
+  date: i64,
+) -> MailMessage {
+  let key = conversation_key(heads.message_id.as_deref(), &heads.in_reply_to, &heads.references)
+    .unwrap_or_else(|| format!("{folder}\u{0}{uid}"));
   let has = |name: &str| flags.iter().any(|flag| flag == name);
   let listed = MailListMessage {
     folder: folder.to_owned(),
@@ -164,7 +177,7 @@ fn read_row(folder: &str, fetch: &Fetch) -> Option<MailMessage> {
     snippet: String::new(),
   };
 
-  Some(MailMessage {
+  MailMessage {
     listed,
     cc: heads.cc,
     bcc: heads.bcc,
@@ -178,7 +191,7 @@ fn read_row(folder: &str, fetch: &Fetch) -> Option<MailMessage> {
     inline: parts.inline,
     text_part: parts.text,
     html_part: parts.html,
-  })
+  }
 }
 
 /// The section a part number names in a fetch's answer.

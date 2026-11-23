@@ -7,12 +7,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sqlx::SqlitePool;
 use tokio::sync::watch;
 
 use crate::accounts::Account;
 use crate::adapters::Mailbox;
-use crate::adapters::imap_smtp::{MailAccount, MailEndpoint};
+use crate::adapters::servers::{MailAccount, MailEndpoint};
 use crate::announcements::{MESSAGE_CREATED, folder_now, message_now};
 use crate::http::Standing;
 use crate::imap::messages::heads;
@@ -22,6 +21,7 @@ use crate::imap::{uid_fetch, uid_search};
 use crate::mail::MailRef;
 use crate::routes::requests::MailFault;
 use crate::rules::{apply_plan, message_facts, plan_rules, rule_context};
+use crate::watcher::marks::{MailMark, owe, owed, read_mark, settled, write_mark};
 use crate::writing::addresses::record_addresses;
 
 /// The folder a watcher stands on.
@@ -35,112 +35,6 @@ const POLL: Duration = Duration::from_secs(30);
 /// Resolves once the word to stop is given, holding nothing of it after.
 async fn stopped(stop: &mut watch::Receiver<bool>) {
   let _ = stop.wait_for(|stopped| *stopped).await;
-}
-
-/// The high-water mark of a folder: the UID validity it was taken under and the highest UID handled.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MailMark {
-  pub validity: String,
-  pub last_uid: u32,
-}
-
-async fn read_mark(pool: &SqlitePool, account: &str, folder: &str) -> Result<Option<MailMark>, MailFault> {
-  let row: Option<(String, i64)> =
-    sqlx::query_as("SELECT uid_validity, last_uid FROM marks WHERE account = ? AND folder = ?")
-      .bind(account)
-      .bind(folder)
-      .fetch_optional(pool)
-      .await?;
-
-  Ok(row.map(|(validity, last_uid)| MailMark {
-    validity,
-    last_uid: u32::try_from(last_uid).unwrap_or(0),
-  }))
-}
-
-async fn write_mark(
-  pool: &SqlitePool,
-  account: &str,
-  folder: &str,
-  mark: &MailMark,
-) -> Result<(), MailFault> {
-  sqlx::query(
-    "INSERT INTO marks (account, folder, uid_validity, last_uid) VALUES (?, ?, ?, ?)
-     ON CONFLICT (account, folder) DO UPDATE SET uid_validity = excluded.uid_validity, last_uid = excluded.last_uid",
-  )
-  .bind(account)
-  .bind(folder)
-  .bind(&mark.validity)
-  .bind(i64::from(mark.last_uid))
-  .execute(pool)
-  .await?;
-
-  Ok(())
-}
-
-/// Keeps a message as an arrival owed its `message.created`.
-async fn owe(
-  pool: &SqlitePool,
-  account: &str,
-  folder: &str,
-  validity: &str,
-  uid: u32,
-) -> Result<(), MailFault> {
-  sqlx::query("INSERT OR IGNORE INTO arrivals (account, folder, uid_validity, uid) VALUES (?, ?, ?, ?)")
-    .bind(account)
-    .bind(folder)
-    .bind(validity)
-    .bind(i64::from(uid))
-    .execute(pool)
-    .await?;
-
-  Ok(())
-}
-
-/// The arrivals still owed their event under the folder's UID validity, oldest first; those of another
-/// validity, a folder the server rebuilt, are let go.
-async fn owed(
-  pool: &SqlitePool,
-  account: &str,
-  folder: &str,
-  validity: &str,
-) -> Result<Vec<u32>, MailFault> {
-  sqlx::query("DELETE FROM arrivals WHERE account = ? AND folder = ? AND uid_validity <> ?")
-    .bind(account)
-    .bind(folder)
-    .bind(validity)
-    .execute(pool)
-    .await?;
-
-  let uids: Vec<i64> = sqlx::query_scalar(
-    "SELECT uid FROM arrivals WHERE account = ? AND folder = ? AND uid_validity = ? ORDER BY uid",
-  )
-  .bind(account)
-  .bind(folder)
-  .bind(validity)
-  .fetch_all(pool)
-  .await?;
-
-  Ok(uids.into_iter().filter_map(|uid| u32::try_from(uid).ok()).collect())
-}
-
-/// Lets an arrival go once its event is said.
-async fn settled(
-  pool: &SqlitePool,
-  account: &str,
-  folder: &str,
-  validity: &str,
-  uid: u32,
-) -> Result<(), MailFault> {
-  sqlx::query("DELETE FROM arrivals WHERE account = ? AND folder = ? AND uid_validity = ? AND uid = ?")
-    .bind(account)
-    .bind(folder)
-    .bind(validity)
-    .bind(i64::from(uid))
-    .execute(pool)
-    .await?;
-
-  Ok(())
 }
 
 /// Where handling starts: the stored mark where it was taken under the folder's present UID validity;

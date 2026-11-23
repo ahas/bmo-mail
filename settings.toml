@@ -35,6 +35,11 @@ dir = "mail-staging"
 # failure in a row, to a minute (docs/mail.md, 「Connections and the watcher」).
 retry_ms = 5000
 
+[pop3]
+# How often, in milliseconds, a POP3 account's watcher opens a session to look for new mail (docs/mail.md,
+# 「A POP3 account」).
+poll_ms = 60000
+
 [console]
 # The bundle build's folder: the module, the stylesheet, the words and the layer it was built on, which the
 # service serves beside its manifest (docs/api.md, 「The console plugin bundle」). A deployment builds it into

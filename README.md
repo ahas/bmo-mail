@@ -16,7 +16,9 @@ states.
 The testbed's `personal-data` check holds the personal-data rule (`PERSONAL-DATA.md`). The repository
 carries the old archive's import in `tests/import.rs`, the accounts in `tests/accounts.rs`:
 their routes, one owner key never reaching another's, the sealing of their secrets and the accounts file's
-import, the watcher over a dropped connection in `tests/watcher.rs`, the console face in `tests/console.rs`: the
+import, the watcher over a dropped connection in `tests/watcher.rs`, a POP3 account against stand-in POP3 and
+submission servers in `tests/pop3.rs`: its inbox listed and read with an attachment, new mail told by `UIDL`, and
+a reply kept as a draft in the store and sent, the console face in `tests/console.rs`: the
 served manifest read through the vendored bmo-ui release's own reading and how far the console's credential and
 the service's token reach, and the screen's words in `tests/words.rs`: every key the screen writes is its own
 pack's or one the release's `wording-keys` module lists, and the hosted tool in `tests/sent_mail.rs`, called as
@@ -26,7 +28,9 @@ folder keeps. `cargo test` runs them all. The console plugin bundle
 carries its browser tests in `client/tests/`: the screen stands on its own in a small Nuxt host there, served by
 the client's dev server and driven with the mouse in Chromium against a stand-in of the service that keeps what
 the screen changes, and `tests/browser/mail-drag.test.ts` carries a list row onto a folder and a label of the mail
-nav and a filter rule to another place, reading each result from a page loaded again. The bundle's check runs
+nav and a filter rule to another place, reading each result from a page loaded again, and
+`tests/browser/mail-kind-actions.test.ts` holds an account whose kind moves no mail to a screen that draws nothing
+that would, at a wide window, a narrow one and a phone's width. The bundle's check runs
 them after its typecheck. The other behaviour tests are deferred: they are written and run here once
 the minimal services stand on the new repositories, and `docs/inventory.md` lists what the old behaviour was
 held to. The build check is `cargo check --all-targets` and the bundle's typecheck.

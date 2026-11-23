@@ -21,6 +21,7 @@ pub mod mail;
 pub mod mcp;
 pub mod members;
 pub mod openapi;
+pub mod pop3;
 pub mod routes;
 pub mod rules;
 pub mod secrets;

@@ -3,28 +3,18 @@
 //! dropped; the watcher's connection is a separate one of its own.
 
 use std::fmt::Debug;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_imap::extensions::idle::IdleResponse;
 use async_imap::imap_proto::{MailboxDatum, Response};
 use async_imap::types::{Mailbox, UnsolicitedResponse};
 use async_imap::{Client, Session};
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::TcpStream;
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
-use tokio_rustls::TlsConnector;
-use tokio_rustls::rustls::pki_types::ServerName;
-use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 
-use crate::adapters::imap_smtp::{MailAccount, MailEndpoint};
+use crate::adapters::servers::{MailAccount, MailEndpoint, MailStream, tls};
 use crate::imap::wire_name;
 use crate::routes::requests::MailFault;
-
-/// What a connection runs over: TLS, or a plain stream where the account's TLS name is `-`.
-pub trait MailStream: AsyncRead + AsyncWrite + Unpin + Send + Debug {}
-
-impl<T: AsyncRead + AsyncWrite + Unpin + Send + Debug> MailStream for T {}
 
 /// An IMAP session, logged in.
 pub type ImapSession = Session<Box<dyn MailStream>>;
@@ -34,29 +24,6 @@ pub type ImapSession = Session<Box<dyn MailStream>>;
 const IMPLICIT_TLS_PORT: u16 = 993;
 /// The name the service gives the server where the server asks with `ID`.
 const CLIENT_NAME: &str = "bmo-mail";
-
-/// TLS checked against the web's root certificates, as one client configuration for every connection.
-static TLS: LazyLock<TlsConnector> = LazyLock::new(|| {
-  let roots = RootCertStore {
-    roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-  };
-  let provider = Arc::new(tokio_rustls::rustls::crypto::ring::default_provider());
-  let config = ClientConfig::builder_with_provider(provider)
-    .with_safe_default_protocol_versions()
-    .expect("the ring provider speaks the default protocol versions")
-    .with_root_certificates(roots)
-    .with_no_client_auth();
-
-  TlsConnector::from(Arc::new(config))
-});
-
-async fn tls(stream: TcpStream, name: &str) -> Result<Box<dyn MailStream>, MailFault> {
-  let server = ServerName::try_from(name.to_owned())
-    .map_err(|why| MailFault::server(format!("the TLS name {name} is not one: {why}")))?;
-  let stream = TLS.connect(server, stream).await.map_err(MailFault::server)?;
-
-  Ok(Box::new(stream))
-}
 
 /// Opens one connection of an account and logs in: over TLS on port 993, upgraded with STARTTLS on another
 /// port with a TLS name, and plain where the TLS name is `-`. Each step waits for the server's answer

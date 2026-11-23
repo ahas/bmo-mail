@@ -194,7 +194,7 @@
              select handing the focus back to its control, is no request to leave and asks nothing. -->
         <UDrawer v-if="narrow" :open="settingsOpen" :title="$t('mail.action.settings')" :ui="FULL_SHEET" @update:open="onSettingsOpen">
           <template #body>
-            <MailSettingsBody v-model:dirty="settingsDirty" :api="api" :labels="labels" :folders="folders" @labels="refreshAll" @settings="loadSettings" />
+            <MailSettingsBody v-model:dirty="settingsDirty" :api="api" :labels="labels" :folders="folders" :moves="movesMail" @labels="refreshAll" @settings="loadSettings" />
           </template>
         </UDrawer>
         <UModal
@@ -210,11 +210,11 @@
             <ShellClose :class="ui.close()" />
           </template>
           <template #body>
-            <MailSettingsBody v-model:dirty="settingsDirty" :api="api" :labels="labels" :folders="folders" @labels="refreshAll" @settings="loadSettings" />
+            <MailSettingsBody v-model:dirty="settingsDirty" :api="api" :labels="labels" :folders="folders" :moves="movesMail" @labels="refreshAll" @settings="loadSettings" />
           </template>
         </UModal>
 
-        <UModal v-model:open="spamAsk" :title="$t('mail.action.report_spam')" :ui="{ footer: 'justify-end' }">
+        <UModal v-if="movesMail" v-model:open="spamAsk" :title="$t('mail.action.report_spam')" :ui="{ footer: 'justify-end' }">
           <template #body>
             <UCheckbox v-model="spamSenders" :label="$t('mail.label.register_spam_senders', { n: countText(spamAddresses.length) })" :disabled="spamAddresses.length === 0" />
           </template>
@@ -254,8 +254,8 @@ import { useCloseGuard } from "bmo-ui/app/domain/form-save";
 import { useIsland } from "bmo-ui/app/domain/island";
 import { usePainted } from "bmo-ui/app/domain/loading";
 import { useBackClose } from "bmo-ui/app/domain/layers";
-import { CREATE_KEY, mailPath, messagesOf, PAGE_MESSAGES, parseMailPath, ROLE_ICONS, ROLE_LABELS, selectBy, shortcutOf, viewFolder, viewRole, viewTitle } from "../../domain/mail";
-import { mailAccounts, mailApi, pageQuery, roleFolder } from "../../domain/mail-api";
+import { accountMoves, CREATE_KEY, mailPath, messagesOf, PAGE_MESSAGES, parseMailPath, ROLE_ICONS, ROLE_LABELS, selectBy, shortcutOf, viewFolder, viewRole, viewTitle } from "../../domain/mail";
+import { mailAccountKinds, mailAccounts, mailApi, pageQuery, roleFolder } from "../../domain/mail-api";
 import { finishAuthorization } from "../../domain/mail-authorization";
 import { loadMailEditor } from "../../domain/mail-editor-load";
 import { useMailStream } from "../../domain/mail-stream";
@@ -268,7 +268,7 @@ import { conversationsOf, isRead, SEEN } from "../../../shared/mail";
 
 import type { MailListAction } from "../../components/MailList.vue";
 import type { MoveTarget, SelectKind } from "../../domain/mail";
-import type { MailAccount, MailConversation, MailEvent, MailFolder, MailLabel, MailMessage, MailSend, MailSettings } from "../../../shared/mail";
+import type { MailAccount, MailAccountKind, MailConversation, MailEvent, MailFolder, MailLabel, MailMessage, MailSend, MailSettings } from "../../../shared/mail";
 import type { SplitterItem } from "@nuxt/ui";
 
 // The mail screen is one screen for every place inside it: the account, the folder, the search and
@@ -297,6 +297,8 @@ const narrow = useNarrow();
 const painted = usePainted();
 
 const accounts = ref<MailAccount[] | null>(null);
+// The kinds of account the service declares, which say what an account of each can do.
+const kinds = ref<MailAccountKind[] | null>(null);
 const folders = ref<MailFolder[]>([]);
 const labels = ref<MailLabel[]>([]);
 const conversations = ref<MailConversation[] | null>(null);
@@ -366,6 +368,9 @@ const before = computed(() => {
 const unreadOnly = computed(() => route.query.unread === "1");
 const address = computed(() => accounts.value?.find((one) => one.name === place.value?.account)?.address ?? "");
 const api = computed(() => mailApi(place.value?.account ?? ""));
+// Whether the open account's mailbox moves mail between folders: where it does not, nothing that moves
+// mail is drawn or answered (docs/mail.md, 「The screen」).
+const movesMail = computed(() => accountMoves(accounts.value?.find((one) => one.name === place.value?.account), kinds.value));
 const role = computed(() => (place.value === null ? null : viewRole(place.value.view, folders.value)));
 const title = computed(() => (place.value === null ? "" : viewTitle(t, place.value.view, labels.value, folders.value)));
 // The one folder the view reads, which mark-all-read marks and whose count the range stands against.
@@ -388,6 +393,7 @@ const listProps = computed(() => ({
   more: more.value,
   labels: labels.value,
   moveTargets: moveTargets.value,
+  moves: movesMail.value,
   view: place.value?.view ?? "inbox",
   title: title.value,
   role: role.value,
@@ -412,6 +418,15 @@ async function loadAccounts(): Promise<void> {
   } catch (error) {
     accounts.value = [];
     listFailure.value = mailFailure(t, error, t("mail.error.accounts_failed"));
+  }
+}
+
+// The kinds the service declares, read once with the accounts.
+async function loadKinds(): Promise<void> {
+  try {
+    kinds.value = await mailAccountKinds();
+  } catch {
+    // Kinds that could not be read leave every action standing, as on an account that moves mail.
   }
 }
 
@@ -626,6 +641,7 @@ async function finishPendingAuthorization(): Promise<void> {
 
 onMounted(async () => {
   await finishPendingAuthorization();
+  void loadKinds();
   await loadAccounts();
 
   if (place.value !== null && segments.value.length === 0) {
@@ -903,8 +919,9 @@ function moveTo(target: MoveTarget): void {
   });
 }
 
-// The nav's views chosen mail may be dropped on from a wide list: the places it can move to and the labels.
-const dropViews = computed(() => [...moveTargets.value.map((one) => one.key), ...labels.value.map((one) => `label:${one.id}`)]);
+// The nav's views chosen mail may be dropped on from a wide list: the places it can move to, where the
+// open account moves mail, and the labels.
+const dropViews = computed(() => [...(movesMail.value ? moveTargets.value.map((one) => one.key) : []), ...labels.value.map((one) => `label:${one.id}`)]);
 
 // Chosen mail dropped on a nav row: moved to that folder, or given that label.
 function droppedOn(view: string): void {
@@ -1033,7 +1050,7 @@ function foldNav(folded: boolean): void {
 function onKey(event: KeyboardEvent): void {
   if (narrow.value || settingsOpen.value) return;
 
-  const shortcut = shortcutOf(event);
+  const shortcut = shortcutOf(event, movesMail.value);
   const rows = conversations.value ?? [];
 
   if (shortcut === null) return;

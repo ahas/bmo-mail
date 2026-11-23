@@ -8,7 +8,7 @@
 
 use std::fmt;
 
-use crate::adapters::imap_smtp::{MailAccount, MailEndpoint};
+use crate::adapters::servers::{MailAccount, MailEndpoint};
 
 /// One account of the accounts file: its login, and the address's local part, the name it is kept under.
 #[derive(Clone, PartialEq, Eq)]

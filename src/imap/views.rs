@@ -144,24 +144,29 @@ fn view_of(query: &MessageQuery) -> MailView {
   }
 }
 
-/// One page of the messages a query asks for, without their bodies, and whether more stand past it.
-pub async fn page_of(
-  pool: &SqlitePool,
-  session: &MailSession,
-  account: &str,
-  query: &MessageQuery,
-) -> Result<(Vec<MailMessage>, bool), MailFault> {
+/// Where a page a query asks for starts, and how many messages it holds.
+pub fn page_cursor(query: &MessageQuery) -> Result<(Cursor, usize), MailFault> {
   let cursor = match (query.before, query.after) {
     (Some(_), Some(_)) => return Err(Asked::bad_request("a page takes before or after, not both").into()),
     (Some(before), None) => Cursor::Before(before),
     (None, Some(after)) => Cursor::After(after),
     (None, None) => Cursor::Newest,
   };
-  let limit = query.limit.unwrap_or(PAGE_SIZE).clamp(1, MOST_PAGE_SIZE) as usize;
-  let folders = folders_of(session).await?;
+
+  Ok((cursor, query.limit.unwrap_or(PAGE_SIZE).clamp(1, MOST_PAGE_SIZE) as usize))
+}
+
+/// The scope of the view a page's query asks for, among the mailbox's folders; none where it names no
+/// message at all.
+pub async fn page_scope(
+  pool: &SqlitePool,
+  folders: &[MailFolder],
+  account: &str,
+  query: &MessageQuery,
+) -> Result<Option<ViewScope>, MailFault> {
   let view = view_of(query);
-  let Some(mut scope) = view_scope(pool, &folders, account, &view).await? else {
-    return Ok((Vec::new(), false));
+  let Some(mut scope) = view_scope(pool, folders, account, &view).await? else {
+    return Ok(None);
   };
 
   // Words and a label together are the words searched within the label.
@@ -172,6 +177,22 @@ pub async fn page_of(
 
     scope.search = all_of(vec![scope.search, Search::Keyword(label_keyword(id))]);
   }
+
+  Ok(Some(scope))
+}
+
+/// One page of the messages a query asks for, without their bodies, and whether more stand past it.
+pub async fn page_of(
+  pool: &SqlitePool,
+  session: &MailSession,
+  account: &str,
+  query: &MessageQuery,
+) -> Result<(Vec<MailMessage>, bool), MailFault> {
+  let (cursor, limit) = page_cursor(query)?;
+  let folders = folders_of(session).await?;
+  let Some(scope) = page_scope(pool, &folders, account, query).await? else {
+    return Ok((Vec::new(), false));
+  };
 
   messages_page(session, &scope.folders, &scope.search, cursor, limit).await
 }

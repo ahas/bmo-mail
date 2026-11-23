@@ -1,6 +1,6 @@
 import { identityMark } from "./mail-avatars";
 
-import type { FolderRole, MailConversation, MailFolder, MailLabel, MailMailbox, MailMessage } from "../../shared/mail";
+import type { FolderRole, MailAccount, MailAccountKind, MailConversation, MailFolder, MailLabel, MailMailbox, MailMessage } from "../../shared/mail";
 import type { Translate } from "bmo-ui/shared/wording";
 import type { AvatarProps } from "@nuxt/ui";
 
@@ -26,6 +26,13 @@ export const ROLE_ICONS: Record<FolderRole, string> = {
 
 // The order the folder roles stand in the mail nav, with the starred view after the inbox.
 export const NAV_ROLES: readonly FolderRole[] = ["inbox", "sent", "drafts", "junk", "trash"];
+
+// Whether an account's mailbox moves mail between folders, as the kind it names declares
+// (docs/mail.md, 「The screen」); never read off a kind's name. While the kinds are unread, or where
+// none of them is the account's, it is taken to, so nothing is held back on a guess.
+export function accountMoves(account: Pick<MailAccount, "kind"> | undefined, kinds: readonly Pick<MailAccountKind, "name" | "moves">[] | null): boolean {
+  return kinds?.find((kind) => kind.name === account?.kind)?.moves ?? true;
+}
 
 // One place chosen mail can go: the inbox, the trash, or another folder, each by its folder's name.
 export interface MoveTarget {
@@ -326,16 +333,18 @@ export const CREATE_KEY = "c";
 // field's, never a shortcut; so is one held with a modifier.
 export type MailShortcut = "search" | "next" | "previous" | "select" | "star" | "trash" | "reply" | "reply-all" | "forward";
 
-const SHORTCUTS: Record<string, MailShortcut> = {
-  "/": "search",
-  j: "next",
-  k: "previous",
-  x: "select",
-  s: "star",
-  "#": "trash",
-  r: "reply",
-  a: "reply-all",
-  f: "forward",
+// Each key with what it does, and whether that moves mail between folders: such a key does nothing on an
+// account whose kind moves none.
+const SHORTCUTS: Record<string, { shortcut: MailShortcut; moves: boolean }> = {
+  "/": { shortcut: "search", moves: false },
+  j: { shortcut: "next", moves: false },
+  k: { shortcut: "previous", moves: false },
+  x: { shortcut: "select", moves: false },
+  s: { shortcut: "star", moves: false },
+  "#": { shortcut: "trash", moves: true },
+  r: { shortcut: "reply", moves: false },
+  a: { shortcut: "reply-all", moves: false },
+  f: { shortcut: "forward", moves: false },
 };
 
 export function isTypingTarget(target: EventTarget | null): boolean {
@@ -348,12 +357,15 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return element.isContentEditable || element.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='textbox']") !== null;
 }
 
-export function shortcutOf(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "target">): MailShortcut | null {
+// The shortcut a key presses, or none where it moves mail and the open account's kind moves none.
+export function shortcutOf(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "target">, moves: boolean): MailShortcut | null {
   if (event.ctrlKey || event.metaKey || event.altKey || isTypingTarget(event.target)) {
     return null;
   }
 
-  return SHORTCUTS[event.key] ?? null;
+  const entry = SHORTCUTS[event.key];
+
+  return entry === undefined || (entry.moves && !moves) ? null : entry.shortcut;
 }
 
 // The colours a label may take, as the settings offer them.

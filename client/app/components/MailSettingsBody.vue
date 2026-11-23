@@ -4,7 +4,8 @@
        are one form, saved by the one Save button at the foot (docs/web.md, 「Forms」); the filters,
        labels and spam senders are records, each saved as it is added, changed, moved or removed
        beside it. The signature is written in the same editor a message's body is, so a picture or a
-       table can go into it. -->
+       table can go into it. On an account whose kind moves no mail between folders, a rule offers no
+       move, spam or trash action and the spam senders do not stand. -->
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
       <p v-if="failure !== ''" role="alert" class="px-4 pt-4 text-sm text-error">{{ failure }}</p>
@@ -69,12 +70,12 @@
               <UInput v-model="form.contains" :placeholder="$t('mail.placeholder.contains')" class="min-w-40 flex-1" :aria-label="$t('mail.placeholder.contains')" />
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <ChoiceSelect v-model="form.action" :items="ACTION_ITEMS" value-key="value" class="w-40" :aria-label="$t('mail.aria.rule_action')" />
+              <ChoiceSelect v-model="form.action" :items="actionItems" value-key="value" class="w-40" :aria-label="$t('mail.aria.rule_action')" />
               <ChoiceSelect v-if="form.action === 'label'" v-model="form.label" :items="props.labels.map((one) => ({ label: one.name, value: one.id }))" value-key="value" :placeholder="$t('mail.label.labels')" class="w-40" :aria-label="$t('mail.label.labels')" />
               <ChoiceSelect v-if="form.action === 'move'" v-model="form.folder" :items="props.folders.map((one) => ({ label: one.shortName, value: one.name }))" value-key="value" :placeholder="$t('mail.label.folders')" class="w-40" :aria-label="$t('mail.label.folders')" />
             </div>
             <div class="flex flex-wrap justify-end gap-2">
-              <UButton color="neutral" variant="outline" :label="$t('mail.action.spam_header_rule')" :loading="busy === 'presets'" @click="addPresets" />
+              <UButton v-if="props.moves" color="neutral" variant="outline" :label="$t('mail.action.spam_header_rule')" :loading="busy === 'presets'" @click="addPresets" />
               <UButton color="neutral" variant="outline" :label="$t('mail.action.apply_inbox')" :loading="busy === 'run'" :disabled="rules.length === 0" @click="runRules" />
               <UButton :label="$t('mail.action.rule_add')" :loading="busy === 'rule'" @click="addRule" />
             </div>
@@ -82,7 +83,8 @@
           <p v-if="ran !== ''" class="text-sm text-muted" role="status">{{ ran }}</p>
         </section>
 
-        <section class="flex flex-col gap-3 border-b border-default p-4" aria-labelledby="mail-settings-labels">
+        <!-- The last section standing draws no line under it, which would fall on the foot's own. -->
+        <section class="flex flex-col gap-3 p-4" :class="{ 'border-b border-default': props.moves }" aria-labelledby="mail-settings-labels">
           <h3 id="mail-settings-labels" class="text-lg font-semibold">{{ $t("mail.label.labels") }}</h3>
           <ul class="flex flex-col gap-2">
             <li v-for="label in props.labels" :key="label.id" class="flex items-center gap-2">
@@ -108,7 +110,7 @@
           </div>
         </section>
 
-        <section class="flex flex-col gap-3 p-4" aria-labelledby="mail-settings-spam">
+        <section v-if="props.moves" class="flex flex-col gap-3 p-4" aria-labelledby="mail-settings-spam">
           <h3 id="mail-settings-spam" class="text-lg font-semibold">{{ $t("mail.title.spam_senders") }}</h3>
           <p v-if="settings.spamSenders.length === 0" class="text-sm text-muted">{{ $t("mail.label.none") }}</p>
           <ul class="flex flex-col gap-1">
@@ -145,7 +147,8 @@ import type { MailApi } from "../domain/mail-api";
 import type { MailFolder, MailLabel, MailRule, MailSettings, MailSettingsPatch, RuleAction, RuleField } from "../../shared/mail";
 
 const { t } = useI18n();
-const props = defineProps<{ api: MailApi; labels: MailLabel[]; folders: MailFolder[] }>();
+// `moves`: whether the account's mailbox moves mail between folders.
+const props = defineProps<{ api: MailApi; labels: MailLabel[]; folders: MailFolder[]; moves: boolean }>();
 
 // Labels changed here change the mail nav and the lists, and the settings change what an open
 // message shows; the page reads each again when it hears so.
@@ -158,14 +161,18 @@ const FIELD_ITEMS = [
   { label: t("mail.label.field_header"), value: "header" },
 ];
 
-const ACTION_ITEMS = [
-  { label: t("mail.label.do_label"), value: "label" },
-  { label: t("mail.label.do_star"), value: "star" },
-  { label: t("mail.label.do_read"), value: "read" },
-  { label: t("mail.label.do_move"), value: "move" },
-  { label: t("mail.label.do_spam"), value: "spam" },
-  { label: t("mail.label.do_trash"), value: "trash" },
+// Each action a rule may take, and whether it moves mail between folders.
+const ACTIONS = [
+  { label: t("mail.label.do_label"), value: "label", moves: false },
+  { label: t("mail.label.do_star"), value: "star", moves: false },
+  { label: t("mail.label.do_read"), value: "read", moves: false },
+  { label: t("mail.label.do_move"), value: "move", moves: true },
+  { label: t("mail.label.do_spam"), value: "spam", moves: true },
+  { label: t("mail.label.do_trash"), value: "trash", moves: true },
 ];
+
+// The actions a rule written for this account may take: none that moves mail where the account moves none.
+const actionItems = computed(() => ACTIONS.filter((one) => props.moves || !one.moves).map(({ label, value }) => ({ label, value })));
 
 const settings = ref<MailSettings | null>(null);
 const rules = ref<MailRule[]>([]);
@@ -178,6 +185,11 @@ const ran = ref("");
 const newLabel = ref("");
 const newSpam = ref("");
 const form = reactive({ field: "from" as RuleField, header: "", contains: "", action: "label" as RuleAction["kind"], label: "", folder: "" });
+
+// An action the account no longer offers is not left chosen.
+watch(actionItems, (items) => {
+  if (!items.some((one) => one.value === form.action)) form.action = "label";
+});
 
 async function run(name: string, work: () => Promise<void>, fallback: string): Promise<void> {
   busy.value = name;

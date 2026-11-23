@@ -22,6 +22,8 @@ test = false
 [dependencies]
 # IMAP: the work connection the routes go through and the watcher's IDLE connection.
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
+# POP3: a `pop3-smtp` account's maildrop, read one session at a time.
+async-pop = { version = "1.1.3", default-features = false, features = ["runtime-tokio"] }
 axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
 # Base64 bodies, read as far as their whole groups go; a file posted to a draft; a message's and a thread's
 # opaque ids.

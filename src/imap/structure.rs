@@ -84,6 +84,27 @@ fn leaf(common: &BodyContentCommon<'_>, other: &BodyContentSinglePart<'_>, part:
   }
 }
 
+/// Sorts one leaf part of a message among its parts: the first plain body, the first HTML body, a picture an
+/// HTML body shows by its content id, and every other part an attachment. `disposition` is the part's
+/// `Content-Disposition` in lower case, and `related` whether it stands inside a `multipart/related`.
+pub fn place(parts: &mut MailParts, one: MailPart, disposition: Option<&str>, related: bool) {
+  let attached = disposition == Some("attachment");
+
+  if !attached && one.filename.is_none() && one.kind == "text/plain" && parts.text.is_none() {
+    parts.text = Some(one);
+  } else if !attached && one.filename.is_none() && one.kind == "text/html" && parts.html.is_none() {
+    parts.html = Some(one);
+  } else if !attached
+    && one.cid.is_some()
+    && (related || disposition == Some("inline"))
+    && one.kind.starts_with("image/")
+  {
+    parts.inline.push(one);
+  } else {
+    parts.attachments.push(one);
+  }
+}
+
 /// What a message is made of, sorted. A single-part message has no part number of its own; its body is
 /// part 1. A message carried inside another is one part, an attachment.
 pub fn message_parts(structure: Option<&BodyStructure<'_>>) -> MailParts {
@@ -112,21 +133,8 @@ pub fn message_parts(structure: Option<&BodyStructure<'_>>) -> MailParts {
     };
     let one = leaf(common, other, number.unwrap_or_else(|| "1".to_owned()));
     let disposition = common.disposition.as_ref().map(|disposition| disposition.ty.to_lowercase());
-    let attached = disposition.as_deref() == Some("attachment");
 
-    if !attached && one.filename.is_none() && one.kind == "text/plain" && parts.text.is_none() {
-      parts.text = Some(one);
-    } else if !attached && one.filename.is_none() && one.kind == "text/html" && parts.html.is_none() {
-      parts.html = Some(one);
-    } else if !attached
-      && one.cid.is_some()
-      && (related || disposition.as_deref() == Some("inline"))
-      && one.kind.starts_with("image/")
-    {
-      parts.inline.push(one);
-    } else {
-      parts.attachments.push(one);
-    }
+    place(parts, one, disposition.as_deref(), related);
   }
 
   if let Some(structure) = structure {

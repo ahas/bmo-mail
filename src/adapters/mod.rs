@@ -5,6 +5,8 @@
 //! account names its adapter by the kind it stores, and each adapter registers itself beside its own code.
 
 pub mod imap_smtp;
+pub mod pop3_smtp;
+pub mod servers;
 
 use std::collections::HashMap;
 use std::fmt;

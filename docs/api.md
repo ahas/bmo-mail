@@ -67,7 +67,7 @@ flowchart TD
 | `{accountName}` | An account's name, unique among its owner's accounts and matched without regard to case: its address's local part unless it was given another. |
 | `{authorizationId}` | An authorization's id: opaque, given when the authorization is started. |
 | `{folderName}` | A folder's full name on the server, its hierarchy delimiter and all, percent-encoded in the path. |
-| `{messageId}` | A message's id: opaque, naming its folder and its UID there. It stands as long as the message stays in that folder; a move gives the message a new one. |
+| `{messageId}` | A message's id: opaque, naming its folder and its UID there, which on a POP3 account is the number the service gave it (`docs/mail.md`, 「A POP3 account」). It stands as long as the message stays in that folder; a move gives the message a new one. |
 | `{threadId}` | A conversation's id: opaque, the same for every message of the conversation whatever its folder. |
 | `{partId}` | A part of a message: its number in the message (`1.2`), or its content id without angle brackets. |
 | `{draftId}` | A draft's id: the `Message-ID` it is saved under, without angle brackets. It stands across every save. |
@@ -99,23 +99,28 @@ alone (「Who checks what」).
 | `GET /summary` | | `accounts`, every account of the owner, and `unreadCount`, the unread messages of every reachable inbox together |
 
 - **A kind** is `name` (its adapter's name, which an account names it by), `signIn` (`password`: an account is
-  added from its fields; `authorization`: through the provider's own page) and `fields`, what a person writes to
+  added from its fields; `authorization`: through the provider's own page), `moves` (its mailbox moves mail
+  between folders: a move, spam and not spam, trash and deleting for good; the screen draws none of them for an
+  account whose kind does not, `docs/mail.md`, 「The screen」) and `fields`, what a person writes to
   add an account of it, in the order a form shows them. A field is `name` (the key it stands under in an
   account's `settings` or `secrets`), `kind` (`text`, `port`, or `secret`: kept encrypted and never answered),
   `required` and `default` (the value a form starts from, or null). The address and the name are every
   account's, and no kind declares them as fields.
 - **The kinds** each adapter declares:
 
-  | Kind | Signs in by | Fields |
-  |---|---|---|
-  | `imap-smtp` | password | `imapHost`, `imapPort` (993 by default), `imapTlsName`, `smtpHost`, `smtpPort` (587 by default), `smtpTlsName`, `login`, `password` (secret) |
-  | `gmail` | authorization | none: the Gmail API adapter keeps the tokens Google hands back as the account's secrets |
-  | `graph` | authorization | none: the Microsoft Graph adapter keeps the tokens Microsoft hands back as the account's secrets |
+  | Kind | Signs in by | Moves | Fields |
+  |---|---|---|---|
+  | `imap-smtp` | password | yes | `imapHost`, `imapPort` (993 by default), `imapTlsName`, `smtpHost`, `smtpPort` (587 by default), `smtpTlsName`, `login`, `password` (secret) |
+  | `pop3-smtp` | password | no | `pop3Host`, `pop3Port` (995 by default), `pop3TlsName`, `smtpHost`, `smtpPort` (587 by default), `smtpTlsName`, `login`, `password` (secret) |
+  | `gmail` | authorization | yes | none: the Gmail API adapter keeps the tokens Google hands back as the account's secrets |
+  | `graph` | authorization | yes | none: the Microsoft Graph adapter keeps the tokens Microsoft hands back as the account's secrets |
 
-  A kind is declared, listed and taken only where its adapter is built into the service. `imap-smtp` is;
-  `gmail` and `graph` stand here as their contract, and until their adapters are built a request naming either
-  is refused 422 `unknown-kind`. For `imap-smtp`, a TLS name left empty is the host and `-` is a plain
-  connection, for a stand-in server alone; a login left empty is the address; a port is 1 to 65535.
+  A kind is declared, listed and taken only where its adapter is built into the service. `imap-smtp` and
+  `pop3-smtp` are; `gmail` and `graph` stand here as their contract, and until their adapters are built a
+  request naming either is refused 422 `unknown-kind`. For `imap-smtp` and `pop3-smtp`, a TLS name left empty
+  is the host and `-` is a plain connection, for a stand-in server alone; a login left empty is the address; a
+  port is 1 to 65535. Which protocol reaches an account's inbox is its kind, so an account added as one kind
+  stays that kind; a change of `settings` changes its servers within it.
 - **An account** is `name` (1 to 64 characters with no slash or space, kept in lower case), `kind`, `address`,
   `position` (its place in its owner's list, from 1), `settings` (its fields that are not secret, by name, each
   a string), `unreadCount` (its inbox's unread messages) and `reachable` (its server answered; where it did
@@ -139,8 +144,9 @@ alone (「Who checks what」).
   moves it among the owner's others; `address` and `settings` replace its own, `settings` whole; `secrets`
   replaces the secrets it names and keeps the others. A change of the address, the settings or the secrets
   signs in again before anything is kept, refused 422 `sign-in-failed` where it fails.
-- **An account removed** is forgotten with its labels, rules, settings, spam senders, mark and known
-  addresses; its sends still waiting are taken back, and its mailbox on the server is untouched.
+- **An account removed** is forgotten with its labels, rules, settings, spam senders, mark, known addresses
+  and a POP3 account's messages and drafts; its sends still waiting are taken back, and its mailbox on the
+  server is untouched.
 - **The small lists** — accounts, folders, labels, rules and addresses — are paged by `position`: `after`
   names the position of the last item read, `limit` caps the page, and with neither the whole list comes in
   one page.
@@ -153,6 +159,9 @@ alone (「Who checks what」).
 |---|---|---|
 | `GET /accounts/{accountName}/folders` | query `after?`, `limit?` | a page of the account's folders |
 | `PATCH /accounts/{accountName}/folders/{folderName}` | `read`: true marks every message of the folder read, false every one unread | the folder |
+
+A POP3 account has two folders, its inbox, `INBOX`, and its drafts, `Drafts`, the service's own (`docs/mail.md`,
+「A POP3 account」), their counts read from the store.
 
 **A folder** is `accountName`, `name` (its full name, the key), `shortName` (the last step of the name, as a
 folder with no role is shown), `role` (`inbox`, `sent`, `drafts`, `junk`, `trash`, or null), `position`,
@@ -187,6 +196,10 @@ folder with no role is shown), `role` (`inbox`, `sent`, `drafts`, `junk`, `trash
   the answer is 204.
 - **The flags a request may set** are `\Seen`, `\Flagged`, `\Answered`, `$Forwarded`, `$Junk`, `$NotJunk` and
   `$MDNSent`. A flag outside them is refused 422 `flag-not-settable` unless the message already carries it.
+- **On a POP3 account** the flags and labels are the service's own, kept on the message's or the draft's row
+  in the store. A change whose `folderName` names a folder other than the message's own is refused 422
+  `not-offered`, since mail there never moves, and a delete 422 `outside-trash`, since it has no spam or trash
+  folder. A search reads the heads the store keeps (`docs/mail.md`, 「A POP3 account」).
 - **A thread** gathers every message of the conversation from the inbox, the sent folders and `folderName`
   where it is given, oldest first, a message found in two folders once. Reading it marks nothing read.
 
@@ -244,15 +257,20 @@ labels; one more is refused 422 `too-many-labels`.
   of `attachments` names the ones to keep by `partId`; a file is added by the attachments route. A file that
   would take the message past the size the submission server takes is refused 413 `too-large`.
 - **A change of a draft** saves it anew under the same id: the new copy is written first and the one it
-  replaces deleted after, so a save that fails midway never loses the older copy.
+  replaces deleted after, or on a POP3 account replaced in one write, so a save that fails midway never loses
+  the older copy.
 - **A send** is `id`, `accountName`, `draftId`, `state` (`waiting`, `sent`, `cancelled` or `failed`), `sendAt`
   and `failure` (the English sentence of why it failed, or null). `sendAt` null sends after the account's undo
   span, `undoSendMs`; a time already past sends at once; a time past the undo span from now is refused 422
   `send-too-late`. A draft with no recipient is refused 422 `no-recipients`.
 - **A send waits in the service.** Taking it back while it waits keeps the draft; after it went, a taking
   back is refused 409 `conflict`. Once sent, the message goes over submission, its copy goes into the sent
-  folder read, the draft is deleted and the recipients become known addresses. A send is kept for a minute
-  after it ended, then answered 404; a service that stops while a send waits leaves its draft in drafts.
+  folder read where the account has one, the draft is deleted and the recipients become known addresses. A
+  send is kept for a minute after it ended, then answered 404; a service that stops while a send waits leaves
+  its draft in drafts.
+- **A POP3 account writes as any account does,** through every route here, over its submission server. Its
+  drafts are kept in the store and stand in its drafts folder, and a message sent leaves no copy anywhere
+  (`docs/mail.md`, 「A POP3 account」).
 - **A read receipt** is sent for a message that asks for one, in the service's own words, and the message
   carries `$MDNSent` after; one that asks for none is refused 422 `no-receipt-asked`. Declining a receipt is
   setting `$MDNSent` on the message.
@@ -312,6 +330,7 @@ log. A route answers the common codes of the conventions where they apply, and t
 | 422 | `no-receipt-asked` | the message asks for no read receipt |
 | 422 | `draft-not-placed` | the server did not say where it put a saved draft, and its `Message-ID` finds it nowhere |
 | 422 | `unknown-kind` | a body names a kind of account the service does not declare |
+| 422 | `not-offered` | the account's kind does not offer what is asked: moving mail on a POP3 account |
 | 422 | `sign-in-failed` | the account's servers did not take its sign-in |
 | 422 | `no-authorization` | an authorization is asked for a kind that signs in by password |
 | 422 | `unknown-authorization` | a body names an authorization that is not the owner's, has run out or was used |
@@ -375,9 +394,11 @@ back; neither wait gives up.
 | `rules` | `id` (its own), `account`, `position`, `enabled`, `match`, `conditions` and `actions` (JSON), `created_at`; indexed by `account`, `position` | the filter rules |
 | `settings` | `account` (key), `signature`, `receipt_default`, `show_images`, `undo_send_ms` | the account's settings |
 | `spam_senders` | `account`, `address`, `created_at`; key both | the always-spam senders |
-| `marks` | `account`, `folder`, `uid_validity`, `last_uid`; key `account`, `folder` | the watcher's high-water mark |
+| `marks` | `account`, `folder`, `uid_validity`, `last_uid`; key `account`, `folder` | the watcher's high-water mark; a POP3 account's stands on `INBOX` under the one validity `pop3`, its UIDs the numbers `pop3_messages` gives |
 | `arrivals` | `account`, `folder`, `uid_validity`, `uid`; key all four | the messages the watcher took that are still owed their `message.created` (`docs/mail.md`, 「Connections and the watcher」) |
 | `addresses` | `account`, `address`, `name`, `last_used`, `uses`; key `account`, `address` | the known addresses |
+| `drafts` | `id` (its own), `account`, `message_id` (without angle brackets), `message` (the whole message's bytes), `flags` (JSON), `changed_at`; unique `account`, `message_id` | the drafts of an account whose server keeps none, a POP3 account's (`docs/mail.md`, 「A POP3 account」) |
+| `pop3_messages` | `id` (its own, never given twice: the message's UID), `account`, `uidl`, `at`, `size`, `head` (the head's bytes), `flags` (JSON, its labels' keywords among them), `parts` and `snippet` (null until it is read whole), `created_at`; unique `account`, `uidl` | each message a POP3 account's maildrop holds (`docs/mail.md`, 「A POP3 account」) |
 | `avatars` | `domain` (key), `type`, `bytes` (none where nothing was found), `looked_up_at` | the sender logos |
 | `events` | `id` (the event's number), `kind`, `owner`, `account` (the account's name), `at`, `data` (JSON) | the event stream's window |
 
@@ -474,7 +495,7 @@ The tool `sent-mail` under `tools/`, in the tool host's manifest format, protoco
 The service calls no other service; its hosted tool calls the units 「The hosted tool」 names.
 
 - **The servers each account names,** through its kind's adapter: for `imap-smtp` the IMAP and submission
-  servers, over TLS but where a TLS name is `-`.
+  servers, for `pop3-smtp` the POP3 and submission servers, over TLS but where a TLS name is `-`.
 - **The key file** the setting `secrets.key_file` names, read once at start.
 - **The accounts file** the setting `accounts.file` names, read once at start until it has been imported, and
   never after (`docs/mail.md`, 「The accounts file, imported once」).
@@ -502,6 +523,7 @@ the settings folder.
 | `accounts` | `administrator` | the administrator's owner key (「Who checks what」) | none: nothing is imported, and the harness plugin needs `--owner` |
 | `secrets` | `key_file` | the key file account secrets are sealed with: 32 random bytes as base64 on one line | none: no account is kept |
 | `staging` | `dir` | the folder posted files wait in | `mail-staging` |
+| `pop3` | `poll_ms` | how often, in milliseconds, a POP3 account's watcher opens a session to look for new mail (`docs/mail.md`, 「A POP3 account」) | `60000` |
 | `watcher` | `retry_ms` | the first wait, in milliseconds, before a dropped watch connection is opened again (`docs/mail.md`, 「Connections and the watcher」) | `5000` |
 | `wording` | `language` | the language of 「The service's own words」 | `ko` |
 | `wording` | `time_zone` | the time zone dates are written in | `Asia/Seoul` |
