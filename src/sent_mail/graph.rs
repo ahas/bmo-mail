@@ -1,5 +1,5 @@
 //! The Graph road (`docs/mail.md`, 「A person's sent mail, read on their own machine」): a Graph access token read
-//! from the person's own Teams page through bmo-ms-teams, then the messages of their sent items folder sent within
+//! from the person's own Teams page through the Teams page service, then the messages of their sent items folder sent within
 //! the day, followed page by page.
 
 use chrono::{DateTime, SecondsFormat};

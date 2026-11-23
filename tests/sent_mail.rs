@@ -1,5 +1,5 @@
 //! The hosted tool (`docs/mail.md`, 「A person's sent mail, read on their own machine」), called as the tool host
-//! calls it, against stand-ins of agency, the node service, bmo-ms-teams and Microsoft Graph served here: whose
+//! calls it, against stand-ins of agency, the node service, the Teams page service and Microsoft Graph served here: whose
 //! person and which machine, the Outlook road and the Graph road in their order, what each upstream is asked
 //! with which token, and the refusals. The schemas the tool's folder keeps are the types'.
 
@@ -455,7 +455,7 @@ async fn where_neither_road_stands_the_refusal_names_each_reason() {
     why.contains("Outlook: the read on u60 ended with 1: Exception calling GetActiveObject"),
     "{why}"
   );
-  assert!(why.contains("Graph: bmo-ms-teams answered 503 not-ready"), "{why}");
+  assert!(why.contains("Graph: Teams page service answered 503 not-ready"), "{why}");
 }
 
 #[tokio::test]

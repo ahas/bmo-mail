@@ -161,7 +161,7 @@ async fn owner_account(settings: &Settings, http: &reqwest::Client) -> Result<Op
 }
 
 /// Where an account's sent mail is read: its own node, and the account agency's node records, the node service
-/// and bmo-ms-teams know it by.
+/// and the Teams page service know it by.
 struct Place {
   node: String,
   account: String,

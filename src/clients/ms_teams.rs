@@ -1,5 +1,5 @@
-//! bmo-ms-teams, as the hosted tool asks it: a Graph access token read from one account's own Teams page, on
-//! the page token road (bmo-ms-teams's `docs/api.md`, 「The page token road」).
+//! The Teams page service, as the hosted tool asks it: a Graph access token read from one account's own Teams page, on
+//! the page token road (`docs/api.md`, 「The hosted tool」).
 
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +7,7 @@ use super::{Failure, Reach};
 use crate::settings::Upstream;
 
 /// The unit's name in a sentence.
-const NAME: &str = "bmo-ms-teams";
+const NAME: &str = "Teams page service";
 
 #[derive(Serialize)]
 struct PageTokenAsk<'a> {

@@ -492,7 +492,7 @@ The tool `sent-mail` under `tools/`, in the tool host's manifest format, protoco
 | the receiver | `GET /owner`, the owner's sender, where the caller acts for no account or `outlook.owner_node` or `outlook.owner_account` is named |
 | the account service | `GET /senders/{senderId}/user`, the account the owner's sender is linked to |
 | the node service | `POST /nodes/{nodeName}/runs`, as the caller `bmo-mail` with the token of its own, the command in `powershell`, the day's bounds handed as variables |
-| bmo-ms-teams | `POST /page-tokens`, as its caller with the token of its own, for the account and the scopes `Mail.ReadBasic`, `Mail.Read` and `Mail.ReadWrite` |
+| the Teams page service | `POST /page-tokens`, as its caller with the token of its own, for the account and the scopes `Mail.ReadBasic`, `Mail.Read` and `Mail.ReadWrite` |
 | Microsoft Graph | the messages of the person's `sentitems` folder sent within the day, with the page token |
 
 ## What the service reaches
@@ -539,11 +539,11 @@ the settings folder.
 | `receiver` | `address`, `token_file` | the receiver, which the hosted tool asks for the owner's sender | none: the deployment's own callers read no one's mail |
 | `account_service` | `address`, `token_file` | the account service, which the hosted tool asks for the account the owner's sender is linked to | none: the deployment's own callers read no one's mail |
 | `outlook` | `owner_node` | the node the owner's account reads its sent mail on | none: its agency record is read as any account's |
-| `outlook` | `owner_account` | the account the owner is known by to agency's node records, the node service and bmo-ms-teams, which the run and the page token for his sent mail name (`docs/mail.md`, 「A person's sent mail, read on their own machine」) | none: his own account |
+| `outlook` | `owner_account` | the account the owner is known by to agency's node records, the node service and the Teams page service, which the run and the page token for his sent mail name (`docs/mail.md`, 「A person's sent mail, read on their own machine」) | none: his own account |
 | `node` | `address` | the node service's address, where the hosted tool makes its runs | none: the Outlook road does not stand |
 | `node` | `token_file` | the file holding the token the node service's configuration gives the caller `bmo-mail` | none |
-| `ms_teams` | `address` | bmo-ms-teams's address, where the hosted tool asks a page token | none: the Graph road does not stand |
-| `ms_teams` | `token_file` | the file holding the token bmo-ms-teams's configuration gives this service as a page token caller | none |
+| `ms_teams` | `address` | the Teams page service's address, where the hosted tool asks a page token | none: the Graph road does not stand |
+| `ms_teams` | `token_file` | the file holding the token the Teams page service's configuration gives this service as a page token caller | none |
 | `graph` | `address` | Microsoft Graph's address, its version included | `https://graph.microsoft.com/v1.0` |
 
 Each of `agency`, `receiver`, `account_service`, `node` and `ms_teams` takes its token either as `token` itself or as
