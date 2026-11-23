@@ -50,7 +50,7 @@
 | `docs/` | 서비스가 하는 일에 대한 정본 문서와 OpenAPI 문서 |
 | `tests/` | 현재 있는 동작 테스트 |
 
-루트에는 Cargo 매니페스트, `VERSION`, `LICENSE`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
+루트에는 Cargo 매니페스트, `VERSION`, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml`, 그리고 배포가 주는 로컬 설정의 예시인
 `settings.local.toml.example`이 있습니다.
 

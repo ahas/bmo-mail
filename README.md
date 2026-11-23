@@ -50,7 +50,7 @@ held to. The build check is `cargo check --all-targets` and the bundle's typeche
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
 | `tests/` | The behaviour tests that stand |
 
-At the root stand the Cargo manifest, `VERSION`, `LICENSE`, `testbed.toml`, `rustfmt.toml`, `CLAUDE.md`,
+At the root stand the Cargo manifest, `VERSION`, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the
 local settings a deployment gives.
 

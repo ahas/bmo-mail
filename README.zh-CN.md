@@ -45,7 +45,7 @@ Teams 页面读取此人某一天发送的邮件，途经代理服务（agency�
 | `docs/` | 关于服务行为的规范文档，以及 OpenAPI 文档 |
 | `tests/` | 现有的行为测试 |
 
-根目录下有 Cargo 清单、`VERSION`、`LICENSE`、`testbed.toml`、`rustfmt.toml`、`CLAUDE.md`、`PERSONAL-DATA.md`、
+根目录下有 Cargo 清单、`VERSION`、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、`PERSONAL-DATA.md`、
 `korean-ledger.json`、`settings.toml`，以及部署所提供的本地设置的示例 `settings.local.toml.example`。
 
 ## 控制台插件包

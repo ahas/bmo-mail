@@ -52,7 +52,7 @@ Teams ページを保持するサービスを経由します。コーディン�
 | `docs/` | サービスが行うことについての正典となるドキュメントと、OpenAPI ドキュメント |
 | `tests/` | 現在ある振る舞いテスト |
 
-ルートには、Cargo マニフェスト、`VERSION`、`LICENSE`、`testbed.toml`、`rustfmt.toml`、`CLAUDE.md`、
+ルートには、Cargo マニフェスト、`VERSION`、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、
 `PERSONAL-DATA.md`、`korean-ledger.json`、`settings.toml`、そしてデプロイが与えるローカル設定の例である
 `settings.local.toml.example` があります。
 

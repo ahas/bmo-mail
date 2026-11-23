@@ -1,0 +1,82 @@
+# What installing the mail service on a fresh machine needs, read by the testbed's install verb (bmo-testbed's
+# docs/install.md, 「The install declaration」). The settings are docs/api.md's 「Settings」.
+
+install = 1
+
+restart = "systemctl --user restart bmo-mail.service"
+
+[[needs]]
+program = "cargo"
+what = "Builds the service; the Rust toolchain from https://rustup.rs."
+
+[[needs]]
+program = "bun"
+what = "Builds the console bundle at every release; the Bun runtime from https://bun.sh."
+
+[[port]]
+name = "mail.server"
+number = 3330
+
+[[token]]
+name = "mail.service"
+file = "env/mail-service.token"
+
+[[token]]
+name = "mail.console"
+file = "env/mail-console.token"
+
+# The key an account's secrets are sealed with: 32 random bytes as base64 on one line.
+[[token]]
+name = "mail.secrets"
+file = "env/mail-secrets.key"
+bytes = 32
+encoding = "base64"
+
+# The release's settings.local.toml. The store and the staging folder stand under the data root; no accounts file
+# is imported, so mailboxes are added on the console; the administrator is the owner's account on the account
+# service. The hosted tool's upstreams are named by their tokens outright; the node service and bmo-ms-teams stay
+# unnamed, so a person's sent Outlook mail is not read.
+[[settings]]
+file = "env/mail.toml"
+text = """
+[server]
+listen = "127.0.0.1:{{port.mail.server}}"
+token = "{{token.mail.service}}"
+
+[store]
+path = "{{data_root}}/mail/mail.db"
+
+[accounts]
+administrator = "{{value.web.owner-account}}"
+
+[secrets]
+key_file = "{{data_root}}/env/mail-secrets.key"
+
+[staging]
+dir = "{{data_root}}/mail/staging"
+
+[console]
+token = "{{token.mail.console}}"
+
+[agency]
+address = "http://127.0.0.1:{{port.agency.control}}"
+token = "{{token.agency.control}}"
+
+[receiver]
+address = "http://127.0.0.1:{{port.receiver.server}}"
+token = "{{token.receiver.service}}"
+
+[account_service]
+address = "{{value.web.address}}"
+token = "{{token.web.server}}"
+"""
+
+[[line]]
+file = "env/web-console.env"
+key = "MAIL_ADDRESS"
+value = "http://127.0.0.1:{{port.mail.server}}"
+
+[[line]]
+file = "env/web-console.env"
+key = "MAIL_TOKEN"
+value = "{{token.mail.console}}"
