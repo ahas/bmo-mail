@@ -1,5 +1,5 @@
 //! The Graph road (`docs/mail.md`, 「A person's sent mail, read on their own machine」): a Graph access token read
-//! from the person's own Teams page through the Teams page service, then the messages of their sent items folder sent within
+//! for the person from the page-token service, then the messages of their sent items folder sent within
 //! the day, followed page by page.
 
 use chrono::{DateTime, SecondsFormat};
@@ -7,7 +7,7 @@ use reqwest::Url;
 use serde::Deserialize;
 
 use super::{Day, Recipient, RecipientKind, SentMessage};
-use crate::clients::ms_teams::MsTeams;
+use crate::clients::page_tokens::PageTokens;
 use crate::settings::Upstream;
 
 /// The Graph scopes a token that reads a person's sent mail holds one of: the one that reads what this road
@@ -118,7 +118,7 @@ fn next_page(graph: &str, link: &str) -> Result<Url, String> {
   Url::parse(link).map_err(|why| format!("Graph's next page does not read: {why}"))
 }
 
-/// The day's sent mail of `account`, read through Graph with the token their own Teams page holds; why the road
+/// The day's sent mail of `account`, read through Graph with the token the page-token service lends for them; why the road
 /// does not stand otherwise.
 pub async fn read(
   upstream: &Upstream,
@@ -127,8 +127,8 @@ pub async fn read(
   account: &str,
   day: &Day,
 ) -> Result<Vec<SentMessage>, String> {
-  let teams = MsTeams::new(upstream, http.clone()).map_err(|why| why.to_string())?;
-  let token = teams.page_token(account, &SCOPES).await.map_err(|why| why.to_string())?.token;
+  let tokens = PageTokens::new(upstream, http.clone()).map_err(|why| why.to_string())?;
+  let token = tokens.page_token(account, &SCOPES).await.map_err(|why| why.to_string())?.token;
   let mut next = Some(first_page(graph, day)?);
   let mut messages = Vec::new();
 

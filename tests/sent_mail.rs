@@ -1,5 +1,5 @@
 //! The hosted tool (`docs/mail.md`, 「A person's sent mail, read on their own machine」), called as the tool host
-//! calls it, against stand-ins of agency, the node service, the Teams page service and Microsoft Graph served here: whose
+//! calls it, against stand-ins of agency, the node service, the page-token service and Microsoft Graph served here: whose
 //! person and which machine, the Outlook road and the Graph road in their order, what each upstream is asked
 //! with which token, and the refusals. The schemas the tool's folder keeps are the types'.
 
@@ -27,7 +27,7 @@ const AGENCY_TOKEN: &str = "agency-test-token";
 const RECEIVER_TOKEN: &str = "receiver-test-token";
 const ACCOUNTS_TOKEN: &str = "accounts-test-token";
 const NODE_TOKEN: &str = "node-caller-test-token";
-const TEAMS_TOKEN: &str = "teams-caller-test-token";
+const TOKENS_CALLER: &str = "tokens-caller-test-token";
 const PAGE_TOKEN: &str = "page-test-token";
 
 /// The first moment of 2026-11-20 in Asia/Seoul, the settings' default zone, and of the day after.
@@ -45,7 +45,7 @@ enum Outlook {
 
 /// What the page token road answers.
 #[derive(Clone)]
-enum Teams {
+enum Tokens {
   Hands,
   Refuses(StatusCode, &'static str),
 }
@@ -53,7 +53,7 @@ enum Teams {
 /// The stand-in's script and what it was asked.
 struct Upstreams {
   outlook: Outlook,
-  teams: Teams,
+  tokens: Tokens,
   /// Whether the account service links the receiver's owner sender to an account.
   owner_linked: bool,
   runs: Vec<(String, Value, String)>,
@@ -175,12 +175,12 @@ async fn page_token(
   let mut upstreams = upstreams.lock().expect("the stand-in's record opens");
 
   upstreams.page_tokens.push((body, bearer(&headers)));
-  match upstreams.teams {
-    Teams::Hands => axum::Json(json!({
+  match upstreams.tokens {
+    Tokens::Hands => axum::Json(json!({
       "token": PAGE_TOKEN, "scopes": "Mail.ReadWrite Calendars.Read", "expiresAt": 1, "node": "u60",
     }))
     .into_response(),
-    Teams::Refuses(status, code) => refused(status, code),
+    Tokens::Refuses(status, code) => refused(status, code),
   }
 }
 
@@ -222,10 +222,10 @@ async fn graph_messages(
 /// The stand-in served on a free port of this machine, with a data root whose settings name it for every
 /// upstream, `u4` as the owner's node and `9` as the account it knows him by; the server ends with the test's
 /// runtime.
-async fn stand_in(name: &str, outlook: Outlook, teams: Teams) -> (Shared, PathBuf) {
+async fn stand_in(name: &str, outlook: Outlook, tokens: Tokens) -> (Shared, PathBuf) {
   let upstreams = Arc::new(Mutex::new(Upstreams {
     outlook,
-    teams,
+    tokens,
     owner_linked: true,
     runs: Vec::new(),
     page_tokens: Vec::new(),
@@ -262,7 +262,7 @@ fn data_root(name: &str, address: &str) -> PathBuf {
     ("agency.token", AGENCY_TOKEN),
     ("receiver.token", RECEIVER_TOKEN),
     ("node.token", NODE_TOKEN),
-    ("teams.token", TEAMS_TOKEN),
+    ("tokens.token", TOKENS_CALLER),
   ] {
     std::fs::write(env.join(file), format!("{token}\n")).expect("a token file is written");
   }
@@ -274,7 +274,7 @@ fn data_root(name: &str, address: &str) -> PathBuf {
        [account_service]\naddress = \"{address}\"\ntoken = \"{ACCOUNTS_TOKEN}\"\n\
        [outlook]\nowner_node = \"u4\"\nowner_account = \"9\"\n\
        [node]\naddress = \"{address}\"\ntoken_file = \"node.token\"\n\
-       [ms_teams]\naddress = \"{address}\"\ntoken_file = \"teams.token\"\n\
+       [page_tokens]\naddress = \"{address}\"\ntoken_file = \"tokens.token\"\n\
        [graph]\naddress = \"{address}/v1.0\"\n"
     ),
   )
@@ -322,7 +322,7 @@ async fn the_outlook_road_reads_the_callers_own_persons_day_on_their_node() {
   let (upstreams, root) = stand_in(
     "outlook",
     Outlook::Answers(json!({ "standing": true, "messages": messages })),
-    Teams::Hands,
+    Tokens::Hands,
   )
   .await;
 
@@ -354,7 +354,7 @@ async fn the_graph_road_reads_with_the_page_token_where_outlook_does_not_stand()
   let (upstreams, root) = stand_in(
     "graph",
     Outlook::Answers(json!({ "standing": false, "reason": "no Outlook is running" })),
-    Teams::Hands,
+    Tokens::Hands,
   )
   .await;
 
@@ -378,7 +378,7 @@ async fn the_graph_road_reads_with_the_page_token_where_outlook_does_not_stand()
   let upstreams = upstreams.lock().expect("the stand-in's record opens");
   assert_eq!(
     upstreams.page_tokens,
-    [(json!({ "account": 60, "scopes": SCOPES }), TEAMS_TOKEN.to_owned())]
+    [(json!({ "account": 60, "scopes": SCOPES }), TOKENS_CALLER.to_owned())]
   );
   assert_eq!(
     upstreams.graph_pages,
@@ -395,7 +395,7 @@ async fn the_graph_road_reads_with_the_page_token_where_outlook_does_not_stand()
 #[tokio::test]
 async fn a_machine_shared_with_other_accounts_is_refused_before_any_road() {
   let (upstreams, root) =
-    stand_in("shared", Outlook::Answers(json!({ "standing": true })), Teams::Hands).await;
+    stand_in("shared", Outlook::Answers(json!({ "standing": true })), Tokens::Hands).await;
 
   let why = refusal_text(&answer(&call(&root, "actor-u61", json!({})), morning()).await);
 
@@ -409,7 +409,7 @@ async fn the_owner_is_read_on_his_node_under_the_account_it_knows_him_by() {
   let (upstreams, root) = stand_in(
     "owner",
     Outlook::Answers(json!({ "standing": false, "reason": "no Outlook is running" })),
-    Teams::Hands,
+    Tokens::Hands,
   )
   .await;
 
@@ -429,7 +429,7 @@ async fn the_owner_is_read_on_his_node_under_the_account_it_knows_him_by() {
 #[tokio::test]
 async fn an_owner_linked_to_no_account_reads_nobodys_mail() {
   let (upstreams, root) =
-    stand_in("unlinked", Outlook::Answers(json!({ "standing": true })), Teams::Hands).await;
+    stand_in("unlinked", Outlook::Answers(json!({ "standing": true })), Tokens::Hands).await;
   upstreams.lock().expect("the stand-in's record opens").owner_linked = false;
 
   let why = refusal_text(&answer(&call(&root, "bmo", json!({})), morning()).await);
@@ -445,7 +445,7 @@ async fn where_neither_road_stands_the_refusal_names_each_reason() {
   let (_, root) = stand_in(
     "neither",
     Outlook::Fails(1, "Exception calling GetActiveObject"),
-    Teams::Refuses(StatusCode::SERVICE_UNAVAILABLE, "not-ready"),
+    Tokens::Refuses(StatusCode::SERVICE_UNAVAILABLE, "not-ready"),
   )
   .await;
 
@@ -455,12 +455,12 @@ async fn where_neither_road_stands_the_refusal_names_each_reason() {
     why.contains("Outlook: the read on u60 ended with 1: Exception calling GetActiveObject"),
     "{why}"
   );
-  assert!(why.contains("Graph: Teams page service answered 503 not-ready"), "{why}");
+  assert!(why.contains("Graph: page-token service answered 503 not-ready"), "{why}");
 }
 
 #[tokio::test]
 async fn a_day_that_is_not_a_date_is_refused() {
-  let (_, root) = stand_in("bad-day", Outlook::Answers(json!({ "standing": true })), Teams::Hands).await;
+  let (_, root) = stand_in("bad-day", Outlook::Answers(json!({ "standing": true })), Tokens::Hands).await;
 
   let why = refusal_text(&answer(&call(&root, "u60", json!({ "day": "20 November" })), morning()).await);
 

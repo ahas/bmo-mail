@@ -39,7 +39,7 @@
           "const": "outlook"
         },
         {
-          "description": "Microsoft Graph, with the token the person's own Teams page holds.",
+          "description": "Microsoft Graph, with the token the page-token service lends for the person.",
           "type": "string",
           "const": "graph"
         }

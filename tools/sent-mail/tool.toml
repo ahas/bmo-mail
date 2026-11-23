@@ -1,6 +1,6 @@
 # The mail service's hosted tool (docs/api.md, 「The hosted tool」): one entry, `bmo/mail_sent`, which reads what the
 # caller's own person sent on one day, on that person's own machine: from the classic Outlook running there, else
-# through Microsoft Graph with the token their own Teams page holds. Subjects, recipients and times alone.
+# through Microsoft Graph with the token the page-token service lends for them. Subjects, recipients and times alone.
 
 [tool]
 name = "sent-mail"
@@ -14,7 +14,7 @@ run = ["bmo-mail", "tool"]
 namespace = "bmo"
 name = "mail_sent"
 title = "Read your person's sent mail"
-description = "Read what your own person sent on one day (subject, recipients and time of each message, never a body or an attachment), from the classic Outlook running on their own PC, else through Microsoft Graph with the token their own Teams page holds. Only your own account's person, only on their own machine."
+description = "Read what your own person sent on one day (subject, recipients and time of each message, never a body or an attachment), from the classic Outlook running on their own PC, else through Microsoft Graph with the token the page-token service lends for them. Only your own account's person, only on their own machine."
 manual = "manual.md"
 input = "input.json"
 output = "output.json"

@@ -45,7 +45,7 @@ pub struct Settings {
   pub account_service: Upstream,
   pub outlook: Outlook,
   pub node: Upstream,
-  pub ms_teams: Upstream,
+  pub page_tokens: Upstream,
   pub graph: Graph,
 }
 
@@ -150,7 +150,7 @@ pub struct Outlook {
   /// The node the owner's account reads on; empty where its agency record is read as any account's.
   #[serde(default)]
   pub owner_node: String,
-  /// The account the owner is known by to agency's node records, the node service and the Teams page service; empty where
+  /// The account the owner is known by to agency's node records, the node service and the page-token service; empty where
   /// it is his own.
   #[serde(default)]
   pub owner_account: String,
@@ -230,7 +230,7 @@ impl Settings {
       &mut settings.receiver,
       &mut settings.account_service,
       &mut settings.node,
-      &mut settings.ms_teams,
+      &mut settings.page_tokens,
     ] {
       upstream.token_file = upstream
         .token_file

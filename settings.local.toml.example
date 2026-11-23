@@ -42,6 +42,6 @@ owner_account = "12"
 address = "http://127.0.0.1:3410"
 token_file = "/srv/bmo-mail/env/mail-node.token"
 
-[ms_teams]
+[page_tokens]
 address = "http://127.0.0.1:3420"
-token_file = "/srv/bmo-mail/env/ms-teams-mail-caller.token"
+token_file = "/srv/bmo-mail/env/page-token-caller.token"

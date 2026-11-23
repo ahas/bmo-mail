@@ -1,5 +1,5 @@
-//! The Teams page service, as the hosted tool asks it: a Graph access token read from one account's own Teams page, on
-//! the page token road (`docs/api.md`, 「The hosted tool」).
+//! The page-token service, as the hosted tool asks it: a Graph access token lent for one account, on its
+//! page token road (`docs/api.md`, 「The hosted tool」).
 
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +7,7 @@ use super::{Failure, Reach};
 use crate::settings::Upstream;
 
 /// The unit's name in a sentence.
-const NAME: &str = "Teams page service";
+const NAME: &str = "page-token service";
 
 #[derive(Serialize)]
 struct PageTokenAsk<'a> {
@@ -23,14 +23,14 @@ pub struct PageToken {
 }
 
 /// The page token road, reached with this service's own caller token.
-pub struct MsTeams(Reach);
+pub struct PageTokens(Reach);
 
-impl MsTeams {
+impl PageTokens {
   pub fn new(upstream: &Upstream, http: reqwest::Client) -> Result<Self, Failure> {
     Reach::of(NAME, upstream, http).map(Self)
   }
 
-  /// The token `account`'s own Teams page holds for one of `scopes`.
+  /// The token the service lends for `account`, holding one of `scopes`.
   pub async fn page_token(&self, account: &str, scopes: &[&str]) -> Result<PageToken, Failure> {
     let account = account
       .parse()

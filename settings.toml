@@ -76,7 +76,7 @@ token_file = ""
 [outlook]
 # The node the owner's account reads its sent mail on; empty, its agency record is read as any account's.
 owner_node = ""
-# The account the owner is known by to agency's node records, the node service and the Teams page service, which the run and
+# The account the owner is known by to agency's node records, the node service and the page-token service, which the run and
 # the page token for his sent mail name; empty, his own account.
 owner_account = ""
 
@@ -85,8 +85,8 @@ owner_account = ""
 address = ""
 token_file = ""
 
-[ms_teams]
-# The Teams page service's address, where the tool asks a person's page token as one of its callers.
+[page_tokens]
+# The page-token service's address, where the tool asks a person's page token as one of its callers.
 address = ""
 token_file = ""
 

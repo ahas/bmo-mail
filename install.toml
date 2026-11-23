@@ -34,7 +34,7 @@ encoding = "base64"
 
 # The release's settings.local.toml. The store and the staging folder stand under the data root; no accounts file
 # is imported, so mailboxes are added on the console; the administrator is the owner's account on the account
-# service. The hosted tool's upstreams are named by their tokens outright; the node service and the Teams page service stay
+# service. The hosted tool's upstreams are named by their tokens outright; the node service and the page-token service stay
 # unnamed, so a person's sent Outlook mail is not read.
 [[settings]]
 file = "env/mail.toml"

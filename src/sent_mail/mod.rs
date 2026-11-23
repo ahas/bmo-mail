@@ -32,7 +32,7 @@ pub struct SentMailAsk {
 pub enum Road {
   /// The running classic Outlook on the person's machine.
   Outlook,
-  /// Microsoft Graph, with the token the person's own Teams page holds.
+  /// Microsoft Graph, with the token the page-token service lends for the person.
   Graph,
 }
 
@@ -161,7 +161,7 @@ async fn owner_account(settings: &Settings, http: &reqwest::Client) -> Result<Op
 }
 
 /// Where an account's sent mail is read: its own node, and the account agency's node records, the node service
-/// and the Teams page service know it by.
+/// and the page-token service know it by.
 struct Place {
   node: String,
   account: String,
@@ -245,7 +245,7 @@ pub async fn read(
   let (road, mut messages) = match outlook::read(&settings.node, &http, &node, &account, &day).await {
     Ok(messages) => (Road::Outlook, messages),
     Err(outlook) => {
-      match graph::read(&settings.ms_teams, &settings.graph.address, &http, &account, &day).await {
+      match graph::read(&settings.page_tokens, &settings.graph.address, &http, &account, &day).await {
         Ok(messages) => (Road::Graph, messages),
         Err(graph) => {
           return Err(format!("neither road stood on {node}: Outlook: {outlook}; Graph: {graph}"));

@@ -44,7 +44,7 @@ neither the service nor its store (「A person's sent mail, read on their own ma
     console from the kind the bundle's manifest names.
   - A small set of desktop keyboard shortcuts.
 - **A person's own sent mail, read on their own machine:** the hosted tool that tells a person's BMO what
-  that person sent on a day, from the Outlook or the Teams page they are signed in to on their own PC
+  that person sent on a day, from the Outlook they are signed in to on their own PC, else through Microsoft Graph
   (「A person's sent mail, read on their own machine」). It reads no account of this service.
 - **Left to the mail server (its operator's work, outside this repository):**
   - Judging spam by content. The service files mail into spam by its own rules and by a spam
@@ -744,8 +744,7 @@ flowchart TD
   Tool -->|"the owner's account, for the deployment's own callers"| Owner["the receiver and the account service"]
   Tool -->|"a run, as the caller bmo-mail"| Node[the node service]
   Node -->|the hub| PC["the person's PC: the running Outlook"]
-  Tool -->|"a page token, for the account"| Teams[Teams page service]
-  Teams -->|"a look"| Page["the person's PC: their Teams page"]
+  Tool -->|"a page token, for the account"| Tokens[page-token service]
   Tool -->|"the person's token"| Graph[Microsoft Graph]
 ```
 
@@ -759,10 +758,10 @@ flowchart TD
   machine is the node agency's record of a person's node names for it, and only where that record is the
   account's alone. An account with no record, or whose record shares the node with other accounts, has no
   machine of its own and is refused saying so before any machine is asked anything, since the Outlook and the
-  Teams page on a shared machine are another person's session.
-- **Whom the machine and the Teams page are asked for.** Every account is asked for by its own account, but
+  sign-ins on a shared machine are another person's session.
+- **Whom the machine and the page token are asked for.** Every account is asked for by its own account, but
   the owner's: agency keeps no node record for the administrator's account, so the owner's node is bound in
-  agency, and his Teams page placed in the Teams page service, under an account of their own. The setting
+  agency, and his page token lent by the page-token service, under an account of their own. The setting
   `outlook.owner_account` names that account beside his node, and the run on his node and his page token are
   asked under it, so the node service finds it among his node's owners.
 - **Two roads, tried in order.** A road that does not stand hands the read to the next, and the answer names
@@ -777,16 +776,15 @@ flowchart TD
      address, an Exchange recipient's SMTP address where Outlook holds one, and whether it was a to, a cc or
      a bcc. The answer comes back compressed and encoded as plain characters, so a day of many messages fits
      the hub's ceiling on a command's output and no code page bends a subject.
-  2. **Microsoft Graph with the person's Teams page token.** The Teams page service's page token road hands over a Graph
-     access token read from the person's own Teams page on their own machine, for one of the scopes that read
-     mail, asked with the caller token that road gives this service. The tool asks Graph for the messages
+  2. **Microsoft Graph with the person's page token.** An optional page-token service, where the settings name one, hands over a
+     Graph access token for the person, for one of the scopes that read mail, asked with the caller token that road gives this service. The tool asks Graph for the messages
      of the person's own sent items folder sent within the day, reading the same fields, and follows Graph's
      pages to the last. The token serves this read alone: it is kept nowhere and written nowhere.
 - **The day** is a calendar date in the time zone the setting `wording.time_zone` names, today where none is
   given, from its midnight to the next. The messages are answered in the order they were sent.
 - **Nothing is kept.** The answer goes to the caller alone: no store row, event or log line carries a
   subject, a name or an address, and a refusal names the account and the node, never a message.
-- **What the machine needs:** classic Outlook running and signed in, or the Teams page standing and signed in;
+- **What the machine needs:** classic Outlook running and signed in, or a page token the page-token service lends for the person;
   and the node's callers naming `bmo-mail`
   (the node service's `docs/nodes.md`, 「A node's callers」). Outlook's guard over a program reading
   addresses is the machine's own setting: where it would ask the person, the command waits on that question

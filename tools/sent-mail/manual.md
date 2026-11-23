@@ -11,8 +11,8 @@ person is the one your account belongs to, and the machine is the node agency bi
 ## How it reads
 
 1. The classic Outlook already running on the person's PC, attached to and never started.
-2. Where Outlook is not running or cannot be attached to: Microsoft Graph, with the token the person's own
-   Teams page on that PC holds.
+2. Where Outlook is not running or cannot be attached to: Microsoft Graph, with the token a page-token service lends for the
+   person, where the deployment has one.
 
 The answer's `road` says which one answered.
 
@@ -25,8 +25,8 @@ The answer's `road` says which one answered.
 
 - Your session acts for no account, or the account has no machine of its own (none bound, or one shared with
   other accounts).
-- Neither road stood: Outlook is not running and the Teams page is not signed in or not standing. The refusal
-  says why for each. The person signs in to Outlook or to the Teams page on their own PC.
+- Neither road stood: Outlook is not running and no page token was lent. The refusal
+  says why for each. The person signs in to Outlook on their own PC.
 
 ## Example
 
