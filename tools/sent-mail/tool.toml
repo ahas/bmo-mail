@@ -20,3 +20,13 @@ input = "input.json"
 output = "output.json"
 hints = { read_only = true, destructive = false, open_world = true, idempotent = true }
 capabilities = ["room.tools"]
+
+# The mail app: the mail screen and this tool are one app, whose two settings `bmo pocket put` declares on the
+# delegation chain (docs/api.md, 「The hosted tool」).
+[app]
+key = "mail"
+name = "Mail"
+description = "Reads, writes and sorts the mail of a person's accounts, and lets their supervisor read what they sent."
+icon = "i-material-symbols-mail-outline"
+offered = true
+on = true

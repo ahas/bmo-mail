@@ -466,6 +466,10 @@ The tool `sent-mail` under `tools/`, in the tool host's manifest format, protoco
   manifest, the schemas and the manual into the tool's `.placed/` folder before the flip, and registered as this
   service's own with the tool host once the service answers ready, allowing `room.tools`, the capability a
   supervisor's record holds. Both steps stand in `testbed.toml`.
+- **It belongs to the mail app:** its manifest's `[app]` names the key `mail`, the key the console manifest's
+  service is, so the mail screen and this tool are one app. Its registration declares the app's two settings,
+  offered and on, both true by default, on the account service's delegation chain (bmo-pocket's `docs/api.md`, 「An
+  app on the delegation chain」); a person who has the app off has neither the screen nor the tool.
 - **Its settings** are the deployment's: the defaults built into the binary, then the data root's
   `env/mail.toml`, the file each release links as `settings.local.toml`, the data root read from the record's
   variable `BMO_DATA_DIR`. A relative path there is read from the data root's `env/`. A call whose record names
@@ -555,7 +559,8 @@ guards them, and this section states only what mail supplies and chooses within 
 
 - **The declaration** is `src/console.json`, every manifest field the service decides: the bundle `mail`, its
   menu title `mail.title.screen`, the icon `i-material-symbols-mail-outline`, its screens under `/mail`, the
-  service `mail`, the API prefix `/`, the role `member`, the owner key asked, the event stream read, no
+  service `mail`, which is the key of the mail app the hosted tool declares (「The hosted tool」), the API prefix
+  `/`, the role `member`, the owner key asked, the event stream read, no
   WebSocket, the notice kind `message.created` with the place its notice opens, `/mail/{accountName}/inbox/{threadId}`,
   the message's conversation in its account's inbox, and the sidebar count read from `GET /summary`'s `unreadCount`.
   It names no share read.

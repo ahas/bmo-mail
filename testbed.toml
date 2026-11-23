@@ -90,7 +90,8 @@ cp bin/bmo-mail tools/sent-mail/tool.toml tools/sent-mail/*.json tools/sent-mail
 '''
 
 # The tool is registered with the tool host once the service answers ready, as this service's own, so a person's
-# supervisor reaches it with `bmo use bmo/mail_sent`.
+# supervisor reaches it with `bmo use bmo/mail_sent`; the registration declares the mail app its manifest names,
+# the screen and the tool as one, on the delegation chain (docs/api.md, 「The hosted tool」).
 [[deploy.step]]
 id = "register-tools"
 phase = "after-health"
