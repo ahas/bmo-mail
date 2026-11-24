@@ -2,6 +2,7 @@
 //! module of it, sharing the process.
 
 mod accounts;
+mod baseline;
 mod console;
 mod import;
 mod pop3;

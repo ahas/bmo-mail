@@ -1,11 +1,9 @@
 //! The mail servers (`docs/mail.md`, 「Mail servers」, 「The platform's system mail」; `docs/api.md`, 「Servers」,
-//! 「System mail」): the accounts kept before servers were records moved onto them once, one record for every set
-//! of identical settings; the servers an owner reaches, their organisation's first, as a stand-in account service's
+//! 「System mail」): the servers an owner reaches, their organisation's first, as a stand-in account service's
 //! delegation chain offers them, an account choosing among them; and the account service's system send.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
@@ -25,7 +23,6 @@ use bmo_mail::wire::{
 };
 use bmo_mail::wording::Wording;
 use serde_json::{Value, json};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -99,134 +96,6 @@ async fn service(folder: &Path, keys: &[(&str, String)]) -> (Arc<Standing>, Stri
   tokio::spawn(async move { axum::serve(listener, app).await });
 
   (standing, address)
-}
-
-/// A server's row as the migration left it: id, holder, protocol, host, port, security, certificate name.
-type ServerRow = (i64, String, String, String, i64, String, Option<String>);
-/// An account's row: owner, name, incoming and outgoing server, settings.
-type AccountRow = (String, String, Option<i64>, Option<i64>, String);
-
-#[tokio::test]
-async fn the_accounts_kept_before_servers_were_records_move_onto_one_record_per_set_of_settings() {
-  let folder = scratch("migration");
-  let path = folder.join("mail.db");
-  let earlier = folder.join("earlier-migrations");
-
-  std::fs::create_dir_all(&earlier).expect("the folder of the earlier migrations is made");
-
-  for entry in std::fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations")).unwrap() {
-    let entry = entry.unwrap();
-    let name = entry.file_name().to_string_lossy().into_owned();
-
-    if name.as_str() < "0006" {
-      std::fs::copy(entry.path(), earlier.join(&name)).expect("an earlier migration is copied");
-    }
-  }
-
-  let options = SqliteConnectOptions::from_str("sqlite:")
-    .unwrap()
-    .filename(&path)
-    .create_if_missing(true);
-  let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.unwrap();
-
-  sqlx::migrate::Migrator::new(earlier.as_path()).await.unwrap().run(&pool).await.unwrap();
-
-  let imap = |host: &str, port: &str, tls: &str, login: &str| {
-    json!({ "imapHost": host, "imapPort": port, "imapTlsName": tls, "smtpHost": "smtp.example.com",
-            "smtpPort": "587", "smtpTlsName": "", "login": login })
-    .to_string()
-  };
-  let pop3 = json!({ "pop3Host": "pop.example.com", "pop3Port": "995", "pop3TlsName": "pop.example.com",
-                     "smtpHost": "smtp.example.com", "smtpPort": "587", "smtpTlsName": "smtp.example.com" })
-  .to_string();
-  let rows = [
-    ("one", "first", "imap-smtp", imap("imap.example.com", "993", "", "first")),
-    (
-      "one",
-      "second",
-      "imap-smtp",
-      imap("imap.example.com", "993", "imap.example.com", "second"),
-    ),
-    ("one", "plain", "imap-smtp", imap("127.0.0.1", "1143", "-", "plain")),
-    ("one", "pop", "pop3-smtp", pop3),
-    ("two", "first", "imap-smtp", imap("imap.example.com", "993", "", "other")),
-  ];
-
-  for (position, (owner, name, kind, settings)) in rows.iter().enumerate() {
-    sqlx::query(
-      "INSERT INTO accounts (owner, name, kind, address, position, settings, secret, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, X'00', 0)",
-    )
-    .bind(owner)
-    .bind(name)
-    .bind(kind)
-    .bind(format!("{name}@example.com"))
-    .bind(position as i64 + 1)
-    .bind(settings)
-    .execute(&pool)
-    .await
-    .expect("an account of the earlier shape is kept");
-  }
-
-  pool.close().await;
-
-  let store = Store::open(&path).await.expect("the store migrates");
-  let pool = store.pool();
-  let servers: Vec<ServerRow> =
-    sqlx::query_as("SELECT id, holder, protocol, host, port, security, tls_name FROM servers ORDER BY id")
-      .fetch_all(pool)
-      .await
-      .unwrap();
-  let shapes: Vec<(&str, &str, &str, i64, &str)> = servers
-    .iter()
-    .map(|(_, holder, protocol, host, port, security, _)| {
-      (holder.as_str(), protocol.as_str(), host.as_str(), *port, security.as_str())
-    })
-    .collect();
-
-  assert_eq!(
-    shapes.len(),
-    6,
-    "one record for every set of identical settings of each owner: {shapes:?}"
-  );
-  assert!(shapes.contains(&("owner:one", "imap", "imap.example.com", 993, "tls")));
-  assert!(shapes.contains(&("owner:one", "imap", "127.0.0.1", 1143, "none")));
-  assert!(shapes.contains(&("owner:one", "pop3", "pop.example.com", 995, "tls")));
-  assert!(shapes.contains(&("owner:one", "smtp", "smtp.example.com", 587, "starttls")));
-  assert!(shapes.contains(&("owner:two", "imap", "imap.example.com", 993, "tls")));
-  assert!(shapes.contains(&("owner:two", "smtp", "smtp.example.com", 587, "starttls")));
-  assert!(
-    servers.iter().all(|server| server.6.is_none()),
-    "a certificate name that is the host is the host's"
-  );
-
-  let accounts: Vec<AccountRow> = sqlx::query_as(
-    "SELECT owner, name, incoming_server, outgoing_server, settings FROM accounts ORDER BY position",
-  )
-  .fetch_all(pool)
-  .await
-  .unwrap();
-  let id_of = |name: &str, owner: &str| {
-    accounts
-      .iter()
-      .find(|one| one.0 == owner && one.1 == name)
-      .map(|one| (one.2, one.3))
-      .unwrap()
-  };
-
-  assert_eq!(id_of("first", "one"), id_of("second", "one"), "identical settings stand on one record");
-  assert_ne!(id_of("first", "one").0, id_of("plain", "one").0);
-  assert_eq!(
-    id_of("first", "one").1,
-    id_of("pop", "one").1,
-    "one submission server for every account of it"
-  );
-  assert_ne!(id_of("first", "one").0, id_of("first", "two").0, "an owner's own records are their own");
-  assert!(accounts.iter().all(|one| one.2.is_some() && one.3.is_some()));
-
-  let first: Value = serde_json::from_str(&accounts[0].4).unwrap();
-
-  assert_eq!(first, json!({ "login": "first" }), "the login stays and the server settings left");
 }
 
 /// What the stand-in account service holds: its chain's path for every person, the link a lock cuts it at, and

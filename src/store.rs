@@ -25,6 +25,20 @@ extern "C" fn keep_waiting(_: *mut c_void, _asked: c_int) -> c_int {
   1
 }
 
+/// The store's migrations, from the 1.0.0 baseline (`docs/api.md`, 「The store」).
+pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+/// The record of migrations an install from before 1.0.0 holds once every migration of its last release ran,
+/// each by its version and description. Its schema is the baseline's.
+pub const BEFORE: [(i64, &str); 6] = [
+  (1, "mail"),
+  (2, "events"),
+  (3, "accounts"),
+  (4, "arrivals"),
+  (5, "pop3"),
+  (6, "servers"),
+];
+
 /// The store, open.
 #[derive(Clone, Debug)]
 pub struct Store {
@@ -64,7 +78,8 @@ impl Store {
       .connect_with(options)
       .await?;
 
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    adopt(&pool).await?;
+    MIGRATOR.run(&pool).await?;
 
     Ok(Self { pool })
   }
@@ -73,6 +88,46 @@ impl Store {
   pub fn pool(&self) -> &SqlitePool {
     &self.pool
   }
+}
+
+/// A record naming every migration of the last release before 1.0.0, and nothing else, rewritten to name the
+/// baseline alone, touching no table and no row; one naming only part of them refused.
+async fn adopt(pool: &SqlitePool) -> Result<(), StoreError> {
+  let mut tx = pool.begin().await?;
+  let recorded: bool = sqlx::query_scalar(
+    "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations')",
+  )
+  .fetch_one(&mut *tx)
+  .await?;
+  if !recorded {
+    return Ok(());
+  }
+  let held: Vec<(i64, String, bool)> =
+    sqlx::query_as("SELECT version, description, success FROM _sqlx_migrations ORDER BY version")
+      .fetch_all(&mut *tx)
+      .await?;
+  let before = |(version, description, success): &(i64, String, bool)| {
+    *success && BEFORE.iter().any(|(old, named)| old == version && named == description)
+  };
+  if held.is_empty() || !held.iter().all(before) {
+    return Ok(());
+  }
+  if held.len() != BEFORE.len() {
+    return Err(StoreError::Before(held.last().map_or(0, |(version, _, _)| *version)));
+  }
+  let baseline = MIGRATOR.iter().next().expect("the baseline migration is built in");
+  sqlx::query("DELETE FROM _sqlx_migrations").execute(&mut *tx).await?;
+  sqlx::query(
+    "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) \
+     VALUES ($1, $2, TRUE, $3, 0)",
+  )
+  .bind(baseline.version)
+  .bind(baseline.description.as_ref())
+  .bind(baseline.checksum.as_ref())
+  .execute(&mut *tx)
+  .await?;
+  tx.commit().await?;
+  Ok(())
 }
 
 /// Why the store could not be opened.
@@ -84,4 +139,9 @@ pub enum StoreError {
   Open(#[from] sqlx::Error),
   #[error("the store could not be migrated: {0}")]
   Migrate(#[from] sqlx::migrate::MigrateError),
+  #[error(
+    "the store holds the migrations of a release before 1.0.0 only through version {0}; that release's last \
+     migration runs first"
+  )]
+  Before(i64),
 }

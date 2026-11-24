@@ -232,12 +232,6 @@ and submission servers one time, and each of its people adds only their address 
 - **A connection test** opens a connection to a server — kept, or as a form holds it before it is kept — with its
   security, reads its greeting and, where a login and a password are given, signs in, and lets go. It answers
   whether the server was reached and whether it took the sign-in, never what it was signed in with.
-- **The accounts kept before servers were records** were moved onto them once, by the store's migration: each
-  account's IMAP or POP3 settings and its submission settings became server records of its owner's own, one
-  record for every set of identical settings an owner held — the same protocol, host, port, security and
-  certificate name — so every account of one owner on one server points at one record. The security was read
-  as each connection was made: a certificate name of `-` is `none`; else IMAP on 993 and submission on 465 are
-  `tls`, POP3 is `tls`, and every other port is `starttls`. Each account kept its login and its password.
 
 ## The platform's system mail
 

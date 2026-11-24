@@ -497,7 +497,12 @@ Dates are written by `date` in `locale` at the setting `wording.time_zone`.
 
 ## The store
 
-A SQLite file, the one `store.path` names, opened and migrated when the service starts. Every row of the
+A SQLite file, the one `store.path` names, opened and migrated when the service starts. Its schema starts at the
+1.0.0 baseline, one migration that makes every table below; every later change to the schema is a migration
+after it. A store whose record of migrations names every migration of the last release before 1.0.0, and nothing
+else, already holds the baseline's schema: the record is rewritten to name the baseline alone, in one
+transaction, and no table and no row is touched. A store whose record names only part of them is refused, with
+the version it stopped at; it is brought to the last release before 1.0.0 by that release first. Every row of the
 tables under an account is that account's by its id, written as text in `account`; a sender logo is a
 domain's, an event is its owner's, and an import is the service's. A statement that meets another's lock on the
 file waits until the lock is let go, and one that finds every connection to the file in use waits for one to come
