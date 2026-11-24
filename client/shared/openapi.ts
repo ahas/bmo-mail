@@ -477,6 +477,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/outgoing-servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The platform's outgoing servers, which the account service chooses the system mail's from. */
+        get: operations["listOutgoingServers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server-tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test a connection to a server, signing in where a login and a password are given. */
+        post: operations["createServerTests"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The servers the owner reaches, or the servers a link of the delegation chain holds. */
+        get: operations["listServers"];
+        put?: never;
+        /** Keep a server of the owner's own, or of a link the owner may write on the delegation chain. */
+        post: operations["createServers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/servers/{serverId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One server the owner reaches or may read. */
+        get: operations["readServersByServerId"];
+        put?: never;
+        post?: never;
+        /** Remove a server no account stands on. */
+        delete: operations["deleteServersByServerId"];
+        options?: never;
+        head?: never;
+        /** Change a server's settings; its protocol stays. */
+        patch: operations["changeServersByServerId"];
+        trace?: never;
+    };
     "/summary": {
         parameters: {
             query?: never;
@@ -488,6 +559,23 @@ export interface paths {
         get: operations["listSummary"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system-mails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send one mail of the platform's own through one of its outgoing servers, at once. */
+        post: operations["createSystemMails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -514,11 +602,25 @@ export interface components {
              *     The screen draws none of them for an account whose kind does not.
              */
             moves: boolean;
+            /** @description The protocols of the servers an account of it is reached through; null for a kind that names none. */
+            servers?: components["schemas"]["KindServers"] | null;
             /** @description What a person writes to add an account of it, in the order a form shows them. */
             fields: components["schemas"]["KindField"][];
         };
         /** @description How an account of a kind signs in. */
         SignIn: "password" | "authorization";
+        /** @description The protocols of the servers a kind reaches its accounts through. */
+        KindServers: {
+            /** @description The incoming server's. */
+            incoming: components["schemas"]["Protocol"];
+            /** @description The outgoing server's. */
+            outgoing: components["schemas"]["Protocol"];
+        };
+        /**
+         * @description What a mail server speaks.
+         * @enum {string}
+         */
+        Protocol: "imap" | "pop3" | "smtp";
         /** @description One field a person writes to add an account of a kind. */
         KindField: {
             /** @description The key it stands under in an account's `settings`, or its `secrets` where it is secret. */
@@ -553,6 +655,16 @@ export interface components {
                 [key: string]: string;
             };
             /**
+             * Format: int64
+             * @description The incoming server's id; null for a kind that names none.
+             */
+            incomingServer?: number | null;
+            /**
+             * Format: int64
+             * @description The outgoing server's id; null for a kind that names none.
+             */
+            outgoingServer?: number | null;
+            /**
              * Format: uint32
              * @description The unread messages of its inbox.
              */
@@ -562,11 +674,19 @@ export interface components {
         };
         /** @description An account to add: by password from its fields, or by an authorization's answer. */
         NewAccount: {
-            kind: string;
+            /** @description Where none is given, the kind whose incoming protocol is the incoming server's. */
+            kind?: string | null;
             /** @description The address's local part where none is given. */
             name?: string | null;
             /** @description Required for a kind that signs in by password. */
             address?: string | null;
+            /**
+             * Format: int64
+             * @description Required for a kind that names servers: a server the owner reaches.
+             */
+            incomingServer?: number | null;
+            /** Format: int64 */
+            outgoingServer?: number | null;
             /** @description Its fields that are not secret, by name. */
             settings?: {
                 [key: string]: string;
@@ -593,6 +713,10 @@ export interface components {
             /** Format: int64 */
             position?: number | null;
             address?: string | null;
+            /** Format: int64 */
+            incomingServer?: number | null;
+            /** Format: int64 */
+            outgoingServer?: number | null;
             /** @description Its fields that are not secret, replaced whole. */
             settings?: {
                 [key: string]: string;
@@ -1048,6 +1172,124 @@ export interface components {
             reason?: string | null;
             version: string;
         };
+        /** @description The platform's outgoing servers. */
+        OutgoingServers: {
+            items: components["schemas"]["OutgoingServer"][];
+        };
+        /** @description One of the platform's outgoing servers, as the account service chooses the system mail's. */
+        OutgoingServer: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            host: string;
+            /** Format: uint16 */
+            port: number;
+            security: components["schemas"]["Security"];
+            auth: components["schemas"]["ServerAuth"];
+        };
+        /** @description How a connection to a server is secured. */
+        Security: "tls" | "starttls" | "none";
+        /** @description How a server is signed in to. */
+        ServerAuth: "password" | "none";
+        /** @description What a connection test came to. */
+        ServerTest: {
+            /** @description Whether a connection, its security and the server's greeting stood. */
+            reached: boolean;
+            /** @description Whether the server took the sign-in; null where no login and password were given. */
+            signedIn?: boolean | null;
+            /** @description `unreachable` or `sign-in-failed`; null where nothing failed. */
+            failure?: string | null;
+        };
+        /** @description A connection test: a kept server, or the fields a form holds, with a login to sign in as where one is given. */
+        NewServerTest: {
+            /**
+             * Format: int64
+             * @description A kept server; the fields below are read where none is named.
+             */
+            serverId?: number | null;
+            protocol?: components["schemas"]["Protocol"] | null;
+            host?: string | null;
+            /** Format: uint16 */
+            port?: number | null;
+            security?: components["schemas"]["Security"] | null;
+            tlsName?: string | null;
+            login?: string | null;
+            password?: string | null;
+        };
+        /**
+         * @description Whether a server is read from or handed mail.
+         * @enum {string}
+         */
+        Direction: "incoming" | "outgoing";
+        /** @description A page of a list. */
+        ServerPage: {
+            items: components["schemas"]["Server"][];
+            /** @description Whether anything stands past the last item. */
+            more: boolean;
+        };
+        /** @description A mail server accounts are reached through (`docs/api.md`, 「Servers」). */
+        Server: {
+            /** Format: int64 */
+            id: number;
+            protocol: components["schemas"]["Protocol"];
+            direction: components["schemas"]["Direction"];
+            name: string;
+            host: string;
+            /** Format: uint16 */
+            port: number;
+            security: components["schemas"]["Security"];
+            /** @description The name its certificate is checked against; null for the host. */
+            tlsName?: string | null;
+            auth: components["schemas"]["ServerAuth"];
+            holder: components["schemas"]["ServerHolder"];
+            /** @description Whether the owner may change and remove it now. */
+            mayChange: boolean;
+            /**
+             * Format: int64
+             * @description How many accounts stand on it, every owner's together.
+             */
+            accountCount: number;
+        };
+        /** @description Who holds a server. */
+        ServerHolder: {
+            /** @description `own` for the owner's own, else the delegation chain's link: `platform` or `unit:<id>`. */
+            link: string;
+            /** @description The company's or unit's name; null for the others. */
+            name?: string | null;
+        };
+        /** @description A server to keep. */
+        NewServer: {
+            /**
+             * @description The link of the delegation chain that holds it, `platform` or `unit:<id>`; the owner's own where none is
+             *     named.
+             */
+            link?: string | null;
+            protocol: components["schemas"]["Protocol"];
+            /** @description The host where none is given. */
+            name?: string | null;
+            host: string;
+            /**
+             * Format: uint16
+             * @description The protocol's usual port for its security where none is given.
+             */
+            port?: number | null;
+            /** @description `tls` for an incoming server and `starttls` for an outgoing one where none is given. */
+            security?: components["schemas"]["Security"] | null;
+            tlsName?: string | null;
+            /** @description `password` where none is given. */
+            auth?: components["schemas"]["ServerAuth"] | null;
+        };
+        /** @description A server's change; its protocol stays. */
+        ServerPatch: {
+            name?: string | null;
+            host?: string | null;
+            /** Format: uint16 */
+            port?: number | null;
+            security?: components["schemas"]["Security"] | null;
+            /** @description An empty one checks the certificate against the host. */
+            tlsName?: string | null;
+            auth?: components["schemas"]["ServerAuth"] | null;
+        };
         /** @description Unread counts across the accounts. */
         Summary: {
             accounts: components["schemas"]["Account"][];
@@ -1056,6 +1298,36 @@ export interface components {
              * @description The unread messages of every reachable inbox together.
              */
             unreadCount: number;
+        };
+        /** @description A system mail that went. */
+        SystemMailSent: {
+            sent: boolean;
+            /** @description The `Message-ID` it went under, without angle brackets. */
+            messageId: string;
+        };
+        /** @description One mail of the platform's own, as the account service sends it (`docs/api.md`, 「System mail」). */
+        NewSystemMail: {
+            /**
+             * Format: int64
+             * @description One of the platform's outgoing servers.
+             */
+            server: number;
+            /** @description The sender's address. */
+            from: string;
+            /** @description The name shown with it. */
+            fromName?: string | null;
+            /**
+             * @description The name of a secret in the platform's space holding `USERNAME` and `PASSWORD`; none for a server that
+             *     takes mail without a sign-in.
+             */
+            secret?: string | null;
+            /** @description The one recipient's address. */
+            to: string;
+            subject: string;
+            text: string;
+            html?: string | null;
+            /** @description What the mail is, a kebab-case word the log keeps. */
+            kind: string;
         };
         /** @description A failure, in the common error shape. */
         WireError: {
@@ -2416,6 +2688,210 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listOutgoingServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The platform's outgoing servers, which the account service chooses the system mail's from. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutgoingServers"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createServerTests: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewServerTest"];
+            };
+        };
+        responses: {
+            /** @description Test a connection to a server, signing in where a login and a password are given. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerTest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listServers: {
+        parameters: {
+            query?: {
+                /** @description The incoming or the outgoing servers alone. */
+                direction?: components["schemas"]["Direction"] | null;
+                /**
+                 * @description A link of the delegation chain, `platform` or `unit:<id>`, whose servers are read; the servers the owner
+                 *     reaches where none is named.
+                 */
+                link?: string | null;
+            };
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The servers the owner reaches, or the servers a link of the delegation chain holds. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createServers: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewServer"];
+            };
+        };
+        responses: {
+            /** @description Keep a server of the owner's own, or of a link the owner may write on the delegation chain. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Server"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    readServersByServerId: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path: {
+                /** @description The server's id. */
+                serverId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One server the owner reaches or may read. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Server"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteServersByServerId: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path: {
+                /** @description The server's id. */
+                serverId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remove a server no account stands on. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    changeServersByServerId: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The role the reader holds; either allows the screen's, member. The console sets it for the person signed in. */
+                "Owner-Role": "administrator" | "member";
+                /** @description The opaque key of the owner the caller acts for; the console sets it for the person signed in. */
+                "Owner-Key": string;
+            };
+            path: {
+                /** @description The server's id. */
+                serverId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerPatch"];
+            };
+        };
+        responses: {
+            /** @description Change a server's settings; its protocol stays. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Server"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listSummary: {
         parameters: {
             query?: never;
@@ -2437,6 +2913,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Summary"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSystemMails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewSystemMail"];
+            };
+        };
+        responses: {
+            /** @description Send one mail of the platform's own through one of its outgoing servers, at once. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemMailSent"];
                 };
             };
             default: components["responses"]["Error"];

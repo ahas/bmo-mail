@@ -15,34 +15,38 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 use crate::adapters::servers::{MailAccount, MailEndpoint, MailStream, tls};
 use crate::imap::wire_name;
 use crate::routes::requests::MailFault;
+use crate::wire::Security;
 
 /// An IMAP session, logged in.
 pub type ImapSession = Session<Box<dyn MailStream>>;
 
-/// The port IMAP is spoken over TLS from the first byte; any other port with a TLS name is upgraded with
-/// STARTTLS.
-const IMPLICIT_TLS_PORT: u16 = 993;
 /// The name the service gives the server where the server asks with `ID`.
 const CLIENT_NAME: &str = "bmo-mail";
 
-/// Opens one connection of an account and logs in: over TLS on port 993, upgraded with STARTTLS on another
-/// port with a TLS name, and plain where the TLS name is `-`. Each step waits for the server's answer
-/// (`docs/mail.md`, 「Connections and the watcher」).
-pub async fn open(endpoint: &MailEndpoint, account: &MailAccount) -> Result<ImapSession, MailFault> {
+/// Opens one connection to a server and reads its greeting: over TLS from the first byte, upgraded with STARTTLS,
+/// or plain, as the server's security says. Each step waits for the server's answer (`docs/mail.md`,
+/// 「Connections and the watcher」).
+pub async fn connected(endpoint: &MailEndpoint) -> Result<Client<Box<dyn MailStream>>, MailFault> {
   let tcp = endpoint.connect().await?;
-  let client: Client<Box<dyn MailStream>> = match endpoint.tls_name.as_deref() {
-    None => greeted(Box::new(tcp)).await?,
-    Some(name) if endpoint.port == IMPLICIT_TLS_PORT => greeted(tls(tcp, name).await?).await?,
-    Some(name) => {
+
+  match endpoint.security {
+    Security::None => greeted(Box::new(tcp)).await,
+    Security::Tls => greeted(tls(tcp, &endpoint.tls_name).await?).await,
+    Security::Starttls => {
       let mut plain = Client::new(tcp);
 
       plain.read_response().await.map_err(MailFault::server)?;
       plain.run_command_and_check_ok("STARTTLS", None).await.map_err(MailFault::server)?;
 
       // After STARTTLS the server greets no more; the conversation goes on over TLS.
-      Client::new(tls(plain.into_inner(), name).await?)
+      Ok(Client::new(tls(plain.into_inner(), &endpoint.tls_name).await?))
     }
-  };
+  }
+}
+
+/// Opens one connection of an account and logs in.
+pub async fn open(endpoint: &MailEndpoint, account: &MailAccount) -> Result<ImapSession, MailFault> {
+  let client = connected(endpoint).await?;
   let mut session = client
     .login(&account.login, &account.password)
     .await

@@ -8,7 +8,9 @@
 
 use std::fmt;
 
-use crate::adapters::servers::{MailAccount, MailEndpoint};
+use crate::adapters::servers::MailAccount;
+use crate::servers::{ServerDraft, ServerFields};
+use crate::wire::Protocol;
 
 /// One account of the accounts file: its login, and the address's local part, the name it is kept under.
 #[derive(Clone, PartialEq, Eq)]
@@ -31,8 +33,8 @@ impl fmt::Debug for FileAccount {
 /// The accounts file, read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MailConfig {
-  pub imap: MailEndpoint,
-  pub smtp: MailEndpoint,
+  pub imap: ServerDraft,
+  pub smtp: ServerDraft,
   pub accounts: Vec<FileAccount>,
 }
 
@@ -46,18 +48,24 @@ fn fault(line: usize, what: impl fmt::Display) -> MailAccountsError {
   MailAccountsError(format!(", line {line}: {what}"))
 }
 
-fn endpoint(words: &[&str], line: usize) -> Result<MailEndpoint, MailAccountsError> {
+/// A server line read as the server it names, its security read as the line writes it (`docs/mail.md`,
+/// 「Mail servers」).
+fn server(protocol: Protocol, words: &[&str], line: usize) -> Result<ServerDraft, MailAccountsError> {
   let shape = || fault(line, "a server line is <host> <port> <tls name>");
   let [host, port, tls_name] = words else {
     return Err(shape());
   };
   let port = port.parse::<u16>().ok().filter(|port| *port > 0).ok_or_else(shape)?;
+  let plain = *tls_name == "-";
+  let fields = ServerFields {
+    host: Some((*host).to_owned()),
+    port: Some(port),
+    security: Some(protocol.security_as_written(port, plain)),
+    tls_name: (!plain).then(|| (*tls_name).to_owned()),
+    ..ServerFields::default()
+  };
 
-  Ok(MailEndpoint {
-    host: (*host).to_owned(),
-    port,
-    tls_name: (*tls_name != "-").then(|| (*tls_name).to_owned()),
-  })
+  ServerDraft::checked(protocol, fields).map_err(|why| fault(line, why.error))
 }
 
 /// The local part of an address of the shape `<local>@<domain>`, neither holding `@` nor a space.
@@ -85,8 +93,8 @@ pub fn parse_accounts_file(text: &str) -> Result<MailConfig, MailAccountsError> 
     let words: Vec<&str> = line.split_whitespace().collect();
 
     match words.split_first() {
-      Some((&"imap", rest)) => imap = Some(endpoint(rest, number)?),
-      Some((&"smtp", rest)) => smtp = Some(endpoint(rest, number)?),
+      Some((&"imap", rest)) => imap = Some(server(Protocol::Imap, rest, number)?),
+      Some((&"smtp", rest)) => smtp = Some(server(Protocol::Smtp, rest, number)?),
       Some((&"account", rest)) => {
         let shape = || fault(number, "an account line is <address> <login> <password>");
         let [address, login, password] = rest else {

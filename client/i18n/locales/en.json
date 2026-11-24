@@ -1,15 +1,6 @@
 {
   "mail": {
     "account_field": {
-      "imapHost": "IMAP server",
-      "imapPort": "IMAP port",
-      "imapTlsName": "IMAP certificate name",
-      "pop3Host": "POP3 server",
-      "pop3Port": "POP3 port",
-      "pop3TlsName": "POP3 certificate name",
-      "smtpHost": "SMTP server",
-      "smtpPort": "SMTP port",
-      "smtpTlsName": "SMTP certificate name",
       "login": "Username",
       "password": "Password"
     },
@@ -18,6 +9,20 @@
       "pop3-smtp": "POP3/SMTP",
       "gmail": "Gmail",
       "graph": "Microsoft 365"
+    },
+    "server_protocol": {
+      "imap": "IMAP",
+      "pop3": "POP3",
+      "smtp": "SMTP"
+    },
+    "server_security": {
+      "tls": "SSL/TLS",
+      "starttls": "STARTTLS",
+      "none": "None"
+    },
+    "server_auth": {
+      "password": "Password",
+      "none": "None"
     },
     "action": {
       "account_add": "Add account",
@@ -87,7 +92,12 @@
       "undo": "Undo",
       "unread_only": "Unread only",
       "unstar": "Remove star",
-      "remove_address_named": "Remove {address}"
+      "remove_address_named": "Remove {address}",
+      "server_add": "Add server",
+      "server_edit": "Edit",
+      "server_remove": "Remove server",
+      "server_remove_confirm": "Remove",
+      "server_test": "Test connection"
     },
     "aria": {
       "accounts": "Accounts",
@@ -180,7 +190,17 @@
       "unknown-label": "Label not found.",
       "unknown-message": "Message not found.",
       "unstar_failed": "Couldn't remove the star.",
-      "upstream-failed": "The mail server isn't responding."
+      "upstream-failed": "The mail server isn't responding.",
+      "servers_failed": "Couldn't load mail servers.",
+      "server_save_failed": "Couldn't save the server.",
+      "server_remove_failed": "Couldn't remove the server.",
+      "server_test_failed": "Couldn't test the connection.",
+      "server-in-use": "Accounts still use this server, so it can't be removed.",
+      "unknown-server": "That server isn't available to you.",
+      "server-mismatch": "That server doesn't match the account type.",
+      "locked": "A unit above has locked this, so it can't be changed.",
+      "forbidden": "You don't have permission.",
+      "unknown-secret": "The saved secret wasn't found."
     },
     "label": {
       "account_address": "Email address",
@@ -279,7 +299,24 @@
       "unread": "Unread",
       "view_label": "Label",
       "view_search": "Search",
-      "view_starred": "Starred"
+      "view_starred": "Starred",
+      "tab_accounts": "Accounts",
+      "tab_servers": "Servers",
+      "account_by_servers": "Mail server",
+      "incoming_server": "Incoming server",
+      "outgoing_server": "Outgoing server",
+      "server_new": "New server",
+      "server_protocol": "Protocol",
+      "server_name": "Name",
+      "server_host": "Host",
+      "server_port": "Port",
+      "server_security": "Security",
+      "server_tls_name": "Certificate name",
+      "server_auth": "Sign-in",
+      "holder_own": "Mine",
+      "holder_platform": "Platform",
+      "server_accounts": "{n} accounts",
+      "default_value": "{value} (default)"
     },
     "message": {
       "account_remove_warning": "This account's labels, filters and settings will be removed too. Mail on the mail server stays as it is.",
@@ -334,7 +371,12 @@
       "saving": "Saving",
       "sending": "Sending",
       "settings_loading": "Loading settings…",
-      "uploading": "Uploading"
+      "uploading": "Uploading",
+      "servers_loading": "Loading mail servers…",
+      "no_servers": "No servers",
+      "server_reached": "Connected",
+      "server_unreached": "Not reached",
+      "server_sign_in_failed": "Sign-in failed"
     },
     "title": {
       "accounts": "Mail accounts",
@@ -346,7 +388,9 @@
       "receipts": "Read receipts",
       "screen": "Mail",
       "signature": "Signature",
-      "spam_senders": "Spam senders"
+      "spam_senders": "Spam senders",
+      "server_add": "Add server",
+      "server_edit": "Edit server"
     }
   }
 }

@@ -1,5 +1,5 @@
 //! One POP3 session (`docs/mail.md`, 「A POP3 account」): opened over TLS from its first byte, or plain where the
-//! account's TLS name is `-`, signed in with `USER` and `PASS`, and ended with `QUIT`. The service never sends
+//! server's security is none, signed in with `USER` and `PASS`, and ended with `QUIT`. The service never sends
 //! `DELE`, so the end of a session leaves the maildrop as it was. The POP3 client reads every answer.
 
 use async_pop::Client;
@@ -64,14 +64,32 @@ fn unstuffed(bytes: &[u8]) -> Vec<u8> {
   out
 }
 
+/// Opens a session with a POP3 server and reads its greeting.
+pub async fn connected(endpoint: &MailEndpoint) -> Result<Client<Box<dyn MailStream>>, MailFault> {
+  let stream = endpoint.connect_secured().await?;
+
+  async_pop::new(stream).await.map_err(fault)
+}
+
 /// Opens a session with the account's POP3 server and signs in.
 pub async fn open(endpoint: &MailEndpoint, account: &MailAccount) -> Result<Pop3Session, MailFault> {
-  let stream = endpoint.connect_secured().await?;
-  let mut client = async_pop::new(stream).await.map_err(fault)?;
+  let mut client = connected(endpoint).await?;
 
   client.login(&account.login, &account.password).await.map_err(fault)?;
 
   Ok(Pop3Session { client })
+}
+
+/// Signs in on a session opened with `connected`, and ends it.
+pub async fn sign_in_and_quit(
+  mut client: Client<Box<dyn MailStream>>,
+  account: &MailAccount,
+) -> Result<(), MailFault> {
+  client.login(&account.login, &account.password).await.map_err(fault)?;
+
+  let _ = client.quit().await;
+
+  Ok(())
 }
 
 impl Pop3Session {

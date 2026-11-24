@@ -12,14 +12,17 @@ use serde_json::json;
 
 use crate::accounts::authorizations::{AUTHORIZATION_SPAN, Authorizations, Waiting};
 use crate::accounts::{Account, Keeping, account_name};
-use crate::adapters::{adapters, by_password, checked_fields, declared};
+use crate::adapters::{Adapter, adapters, by_password, checked_fields, declared};
 use crate::announcements::{ACCOUNT_CHANGED, ACCOUNT_CREATED, ACCOUNT_DELETED};
 use crate::http::{
   Answer, Call, Guard, Operation, Refused, Route, Standing, answer, inline, nothing, schema,
 };
 use crate::routes::requests::{Asked, MailFault, address_shaped, owned_account};
+use crate::routes::servers::reached_server;
+use crate::servers::MailServer;
 use crate::wire::{
-  AccountKind, AccountPatch, Authorization, Fields, ListQuery, NewAccount, NewAuthorization, Page, Summary,
+  AccountKind, AccountPatch, Authorization, Fields, ListQuery, NewAccount, NewAuthorization, Page,
+  Protocol, Summary,
 };
 
 const ACCOUNT: (&str, &str) = ("accountName", "The account's name, unique among its owner's accounts.");
@@ -38,6 +41,8 @@ async fn member(standing: &Standing, account: &Account) -> crate::wire::Account 
     address: account.address.clone(),
     position: account.position,
     settings: account.settings.clone(),
+    incoming_server: account.server_ids().0,
+    outgoing_server: account.server_ids().1,
     unread_count: unread.unwrap_or(0),
     reachable: unread.is_some(),
   }
@@ -68,6 +73,89 @@ fn name_of(given: Option<&str>, address: &str) -> Result<String, Asked> {
       .filter(|name| !name.trim().is_empty())
       .unwrap_or_else(|| address.split_once('@').map_or(address, |(local, _)| local)),
   )
+}
+
+/// The servers an account of a kind is to stand on, each one the owner reaches and of the protocol the kind
+/// names; none for a kind that names no servers, where a server named is refused.
+async fn chosen_servers(
+  standing: &Standing,
+  owner: &str,
+  kind: &AccountKind,
+  incoming: Option<i64>,
+  outgoing: Option<i64>,
+) -> Result<(Option<MailServer>, Option<MailServer>), MailFault> {
+  let Some(protocols) = kind.servers else {
+    if incoming.is_some() || outgoing.is_some() {
+      return Err(Asked::bad_request("the kind names no servers").into());
+    }
+
+    return Ok((None, None));
+  };
+  let (Some(incoming), Some(outgoing)) = (incoming, outgoing) else {
+    return Err(
+      Asked::bad_request("the kind is reached through an incoming and an outgoing server").into(),
+    );
+  };
+  let incoming = reached_server(standing, owner, incoming).await?;
+  let outgoing = reached_server(standing, owner, outgoing).await?;
+
+  if incoming.protocol() != protocols.incoming || outgoing.protocol() != protocols.outgoing {
+    return Err(
+      Asked::rule("server-mismatch", "a server is not of the protocol the account's kind reaches").into(),
+    );
+  }
+
+  Ok((Some(incoming), Some(outgoing)))
+}
+
+/// The server an account's change leaves it on: the one it stood on where the change names none or the same, else
+/// one the owner reaches of the protocol the kind names.
+async fn changed_server(
+  standing: &Standing,
+  owner: &str,
+  wanted: Option<i64>,
+  current: &Option<MailServer>,
+  protocol: Option<Protocol>,
+) -> Result<Option<MailServer>, MailFault> {
+  let Some(wanted) = wanted.filter(|wanted| current.as_ref().is_none_or(|current| current.id != *wanted))
+  else {
+    return Ok(current.clone());
+  };
+  let Some(protocol) = protocol else {
+    return Err(Asked::bad_request("the kind names no servers").into());
+  };
+  let server = reached_server(standing, owner, wanted).await?;
+
+  if server.protocol() != protocol {
+    return Err(
+      Asked::rule("server-mismatch", "a server is not of the protocol the account's kind reaches").into(),
+    );
+  }
+
+  Ok(Some(server))
+}
+
+/// The kind a new account names: the one given, else the one whose incoming protocol is the incoming server's.
+async fn kind_of(
+  standing: &Standing,
+  owner: &str,
+  new: &NewAccount,
+) -> Result<&'static dyn Adapter, MailFault> {
+  if let Some(kind) = &new.kind {
+    return Ok(declared(kind)?);
+  }
+
+  let Some(incoming) = new.incoming_server else {
+    return Err(Asked::bad_request("an account names its kind or its incoming server").into());
+  };
+  let protocol = reached_server(standing, owner, incoming).await?.protocol();
+
+  adapters()
+    .into_iter()
+    .find(|adapter| adapter.kind().servers.is_some_and(|servers| servers.incoming == protocol))
+    .ok_or_else(|| {
+      Asked::rule("server-mismatch", "no kind reads an incoming server of that protocol").into()
+    })
 }
 
 /// `GET /account-kinds`.
@@ -144,7 +232,15 @@ impl Route for CreateAccount {
     body: Some(schema::<NewAccount>),
     status: 201,
     answer: Answer::Json(schema::<crate::wire::Account>),
-    codes: &["conflict", "unknown-kind", "sign-in-failed", "unknown-authorization", "not-ready"],
+    codes: &[
+      "conflict",
+      "unknown-kind",
+      "unknown-server",
+      "server-mismatch",
+      "sign-in-failed",
+      "unknown-authorization",
+      "not-ready",
+    ],
     guard: Guard::Screen,
   };
 
@@ -153,7 +249,7 @@ impl Route for CreateAccount {
     let new: NewAccount = call.body().await?;
     let standing = Arc::clone(call.standing());
     let added = async {
-      let adapter = declared(&new.kind)?;
+      let adapter = kind_of(&standing, &owner, &new).await?;
       let kind = adapter.kind();
 
       standing.accounts.secrets()?;
@@ -175,7 +271,22 @@ impl Route for CreateAccount {
           return Err(Asked::conflict("the owner holds an account of that name").into());
         }
 
-        adapter.sign_in(&address, &settings, &secrets).await?;
+        let (incoming, outgoing) =
+          chosen_servers(&standing, &owner, &kind, new.incoming_server, new.outgoing_server).await?;
+        let signing = Account {
+          id: 0,
+          owner: owner.clone(),
+          name: name.clone(),
+          kind: kind.name.clone(),
+          address: address.clone(),
+          position: 0,
+          settings: settings.clone(),
+          secrets: secrets.clone(),
+          incoming: incoming.clone(),
+          outgoing: outgoing.clone(),
+        };
+
+        adapter.sign_in(&signing).await?;
 
         Keeping {
           name,
@@ -183,6 +294,8 @@ impl Route for CreateAccount {
           address,
           settings,
           secrets,
+          incoming_server: incoming.map(|server| server.id),
+          outgoing_server: outgoing.map(|server| server.id),
         }
       } else {
         let Some(given) = &new.authorization else {
@@ -191,7 +304,12 @@ impl Route for CreateAccount {
           );
         };
 
-        if new.address.is_some() || new.settings.is_some() || new.secrets.is_some() {
+        if new.address.is_some()
+          || new.settings.is_some()
+          || new.secrets.is_some()
+          || new.incoming_server.is_some()
+          || new.outgoing_server.is_some()
+        {
           return Err(Asked::bad_request("a kind that signs in by authorization takes no fields").into());
         }
 
@@ -208,6 +326,8 @@ impl Route for CreateAccount {
           address,
           settings: signed.settings,
           secrets: signed.secrets,
+          incoming_server: None,
+          outgoing_server: None,
         }
       };
 
@@ -268,7 +388,14 @@ impl Route for ChangeAccount {
     body: Some(schema::<AccountPatch>),
     status: 200,
     answer: Answer::Json(schema::<crate::wire::Account>),
-    codes: &["not-found", "conflict", "sign-in-failed", "not-ready"],
+    codes: &[
+      "not-found",
+      "conflict",
+      "unknown-server",
+      "server-mismatch",
+      "sign-in-failed",
+      "not-ready",
+    ],
     guard: Guard::Screen,
   };
 
@@ -290,7 +417,12 @@ impl Route for ChangeAccount {
         return Err(Asked::conflict("the owner holds an account of that name").into());
       }
 
-      if patch.address.is_some() || patch.settings.is_some() || patch.secrets.is_some() {
+      if patch.address.is_some()
+        || patch.settings.is_some()
+        || patch.secrets.is_some()
+        || patch.incoming_server.is_some()
+        || patch.outgoing_server.is_some()
+      {
         if !by_password(&kind) {
           return Err(
             Asked::bad_request(
@@ -315,7 +447,26 @@ impl Route for ChangeAccount {
 
         changed.settings = settings;
         changed.secrets = secrets;
-        adapter.sign_in(&changed.address, &changed.settings, &changed.secrets).await?;
+
+        let protocols = kind.servers;
+
+        changed.incoming = changed_server(
+          &standing,
+          &account.owner,
+          patch.incoming_server,
+          &account.incoming,
+          protocols.map(|one| one.incoming),
+        )
+        .await?;
+        changed.outgoing = changed_server(
+          &standing,
+          &account.owner,
+          patch.outgoing_server,
+          &account.outgoing,
+          protocols.map(|one| one.outgoing),
+        )
+        .await?;
+        adapter.sign_in(&changed).await?;
       }
 
       standing.accounts.change(&changed, patch.position).await

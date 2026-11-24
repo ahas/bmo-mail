@@ -43,6 +43,7 @@ pub struct Settings {
   pub agency: Upstream,
   pub receiver: Upstream,
   pub account_service: Upstream,
+  pub system_mail: SystemMail,
   pub outlook: Outlook,
   pub node: Upstream,
   pub page_tokens: Upstream,
@@ -144,6 +145,37 @@ pub struct Upstream {
   pub token_file: Option<PathBuf>,
 }
 
+/// The platform's system mail (`docs/api.md`, 「System mail」): the credential the account service presents, and
+/// the folder a send's named secret is read from.
+#[derive(Clone, Debug, Deserialize)]
+pub struct SystemMail {
+  /// The credential itself; it stands before the file where both are given.
+  #[serde(default)]
+  pub token: String,
+  #[serde(default)]
+  pub token_file: Option<PathBuf>,
+  /// The platform's space of the secret store; none where it is empty.
+  #[serde(default)]
+  pub secrets_dir: Option<PathBuf>,
+}
+
+impl SystemMail {
+  /// The credential as it stands now: the one given, else the file's, its surrounding whitespace dropped; none
+  /// where neither is named or the file does not read.
+  pub fn credential(&self) -> Option<String> {
+    let given = self.token.trim();
+
+    if !given.is_empty() {
+      return Some(given.to_owned());
+    }
+
+    let read = std::fs::read_to_string(self.token_file.as_ref()?).ok()?;
+    let read = read.trim();
+
+    (!read.is_empty()).then(|| read.to_owned())
+  }
+}
+
 /// Where the Outlook road reads the owner's own account.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Outlook {
@@ -225,6 +257,9 @@ impl Settings {
       .key_file
       .filter(|file| !file.as_os_str().is_empty())
       .map(|file| dir.join(file));
+    for file in [&mut settings.system_mail.token_file, &mut settings.system_mail.secrets_dir] {
+      *file = file.take().filter(|file| !file.as_os_str().is_empty()).map(|file| dir.join(file));
+    }
     for upstream in [
       &mut settings.agency,
       &mut settings.receiver,

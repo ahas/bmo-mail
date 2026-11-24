@@ -33,7 +33,7 @@ flowchart TD
   key of the owner the caller acts for. A call whose role is missing or not one of the two, or whose owner key is
   missing or empty, is refused 403 `forbidden`; an owner key past 200 characters is refused 400 `bad-request`.
   The routes that read no account, `GET /account-kinds` and `GET /avatars/{address}`, take the headers and act
-  for no owner.
+  for no owner. The system mail's routes take neither header and a credential of their own (「System mail」).
 - **Bodies are JSON with camelCase keys, both ways,** but for the byte answers (「Byte answers」). A body
   carries at most 64 MiB. A body or a query that is not the shape the route takes is refused 400
   `bad-request`, the sentence naming what is wrong.
@@ -58,6 +58,8 @@ flowchart TD
   file are that key's (`docs/mail.md`, 「The accounts file, imported once」), and the harness plugin acts for
   it unless it is told another (「The harness plugin」). The key is an owner key like any other; no route turns
   on it, and no route needs more than the screen's role.
+- **The account service's system sends** present the credential the setting `system_mail.token` names, which
+  reaches the system mail's routes and nothing else (「System mail」); the service's token reaches them as well.
 - **The service listens on a loopback address,** so only this machine reaches it.
 
 ## Keys
@@ -75,6 +77,7 @@ flowchart TD
 | `{labelId}` | A label's id, given when the label is made. |
 | `{ruleId}` | A rule's id, a signed 64-bit integer. |
 | `{address}` | A mail address. |
+| `{serverId}` | A mail server's id, a signed 64-bit integer given when the server is kept. |
 
 A key that names nothing is answered 404 `not-found`, an account's name naming no account among them.
 
@@ -91,9 +94,9 @@ alone (「Who checks what」).
 |---|---|---|
 | `GET /account-kinds` | | a page of the kinds the service declares, one for each adapter built into it |
 | `GET /accounts` | query `after?`, `limit?` | a page of the owner's accounts, in their order |
-| `POST /accounts` | `kind`, `name?`, `address?`, `settings?`, `secrets?`, `authorization?` | 201, the account, once it signed in |
+| `POST /accounts` | `kind?`, `name?`, `address?`, `incomingServer?`, `outgoingServer?`, `settings?`, `secrets?`, `authorization?` | 201, the account, once it signed in |
 | `GET /accounts/{accountName}` | | the account |
-| `PATCH /accounts/{accountName}` | any of `name`, `position`, `address`, `settings`, `secrets` | the account |
+| `PATCH /accounts/{accountName}` | any of `name`, `position`, `address`, `incomingServer`, `outgoingServer`, `settings`, `secrets` | the account |
 | `DELETE /accounts/{accountName}` | | 204; the account is forgotten with everything the store holds for it |
 | `POST /authorizations` | `kind`, `returnTo` | 201, the authorization: the provider's page to send the browser to |
 | `GET /summary` | | `accounts`, every account of the owner, and `unreadCount`, the unread messages of every reachable inbox together |
@@ -101,34 +104,39 @@ alone (「Who checks what」).
 - **A kind** is `name` (its adapter's name, which an account names it by), `signIn` (`password`: an account is
   added from its fields; `authorization`: through the provider's own page), `moves` (its mailbox moves mail
   between folders: a move, spam and not spam, trash and deleting for good; the screen draws none of them for an
-  account whose kind does not, `docs/mail.md`, 「The screen」) and `fields`, what a person writes to
+  account whose kind does not, `docs/mail.md`, 「The screen」), `servers` (for a kind reached through mail
+  servers, `incoming`, the protocol of the incoming server it reads, and `outgoing`, of the outgoing server it
+  sends through; null for a kind that names none) and `fields`, what a person writes to
   add an account of it, in the order a form shows them. A field is `name` (the key it stands under in an
   account's `settings` or `secrets`), `kind` (`text`, `port`, or `secret`: kept encrypted and never answered),
   `required` and `default` (the value a form starts from, or null). The address and the name are every
   account's, and no kind declares them as fields.
 - **The kinds** each adapter declares:
 
-  | Kind | Signs in by | Moves | Fields |
-  |---|---|---|---|
-  | `imap-smtp` | password | yes | `imapHost`, `imapPort` (993 by default), `imapTlsName`, `smtpHost`, `smtpPort` (587 by default), `smtpTlsName`, `login`, `password` (secret) |
-  | `pop3-smtp` | password | no | `pop3Host`, `pop3Port` (995 by default), `pop3TlsName`, `smtpHost`, `smtpPort` (587 by default), `smtpTlsName`, `login`, `password` (secret) |
-  | `gmail` | authorization | yes | none: the Gmail API adapter keeps the tokens Google hands back as the account's secrets |
-  | `graph` | authorization | yes | none: the Microsoft Graph adapter keeps the tokens Microsoft hands back as the account's secrets |
+  | Kind | Signs in by | Moves | Servers | Fields |
+  |---|---|---|---|---|
+  | `imap-smtp` | password | yes | `imap`, `smtp` | `login`, `password` (secret) |
+  | `pop3-smtp` | password | no | `pop3`, `smtp` | `login`, `password` (secret) |
+  | `gmail` | authorization | yes | none | none: the Gmail API adapter keeps the tokens Google hands back as the account's secrets |
+  | `graph` | authorization | yes | none | none: the Microsoft Graph adapter keeps the tokens Microsoft hands back as the account's secrets |
 
   A kind is declared, listed and taken only where its adapter is built into the service. `imap-smtp` and
   `pop3-smtp` are; `gmail` and `graph` stand here as their contract, and until their adapters are built a
-  request naming either is refused 422 `unknown-kind`. For `imap-smtp` and `pop3-smtp`, a TLS name left empty
-  is the host and `-` is a plain connection, for a stand-in server alone; a login left empty is the address; a
-  port is 1 to 65535. Which protocol reaches an account's inbox is its kind, so an account added as one kind
-  stays that kind; a change of `settings` changes its servers within it.
+  request naming either is refused 422 `unknown-kind`. For `imap-smtp` and `pop3-smtp` a login left empty is
+  the address. Which protocol reaches an account's inbox is its kind, so an account added as one kind stays that
+  kind; a change of its incoming server changes its server within it.
 - **An account** is `name` (1 to 64 characters with no slash or space, kept in lower case), `kind`, `address`,
   `position` (its place in its owner's list, from 1), `settings` (its fields that are not secret, by name, each
-  a string), `unreadCount` (its inbox's unread messages) and `reachable` (its server answered; where it did
-  not, the count is 0). Its secrets are never answered.
-- **Adding an account by password:** `address` (required), `settings` and `secrets` (by field name, each a
-  string; a required field missing, or a field the kind does not declare there, is refused 400 `bad-request`)
-  and `name` (the address's local part where none is given). A name taken among the owner's accounts is
-  refused 409 `conflict`. The service then signs in, and an account whose servers did not take its login is
+  a string), `incomingServer` and `outgoingServer` (the servers' ids, null for a kind that names none),
+  `unreadCount` (its inbox's unread messages) and `reachable` (its server answered; where it did not, the count
+  is 0). Its secrets are never answered.
+- **Adding an account by password:** `address` (required), `incomingServer` and `outgoingServer` (required for a
+  kind that names servers: ids of servers the owner reaches, 「Servers」; one the owner does not reach is refused
+  422 `unknown-server`, and an incoming server of another protocol than the kind's, or an outgoing server that is
+  no `smtp`, 422 `server-mismatch`), `kind` (where none is given, the kind whose `servers.incoming` is the
+  incoming server's protocol), `settings` and `secrets` (by field name, each a string; a required field missing,
+  or a field the kind does not declare there, is refused 400 `bad-request`) and `name` (the address's local
+  part where none is given). A name taken among the owner's accounts is refused 409 `conflict`. The service then signs in, and an account whose servers did not take its login is
   refused 422 `sign-in-failed` with nothing of it kept. A service with no key file refuses 503 `not-ready`
   (`docs/mail.md`, 「Accounts and credentials」). The account is placed after the owner's others.
 - **Adding an account by authorization** is two steps. `POST /authorizations` names the `kind` and
@@ -142,8 +150,11 @@ alone (「Who checks what」).
   `no-authorization`.
 - **A change of an account:** `name` renames it (409 `conflict` where the owner holds that name); `position`
   moves it among the owner's others; `address` and `settings` replace its own, `settings` whole; `secrets`
-  replaces the secrets it names and keeps the others. A change of the address, the settings or the secrets
-  signs in again before anything is kept, refused 422 `sign-in-failed` where it fails.
+  replaces the secrets it names and keeps the others; `incomingServer` and `outgoingServer` choose other servers
+  the owner reaches, refused as adding refuses them, an incoming server of another protocol than the account's
+  kind among them. A change of the address, the settings, the secrets or a server signs in again before anything
+  is kept, refused 422 `sign-in-failed` where it fails. A server the account stood on before needs no reaching
+  to stay.
 - **An account removed** is forgotten with its labels, rules, settings, spam senders, mark, known addresses
   and a POP3 account's messages and drafts; its sends still waiting are taken back, and its mailbox on the
   server is untouched.
@@ -152,6 +163,80 @@ alone (「Who checks what」).
   one page.
 - **An owner with no account** has an empty accounts page and a summary that counts nothing, and every route
   under an account answers 404.
+
+## Servers
+
+The mail servers accounts are reached through (`docs/mail.md`, 「Mail servers」). Every route here acts for the
+owner key the request carries, as a person of the account service's: the delegation chain is asked for that
+person, and a link's servers are written in their name.
+
+| Method and path | Sends | Answers |
+|---|---|---|
+| `GET /servers` | query `direction?`, `link?` | a page of servers: without `link`, every server the owner reaches, their organisation's first, then the platform's, then their own; with `link`, the servers that link holds |
+| `POST /servers` | `link?`, `protocol`, `name?`, `host`, `port?`, `security?`, `tlsName?`, `auth?` | 201, the server |
+| `GET /servers/{serverId}` | | the server |
+| `PATCH /servers/{serverId}` | any of `name`, `host`, `port`, `security`, `tlsName`, `auth` | the server |
+| `DELETE /servers/{serverId}` | | 204 |
+| `POST /server-tests` | `serverId?`, or the server's own fields `protocol`, `host`, `port?`, `security?`, `tlsName?`; `login?`, `password?` | `reached`, `signedIn` (null where no login and password were given) and `failure`, the code of what failed (`unreachable` or `sign-in-failed`) or null |
+
+- **A server** is `id`, `protocol` (`imap`, `pop3` or `smtp`), `direction` (`incoming` for `imap` and `pop3`,
+  `outgoing` for `smtp`), `name` (1 to 80 characters, the host where none is given), `host`, `port` (1 to 65535,
+  the protocol's usual port for its security where none is given), `security` (`tls`, `starttls` or `none`;
+  `tls` for an incoming server and `starttls` for an outgoing one where none is given, and a POP3 server takes no
+  `starttls`), `tlsName` (the name its certificate is checked against, null for the host), `auth` (`password`, or
+  `none` for an outgoing server that takes mail without a sign-in; `password` where none is given), `holder`
+  (`link`: `own` for the owner's own, `platform`, or `unit:<id>`; `name`: the company's or unit's name in the
+  servers an owner reaches, null for the others and in a link's own list), `mayChange` (whether the owner may change and remove it now) and `accountCount` (how many accounts
+  stand on it, every owner's together). A field out of its shape is refused 400 `bad-request`.
+- **`direction`** narrows a page to the incoming or the outgoing servers; **`link`** names a link of the chain,
+  `platform` or `unit:<id>`, whose servers are read by whoever may read that link's entry on the chain, 403
+  `forbidden` for anyone else.
+- **Who holds a new server** is `link`: none for the owner's own, or a link the owner may write on the chain.
+  Adding, changing and removing a server of a link writes the link's value on the chain first, in the owner's
+  name, as the unit that declared the kind: a refusal there is this route's — 403 `forbidden` to anyone but the
+  link's writers, 409 `locked` under a lock above, 404 `not-found` for a unit that does not stand — and nothing
+  of the server changes. A server of another owner, and a server of a link the owner may not read, is answered
+  404 `not-found`.
+- **The protocol stays:** a change names no `protocol`, and a server of another protocol is another server.
+- **A removal** of a server an account stands on is refused 409 `server-in-use`.
+- **A connection test** tests a server kept, one the owner reaches or whose link they may read, or the fields a
+  form holds before it is kept, and keeps nothing of either. Where a `login` and a `password` are given it signs
+  in as them; `failure` is `unreachable` where no connection, security or greeting stood, and `sign-in-failed`
+  where the server would not take the sign-in.
+- **The delegation chain's kind** is `mail.servers`, declared as the service stands and again where the account
+  service answers it undeclared: `json`, `layered`, at the platform and units, a unit's link written by its heads,
+  no rules. A link's value is the list of the ids of the servers it holds.
+- **Where the settings name no account service,** a page holds the owner's own servers alone, and a server of a
+  link is refused 503 `not-ready`. Where the account service is named and does not answer, a route that needs it
+  is refused 502 `upstream-failed`.
+
+## System mail
+
+The account service's sends of the platform's own mail (`docs/mail.md`, 「The platform's system mail」). These
+routes take the credential `system_mail.token` names, or the service's token, and no owner headers; any other
+bearer is refused 401 `unauthorized`, and where the setting names none, only the service's token reaches them.
+
+| Method and path | Sends | Answers |
+|---|---|---|
+| `GET /outgoing-servers` | | `items`: the platform's outgoing servers, each `id`, `name`, `host`, `port`, `security` and `auth` |
+| `POST /system-mails` | `server`, `from`, `fromName?`, `secret?`, `to`, `subject`, `text`, `html?`, `kind` | 201, `sent` true and `messageId`, the `Message-ID` it went under |
+
+- **`server`** is the id of one of the platform's outgoing servers, held by the chain's `platform` link. Any other —
+  a company's or a unit's, a person's own, or an incoming one — is refused 422 `unknown-server`, so the system mail
+  never goes through a server the platform administrator did not set.
+- **`from`** is the sender's address and `fromName` the name shown with it; **`to`** is one address. An address
+  that is not one is refused 400 `bad-request`.
+- **`secret`** names a secret of the platform's space, the folder `system_mail.secrets_dir` names: a file name of
+  letters, digits, `.`, `_` and `-`, holding `USERNAME` and `PASSWORD` lines. The server is signed in with them; a
+  secret that is not a file there, or holds no `PASSWORD`, is refused 422 `unknown-secret` without its contents
+  being said. A login left out of it is `from`. A send with no secret goes through a server whose `auth` is
+  `none` alone, any other refused 422 `unknown-secret`.
+- **`subject`** is one line; **`text`** is the plain body and **`html`** the HTML one, the message going as both
+  where both are given. **`kind`** is a kebab-case word saying what the mail is — `test`, `email-verification`,
+  `password-reset` and their kin — which the log keeps beside the server's id.
+- **The mail goes at once** over submission, and the answer waits for the server: a server that refuses the
+  sign-in is 422 `sign-in-failed`, and one that does not answer or refuses the mail 502 `upstream-failed`, its
+  sentence the server's. Nothing of a send is kept.
 
 ## Folders
 
@@ -318,6 +403,8 @@ log. A route answers the common codes of the conventions where they apply, and t
 | Status | Code | When |
 |---|---|---|
 | 409 | `conflict` | an account's or a label's name is taken, or a send has already gone |
+| 409 | `server-in-use` | a server to remove has an account standing on it |
+| 409 | `locked` | a server's link stands under a lock above on the delegation chain |
 | 413 | `too-large` | a file would take the draft past the size the submission server takes, or the message to send is past it |
 | 422 | `too-many-labels` | the account holds the most labels it may |
 | 422 | `flag-not-settable` | a flag is not one a request may set |
@@ -331,11 +418,14 @@ log. A route answers the common codes of the conventions where they apply, and t
 | 422 | `draft-not-placed` | the server did not say where it put a saved draft, and its `Message-ID` finds it nowhere |
 | 422 | `unknown-kind` | a body names a kind of account the service does not declare |
 | 422 | `not-offered` | the account's kind does not offer what is asked: moving mail on a POP3 account |
-| 422 | `sign-in-failed` | the account's servers did not take its sign-in |
+| 422 | `sign-in-failed` | the account's servers did not take its sign-in, or a system mail's server did not take its secret |
+| 422 | `unknown-server` | a body names a server the owner does not reach, or a system mail one that is not the platform's outgoing server |
+| 422 | `server-mismatch` | an account's incoming server is not of its kind's protocol, or its outgoing server is not one |
+| 422 | `unknown-secret` | a system mail names a secret that does not stand, or none where its server needs one |
 | 422 | `no-authorization` | an authorization is asked for a kind that signs in by password |
 | 422 | `unknown-authorization` | a body names an authorization that is not the owner's, has run out or was used |
-| 502 | `upstream-failed` | the mail server did not answer, or failed |
-| 503 | `not-ready` | an account is to be added or changed, and the service has no key file to seal its secrets with |
+| 502 | `upstream-failed` | the mail server did not answer, or failed; or the account service did not answer |
+| 503 | `not-ready` | an account is to be added or changed, and the service has no key file to seal its secrets with; or a server of a link is asked for, and the settings name no account service |
 
 ## The event stream
 
@@ -389,7 +479,8 @@ back; neither wait gives up.
 
 | Table | Columns | What it holds |
 |---|---|---|
-| `accounts` | `id` (its own), `owner`, `name`, `kind`, `address`, `position`, `settings` (JSON), `secret` (the sealed secrets), `created_at`; unique `owner`, `name` | the accounts (`docs/mail.md`, 「Accounts and credentials」) |
+| `servers` | `id` (its own), `holder` (`owner:` and the owner key for a person's own, else the chain's link, `platform` or `unit:<id>`), `protocol`, `name`, `host`, `port`, `security`, `tls_name` (null for the host), `auth`, `created_at` | the mail servers (`docs/mail.md`, 「Mail servers」) |
+| `accounts` | `id` (its own), `owner`, `name`, `kind`, `address`, `position`, `settings` (JSON: the login), `incoming_server` and `outgoing_server` (the servers' ids, null for a kind that names none), `secret` (the sealed secrets), `created_at`; unique `owner`, `name` | the accounts (`docs/mail.md`, 「Accounts and credentials」) |
 | `imports` | `source` (key), `owner`, `count`, `at` | the record that the accounts file was imported, and for which owner key |
 | `labels` | `account`, `id`, `name`, `color`, `position`, `created_at`; key `account`, `id` | the account's labels |
 | `rules` | `id` (its own), `account`, `position`, `enabled`, `match`, `conditions` and `actions` (JSON), `created_at`; indexed by `account`, `position` | the filter rules |
@@ -497,10 +588,25 @@ The tool `sent-mail` under `tools/`, in the tool host's manifest format, protoco
 
 ## What the service reaches
 
-The service calls no other service; its hosted tool calls the units 「The hosted tool」 names.
+The service calls one other unit, the account service, for its servers' delegation chain; its hosted tool calls
+the units 「The hosted tool」 names.
 
+- **The account service,** at the settings' `account_service` with its token, through its routes (bmo-web's
+  `docs/boundary.md`, 「Organisation units」 and 「The delegation chain」) and nothing else:
+  - `PUT /chain/kinds/mail.servers`, the declaration, as the service stands and again where a read answers 404
+    `no-such-kind`;
+  - `GET /chain/kinds/mail.servers/resolve?person=` and `GET /users/{user}/unit`, for the servers an owner
+    reaches: the links of their chain down to the one whose lock cuts it, and their company's and units' names;
+  - `GET /chain/kinds/mail.servers/links/{link}` with `Owner-Key`, whether the owner may read and change a
+    link's servers;
+  - `PUT /chain/kinds/mail.servers/links/{link}/value` with `Owner-Key` and `Declared-By` `mail`, the list of a
+    link's servers, written as one of them is added, changed or removed.
+  Nothing it answers is kept: each list and each write asks again.
 - **The servers each account names,** through its kind's adapter: for `imap-smtp` the IMAP and submission
-  servers, for `pop3-smtp` the POP3 and submission servers, over TLS but where a TLS name is `-`.
+  servers, for `pop3-smtp` the POP3 and submission servers, over the security each server names. A system mail
+  goes over the submission server it names.
+- **The platform's secret folder** the setting `system_mail.secrets_dir` names, where a system mail's secret is
+  read at its send (「System mail」).
 - **The key file** the setting `secrets.key_file` names, read once at start.
 - **The accounts file** the setting `accounts.file` names, read once at start until it has been imported, and
   never after (`docs/mail.md`, 「The accounts file, imported once」).
@@ -537,7 +643,9 @@ the settings folder.
 | `agency` | `address` | agency's control address, which the hosted tool asks whose account a caller acts for and which node is that account's | none: the tool reads no one's mail |
 | `agency` | `token_file` | the file holding the token the tool presents to agency | none |
 | `receiver` | `address`, `token_file` | the receiver, which the hosted tool asks for the owner's sender | none: the deployment's own callers read no one's mail |
-| `account_service` | `address`, `token_file` | the account service, which the hosted tool asks for the account the owner's sender is linked to | none: the deployment's own callers read no one's mail |
+| `account_service` | `address`, `token_file` | the account service, which the service asks for its servers' delegation chain (「Servers」) and the hosted tool for the account the owner's sender is linked to | none: only a person's own servers stand, and the deployment's own callers read no one's mail |
+| `system_mail` | `token`, `token_file` | the credential the account service presents for the platform's system mail (「System mail」) | none: only the service's token reaches the system mail's routes |
+| `system_mail` | `secrets_dir` | the platform's space of the secret store, the data root's `env/`, where a system mail's secret is read | none: a system mail that names a secret is refused |
 | `outlook` | `owner_node` | the node the owner's account reads its sent mail on | none: its agency record is read as any account's |
 | `outlook` | `owner_account` | the account the owner is known by to agency's node records, the node service and the page-token service, which the run and the page token for his sent mail name (`docs/mail.md`, 「A person's sent mail, read on their own machine」) | none: his own account |
 | `node` | `address` | the node service's address, where the hosted tool makes its runs | none: the Outlook road does not stand |
@@ -546,7 +654,7 @@ the settings folder.
 | `page_tokens` | `token_file` | the file holding the token the page-token service's configuration gives this service as a page token caller | none |
 | `graph` | `address` | Microsoft Graph's address, its version included | `https://graph.microsoft.com/v1.0` |
 
-Each of `agency`, `receiver`, `account_service`, `node` and `page_tokens` takes its token either as `token` itself or as
+Each of `agency`, `receiver`, `account_service`, `node`, `page_tokens` and `system_mail` takes its token either as `token` itself or as
 `token_file`, the file holding it; `token` stands first where both are given. A token file's surrounding
 whitespace is dropped, and the file is read at each call, so a token changed where it is kept is taken up at
 once.

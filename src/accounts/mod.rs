@@ -14,6 +14,7 @@ use tokio::sync::Notify;
 
 use crate::routes::requests::{Asked, MailFault};
 use crate::secrets::Secrets;
+use crate::servers::{MailServer, server_on};
 use crate::wire::Fields;
 
 /// The tables whose rows are an account's, by its id written as text in `account`.
@@ -47,6 +48,10 @@ pub struct Account {
   pub position: i64,
   pub settings: Fields,
   pub secrets: Fields,
+  /// The incoming server it is read from; none for a kind that names no servers.
+  pub incoming: Option<MailServer>,
+  /// The outgoing server it sends through; none for a kind that names no servers.
+  pub outgoing: Option<MailServer>,
 }
 
 // An account written into a log names its id, name, kind and address, never a secret.
@@ -67,6 +72,14 @@ impl Account {
   pub fn store_key(&self) -> String {
     self.id.to_string()
   }
+
+  /// The ids of its incoming and outgoing servers.
+  pub fn server_ids(&self) -> (Option<i64>, Option<i64>) {
+    (
+      self.incoming.as_ref().map(|server| server.id),
+      self.outgoing.as_ref().map(|server| server.id),
+    )
+  }
 }
 
 /// An account to keep: everything but its id and its place.
@@ -77,6 +90,8 @@ pub struct Keeping {
   pub address: String,
   pub settings: Fields,
   pub secrets: Fields,
+  pub incoming_server: Option<i64>,
+  pub outgoing_server: Option<i64>,
 }
 
 /// A name as an account is kept under, or why it is not one: 1 to 64 characters with no slash, no space and
@@ -95,9 +110,10 @@ pub fn account_name(name: &str) -> Result<String, Asked> {
 }
 
 /// A row of `accounts`, its secret still sealed.
-type Row = (i64, String, String, String, String, i64, String, Vec<u8>);
+type Row = (i64, String, String, String, String, i64, String, Vec<u8>, Option<i64>, Option<i64>);
 
-const COLUMNS: &str = "id, owner, name, kind, address, position, settings, secret";
+const COLUMNS: &str =
+  "id, owner, name, kind, address, position, settings, secret, incoming_server, outgoing_server";
 
 /// The accounts in the store, and the word that they changed.
 pub struct Accounts {
@@ -138,8 +154,9 @@ pub async fn keep(
   position: i64,
 ) -> Result<i64, MailFault> {
   let id: i64 = sqlx::query_scalar(
-    "INSERT INTO accounts (owner, name, kind, address, position, settings, secret, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, X'', ?) RETURNING id",
+    "INSERT INTO accounts (owner, name, kind, address, position, settings, secret, incoming_server,
+       outgoing_server, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, X'', ?, ?, ?) RETURNING id",
   )
   .bind(owner)
   .bind(&account.name)
@@ -147,6 +164,8 @@ pub async fn keep(
   .bind(&account.address)
   .bind(position)
   .bind(written(&account.settings))
+  .bind(account.incoming_server)
+  .bind(account.outgoing_server)
   .bind(chrono::Utc::now().timestamp_millis())
   .fetch_one(&mut *connection)
   .await?;
@@ -225,8 +244,8 @@ impl Accounts {
     Ok(sqlx::query_scalar("SELECT COUNT(*) FROM accounts").fetch_one(&self.pool).await?)
   }
 
-  fn opened(&self, row: Row) -> Result<Account, MailFault> {
-    let (id, owner, name, kind, address, position, settings, secret) = row;
+  async fn opened(&self, row: Row) -> Result<Account, MailFault> {
+    let (id, owner, name, kind, address, position, settings, secret, incoming, outgoing) = row;
     let secrets = self.secrets()?;
     let opened = secrets.open(id, &secret).map_err(MailFault::server)?;
     let secrets =
@@ -241,7 +260,28 @@ impl Accounts {
       position,
       settings: fields(&settings)?,
       secrets,
+      incoming: self.server(incoming).await?,
+      outgoing: self.server(outgoing).await?,
     })
+  }
+
+  async fn server(&self, id: Option<i64>) -> Result<Option<MailServer>, MailFault> {
+    let Some(id) = id else {
+      return Ok(None);
+    };
+    let mut connection = self.pool.acquire().await?;
+
+    server_on(&mut connection, id).await
+  }
+
+  async fn all_opened(&self, rows: Vec<Row>) -> Result<Vec<Account>, MailFault> {
+    let mut accounts = Vec::with_capacity(rows.len());
+
+    for row in rows {
+      accounts.push(self.opened(row).await?);
+    }
+
+    Ok(accounts)
   }
 
   /// The owner's accounts, in their order. An owner whose service keeps no key holds none.
@@ -256,7 +296,7 @@ impl Accounts {
         .fetch_all(&self.pool)
         .await?;
 
-    rows.into_iter().map(|row| self.opened(row)).collect()
+    self.all_opened(rows).await
   }
 
   /// Every account of every owner, for the watchers.
@@ -270,7 +310,7 @@ impl Accounts {
         .fetch_all(&self.pool)
         .await?;
 
-    rows.into_iter().map(|row| self.opened(row)).collect()
+    self.all_opened(rows).await
   }
 
   /// The owner's account a name names, matched without regard to case.
@@ -286,7 +326,10 @@ impl Accounts {
         .fetch_optional(&self.pool)
         .await?;
 
-    row.map(|row| self.opened(row)).transpose()
+    match row {
+      Some(row) => Ok(Some(self.opened(row).await?)),
+      None => Ok(None),
+    }
   }
 
   /// Keeps a new account of the owner after the owner's others; a name the owner holds is a conflict.
@@ -332,13 +375,16 @@ impl Accounts {
     }
 
     sqlx::query(
-      "UPDATE accounts SET name = ?, kind = ?, address = ?, settings = ?, secret = ? WHERE id = ?",
+      "UPDATE accounts SET name = ?, kind = ?, address = ?, settings = ?, secret = ?, incoming_server = ?,
+       outgoing_server = ? WHERE id = ?",
     )
     .bind(&account.name)
     .bind(&account.kind)
     .bind(&account.address)
     .bind(written(&account.settings))
     .bind(sealed(secrets, account.id, &account.secrets)?)
+    .bind(account.server_ids().0)
+    .bind(account.server_ids().1)
     .bind(account.id)
     .execute(&mut *transaction)
     .await?;

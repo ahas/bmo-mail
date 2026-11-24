@@ -26,6 +26,7 @@ pub mod routes;
 pub mod rules;
 pub mod secrets;
 pub mod sent_mail;
+pub mod servers;
 pub mod settings;
 pub mod store;
 pub mod watcher;
@@ -88,6 +89,10 @@ pub async fn serve(settings: Settings) -> Result<(), String> {
     Ok(Imported::Waiting(_)) => {}
     Err(why) => eprintln!("mail: the accounts file could not be imported: {why:?}"),
   }
+
+  let declaring = Arc::clone(&standing);
+
+  tokio::spawn(async move { declaring.organisation.declare().await });
 
   let router = http::router(Arc::clone(&standing)).map_err(|faults| faults.join("; "))?;
   let listener = TcpListener::bind(listen)

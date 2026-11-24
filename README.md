@@ -19,7 +19,10 @@ carries the old archive's import in `tests/import.rs`, the accounts in `tests/ac
 their routes, one owner key never reaching another's, the sealing of their secrets and the accounts file's
 import, the watcher over a dropped connection in `tests/watcher.rs`, a POP3 account against stand-in POP3 and
 submission servers in `tests/pop3.rs`: its inbox listed and read with an attachment, new mail told by `UIDL`, and
-a reply kept as a draft in the store and sent, the console face in `tests/console.rs`: the
+a reply kept as a draft in the store and sent, the mail servers in `tests/servers.rs`: the accounts kept before servers
+were records moved onto one record per set of identical settings, the servers an owner reaches against a stand-in
+account service's delegation chain, an account choosing among them, and the account service's system send against a
+stand-in submission server, the console face in `tests/console.rs`: the
 served manifest read through the vendored bmo-ui release's own reading and how far the console's credential and
 the service's token reach, and the screen's words in `tests/words.rs`: every key the screen writes is its own
 pack's or one the release's `wording-keys` module lists, and the hosted tool in `tests/sent_mail.rs`, called as
@@ -31,7 +34,9 @@ the client's dev server and driven with the mouse in Chromium against a stand-in
 the screen changes, and `tests/browser/mail-drag.test.ts` carries a list row onto a folder and a label of the mail
 nav and a filter rule to another place, reading each result from a page loaded again, and
 `tests/browser/mail-kind-actions.test.ts` holds an account whose kind moves no mail to a screen that draws nothing
-that would, at a wide window, a narrow one and a phone's width. The bundle's check runs
+that would, at a wide window, a narrow one and a phone's width, and `tests/browser/mail-servers.test.ts` keeps a
+server of the person's own with its connection test and adds an account on servers chosen from the selects, a new
+server among them, at a wide window and a phone's width. The bundle's check runs
 them after its typecheck. The other behaviour tests are deferred: they are written and run here once
 the minimal services stand on the new repositories, and `docs/inventory.md` lists what the old behaviour was
 held to. The build check is `cargo check --all-targets` and the bundle's typecheck.

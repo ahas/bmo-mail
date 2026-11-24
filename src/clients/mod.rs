@@ -1,4 +1,5 @@
-//! The clients of the units the hosted tool calls (`docs/api.md`, 「The hosted tool」), one module for each,
+//! The clients of the units the service and its hosted tool call (`docs/api.md`, 「What the service reaches」,
+//! 「The hosted tool」), one module for each,
 //! holding only the calls this repository makes, and what every one of them stands on: a unit reached at its
 //! address with the token its file holds.
 
@@ -124,6 +125,25 @@ impl Reach {
   /// `POST path` with `body`, read as `T`.
   pub async fn post<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T, Failure> {
     self.send(self.request(Method::POST, path)?.json(body)).await
+  }
+
+  /// A call of any method, with headers of its own and a body where one is given, read as `T`.
+  pub async fn call<T: DeserializeOwned>(
+    &self,
+    method: Method,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: Option<&Value>,
+  ) -> Result<T, Failure> {
+    let request = headers
+      .iter()
+      .fold(self.request(method, path)?, |request, (name, value)| request.header(*name, *value));
+    let request = match body {
+      Some(body) => request.json(body),
+      None => request,
+    };
+
+    self.send(request).await
   }
 
   async fn send<T: DeserializeOwned>(&self, request: RequestBuilder) -> Result<T, Failure> {

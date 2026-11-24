@@ -27,9 +27,11 @@ structure (archive document #301, 「원칙」).
 
 ## Boundaries
 
-- **The service calls no other unit.** The console in front of the service checks the sign-in, hands the
+- **The service calls one other unit, the account service, for its mail servers' delegation chain alone**
+  (`docs/api.md`, 「What the service reaches」). The console in front of the service checks the sign-in, hands the
   screen's requests on, relays the event stream and rings the push; the service checks its bearer token and
-  listens on a loopback address (`docs/api.md`, 「Who checks what」). The hosted tool alone calls agency, the
+  listens on a loopback address (`docs/api.md`, 「Who checks what」). The account service reaches the system
+  mail's routes under a credential of its own. The hosted tool alone calls agency, the
   receiver, the account service, the node service and the page-token service (`docs/api.md`, 「The hosted tool」). Every other unit is reached through its
   API, never through its code, its tables or its files.
 - **A client of another service is one module named for that service** under `src/clients/`, holding only

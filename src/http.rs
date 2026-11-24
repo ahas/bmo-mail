@@ -25,6 +25,8 @@ use crate::avatars::Avatars;
 use crate::console::{self, SCREEN_ROLE};
 use crate::events::Events;
 use crate::secrets::Secrets;
+use crate::servers::Servers;
+use crate::servers::organisation::Organisation;
 use crate::settings::Settings;
 use crate::store::Store;
 use crate::wire::Role;
@@ -87,6 +89,8 @@ pub enum Guard {
   /// The service's token or the console's credential, an `Owner-Role` allowing the screen's role and an
   /// `Owner-Key`: every route the screen uses.
   Screen,
+  /// The service's token or the account service's credential for the platform's system mail, and no owner.
+  SystemMail,
 }
 
 /// One route the service answers, registered beside its answer with `bmo_mail::route!`.
@@ -248,6 +252,10 @@ pub struct Standing {
   pub sends: Sends,
   /// The lookups of sender logos.
   pub avatars: Avatars,
+  /// The mail servers.
+  pub servers: Servers,
+  /// The account service, asked who offers which server.
+  pub organisation: Organisation,
 }
 
 impl Standing {
@@ -255,6 +263,8 @@ impl Standing {
   pub fn new(settings: Settings, store: Store, wording: Wording, secrets: Option<Secrets>) -> Self {
     let accounts = Accounts::new(store.pool().clone(), secrets);
     let events = Events::new(store.pool().clone());
+    let servers = Servers::new(store.pool().clone());
+    let organisation = Organisation::new(&settings);
     Self {
       settings,
       store,
@@ -265,6 +275,8 @@ impl Standing {
       wording,
       sends: Sends::default(),
       avatars: Avatars::default(),
+      servers,
+      organisation,
     }
   }
 
@@ -397,7 +409,10 @@ fn authorized(standing: &Standing, request: &Request, guard: Guard) -> bool {
   let settings = &standing.settings;
   let accepted = |expected: &str| !expected.is_empty() && presented == expected;
 
-  accepted(&settings.server.token) || (guard == Guard::Screen && accepted(&settings.console.token))
+  accepted(&settings.server.token)
+    || (guard == Guard::Screen && accepted(&settings.console.token))
+    || (guard == Guard::SystemMail
+      && settings.system_mail.credential().is_some_and(|credential| accepted(&credential)))
 }
 
 /// What a request to a path no route claims is answered.

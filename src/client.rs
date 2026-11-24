@@ -14,6 +14,10 @@ use crate::wire::{
   NewRuleRun, NewSend, Page, Receipt, Role, Rule, RulePatch, RuleRun, Send, Settings, SettingsPatch,
   SpamSender, Summary, Thread, ThreadQuery, WireError,
 };
+use crate::wire::{
+  NewServer, NewServerTest, NewSystemMail, OutgoingServers, Server, ServerPatch, ServerQuery, ServerTest,
+  SystemMailSent,
+};
 
 /// What a path segment keeps as it is: the characters no URI gives a meaning of their own.
 const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
@@ -217,6 +221,46 @@ impl MailClient {
   /// `GET /summary`.
   pub async fn summary(&self) -> Called<Summary> {
     self.get("/summary", &()).await
+  }
+
+  /// `GET /servers`.
+  pub async fn servers(&self, query: &ServerQuery) -> Called<Page<Server>> {
+    self.get("/servers", query).await
+  }
+
+  /// `POST /servers`.
+  pub async fn create_server(&self, server: &NewServer) -> Called<Server> {
+    self.with_body(Method::POST, "/servers", server).await
+  }
+
+  /// `GET /servers/{serverId}`.
+  pub async fn server(&self, server: i64) -> Called<Server> {
+    self.get(&format!("/servers/{server}"), &()).await
+  }
+
+  /// `PATCH /servers/{serverId}`.
+  pub async fn change_server(&self, server: i64, patch: &ServerPatch) -> Called<Server> {
+    self.with_body(Method::PATCH, &format!("/servers/{server}"), patch).await
+  }
+
+  /// `DELETE /servers/{serverId}`.
+  pub async fn delete_server(&self, server: i64) -> Called<()> {
+    self.delete(&format!("/servers/{server}")).await
+  }
+
+  /// `POST /server-tests`.
+  pub async fn test_server(&self, test: &NewServerTest) -> Called<ServerTest> {
+    self.with_body(Method::POST, "/server-tests", test).await
+  }
+
+  /// `GET /outgoing-servers`, under the system mail's credential.
+  pub async fn outgoing_servers(&self) -> Called<OutgoingServers> {
+    self.get("/outgoing-servers", &()).await
+  }
+
+  /// `POST /system-mails`, under the system mail's credential.
+  pub async fn send_system_mail(&self, mail: &NewSystemMail) -> Called<SystemMailSent> {
+    self.with_body(Method::POST, "/system-mails", mail).await
   }
 
   /// `GET /accounts/{accountName}/folders`.

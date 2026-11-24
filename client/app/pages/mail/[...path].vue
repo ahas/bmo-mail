@@ -226,20 +226,25 @@
       </template>
 
       <!-- One's own accounts stand apart from the frame, so the empty state of a screen with no
-           account opens them as well as the nav. -->
-      <UDrawer v-if="narrow" v-model:open="accountsOpen" :title="$t('mail.title.accounts')" :ui="FULL_SHEET">
+           account opens them as well as the nav. The account form there holds what is typed, so
+           while it holds any every way of closing them asks first, wired as the settings are. -->
+      <UDrawer v-if="narrow" :open="accountsOpen" :title="$t('mail.title.accounts')" :ui="FULL_SHEET" @update:open="onAccountsOpen">
         <template #body>
-          <MailAccounts :accounts="accounts ?? []" @added="onAccountAdded" @removed="onAccountRemoved" />
+          <MailAccounts v-model:dirty="accountsDirty" :accounts="accounts ?? []" @added="onAccountAdded" @removed="onAccountRemoved" />
         </template>
       </UDrawer>
       <UModal
         v-else
-        v-model:open="accountsOpen"
+        :open="accountsOpen"
         :title="$t('mail.title.accounts')"
         :ui="{ content: 'sm:max-w-2xl h-[85dvh] flex flex-col', body: 'flex min-h-0 flex-1 flex-col p-0 sm:p-0' }"
+        @update:open="onAccountsOpen"
       >
+        <template #close="{ ui }">
+          <ShellClose :class="ui.close()" />
+        </template>
         <template #body>
-          <MailAccounts :accounts="accounts ?? []" @added="onAccountAdded" @removed="onAccountRemoved" />
+          <MailAccounts v-model:dirty="accountsDirty" :accounts="accounts ?? []" @added="onAccountAdded" @removed="onAccountRemoved" />
         </template>
       </UModal>
     </template>
@@ -315,6 +320,14 @@ const choosing = ref(false);
 const navDrawer = ref(false);
 const navFolded = ref(false);
 const accountsOpen = ref(false);
+const accountsDirty = ref(false);
+const accountsGuard = useCloseGuard(accountsOpen, () => accountsDirty.value, t);
+
+// The accounts' drawer or modal asking to stand or to close, as the settings' do.
+function onAccountsOpen(standing: boolean): void {
+  if (standing) accountsOpen.value = true;
+  else void accountsGuard.leave();
+}
 const settingsOpen = ref(false);
 const settingsDirty = ref(false);
 const settingsGuard = useCloseGuard(settingsOpen, () => settingsDirty.value, t);

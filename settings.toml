@@ -69,9 +69,18 @@ address = ""
 token_file = ""
 
 [account_service]
-# The account service's address, where the tool reads the account the owner's sender is linked to.
+# The account service's address, where the service reads its mail servers' delegation chain and the tool reads the
+# account the owner's sender is linked to (docs/api.md, 「What the service reaches」).
 address = ""
 token_file = ""
+
+[system_mail]
+# The credential the account service presents for the platform's system mail (docs/api.md, 「System mail」), given
+# itself or as its file; empty, only the service's token reaches those routes.
+token = ""
+token_file = ""
+# The platform's space of the secret store, the data root's env/, where a system mail's named secret is read.
+secrets_dir = ""
 
 [outlook]
 # The node the owner's account reads its sent mail on; empty, its agency record is read as any account's.

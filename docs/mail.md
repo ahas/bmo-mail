@@ -19,6 +19,8 @@ flowchart TD
   Adapter --> SMTP[mail server: submission]
   Service --> Store[the service's store]
   Service -->|events| Console
+  Service -->|"the delegation chain: who offers which server"| AccountService[the account service]
+  AccountService -->|"system mail: POST /system-mails"| Service
 ```
 
 Beside the service stands its hosted tool, which reads what a person sent from their own machine and touches
@@ -28,6 +30,11 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 
 - **Accounts:** each owner's own list of mail accounts, added, changed and removed from the screen
   (「Accounts and credentials」). The code and the documents carry no address.
+- **Mail servers:** the incoming and outgoing servers accounts are reached through, each kept once as a record of
+  its own and chosen by any number of accounts: the platform's and an organisation's, offered down the organisation
+  tree, and a person's own (「Mail servers」).
+- **The platform's system mail:** one mail at a time the account service sends through an outgoing server of the
+  platform's — a reset link, an email's verification, a security notice (「The platform's system mail」).
 - **In the screen:**
   - Views: the inbox, the sent folder, drafts, spam, trash, starred, one view per label, any other
     folder the mailbox holds, and search.
@@ -102,17 +109,20 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   the order they put it. One owner key never sees, reads or changes another's account: every route
   under an account answers an owner who does not hold it as if the account did not stand.
 - **An account is of a kind,** the name of the adapter that reaches its mailbox. Each adapter declares
-  its kind: how an account of it signs in, and the fields a person writes to add one. The screen, the
-  routes and the tools know no adapter: they read the kinds the service declares, and the service
-  finds an account's adapter by its kind alone.
-  - `imap-smtp`: a mail server reached over IMAP and submission, signed in with a login and a
-    password. Its fields are the IMAP host and port, the submission host and port, the name each
-    certificate is checked against (the host where none is written; `-` for a plain connection, which
-    only a stand-in server uses), the login (the address where none is written) and the password.
-  - `pop3-smtp`: a mail server reached over POP3 and submission, signed in with a login and a password,
-    for a mailbox whose server offers no IMAP. Its fields are those of `imap-smtp` with the POP3 host and
-    port in place of the IMAP ones, and the POP3 server's certificate name read the same way. What its
-    mailbox offers is 「A POP3 account」.
+  its kind: how an account of it signs in, the fields a person writes to add one, and, for a kind reached
+  through mail servers, the protocol of the incoming server it reads and of the outgoing server it sends
+  through. The screen, the routes and the tools know no adapter: they read the kinds the service declares, and
+  the service finds an account's adapter by its kind alone.
+  - `imap-smtp`: a mailbox reached over IMAP and submission, signed in with a login and a password. Its
+    fields are the login (the address where none is written) and the password; it reads an incoming server of
+    the protocol `imap` and sends through an outgoing server of the protocol `smtp` (「Mail servers」).
+  - `pop3-smtp`: a mailbox reached over POP3 and submission, signed in with a login and a password, for a
+    mailbox whose server offers no IMAP. Its fields are those of `imap-smtp`, and it reads an incoming server of
+    the protocol `pop3`. What its mailbox offers is 「A POP3 account」.
+- **An account reached through mail servers names two of them:** one incoming server, of the protocol its kind
+  reads, and one outgoing server. Its own are the address, the login and the password; where it connects, how
+  and over what security is the servers' (「Mail servers」). An account is added only on servers its owner
+  reaches, and where the kind is not named it is the one whose incoming protocol is the incoming server's.
   - `gmail` (the Gmail API) and `graph` (Microsoft Graph): a provider signed in through its own
     authorization page, the service keeping the tokens it hands back. Their contract stands in
     `docs/api.md`, 「Accounts」; until an adapter of the kind is built into the service, the service
@@ -120,8 +130,9 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 - **Adding an account signs in first.** The service checks the account against its servers — for
   `imap-smtp` a login to IMAP and to submission — and keeps it only when they took it; an account
   whose sign-in failed is refused, and nothing of it is kept. For `pop3-smtp` the sign-in is a login to
-  POP3 that answers `UIDL`, then to submission. Changing an account's address, settings
-  or password signs in again the same way.
+  POP3 that answers `UIDL`, then to submission. Changing an account's address, login, password or servers
+  signs in again the same way; an outgoing server that takes mail without a sign-in is greeted and asked its
+  capabilities alone.
 - **An account's name** is the local part of its address unless the person gives it another. It is
   unique among one owner's accounts and matched without regard to case; the routes and the screen's
   addresses name the account by it.
@@ -137,9 +148,10 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   a store holding accounts while no key file is named, stops the service at start rather than leave
   accounts it cannot open.
 - **Choosing how a mailbox is reached is choosing the kind.** An account names one kind, chosen when it is
-  added, and the kinds are offered in their names' order, `imap-smtp` first. An account changes its
-  servers, its login and its password within its kind; reaching the same mailbox by another protocol is
-  removing the account and adding it again as the other kind.
+  added — by the incoming server chosen, for a kind reached through mail servers — and the kinds are offered in
+  their names' order, `imap-smtp` first. An account changes its servers, its login and its password within its
+  kind: another incoming server of the same protocol is a change, one of another protocol is refused, and
+  reaching the same mailbox by another protocol is removing the account and adding it again as the other kind.
 - **Removing an account** forgets it and everything the store holds for it — its labels, rules,
   settings, spam senders, the watcher's mark, the known addresses and a POP3 account's messages and
   drafts — takes back its sends still waiting, and lets its connections go. Its mailbox on the server
@@ -150,7 +162,9 @@ neither the service nor its store (「A person's sent mail, read on their own ma
 - **A deployment that read its mailboxes from an accounts file moves them into the store once.** At
   start, while no import has been made, the service reads the file the setting `accounts.file` names
   and keeps each account it names as an `imap-smtp` account of the administrator's owner key, in the
-  file's order, its password encrypted. What the store already kept for each account's address —
+  file's order, its password encrypted, on the file's IMAP and submission servers kept as the administrator's
+  own server records — a record the administrator already holds with the same settings is taken rather than
+  made again (「Mail servers」). What the store already kept for each account's address —
   labels, rules, settings, spam senders, the watcher's mark, the known addresses and the event window
   — stays that account's, so nothing it had is lost. The import is recorded, and from then on the file
   is not read again.
@@ -160,9 +174,94 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   A file that does not read is said in the log naming its line and never repeating it, since the line
   may hold a password, and nothing is imported.
 - **The administrator's owner key** is read from the setting `accounts.administrator`. The imported
-  accounts are that key's; a change of the setting carries the accounts the earlier key held to the
-  new one at the next start. With no administrator key or no key file, the import waits, said in the
+  accounts are that key's; a change of the setting carries the accounts and the own servers the earlier key
+  held to the new one at the next start. With no administrator key or no key file, the import waits, said in the
   log, and the file stays unread.
+
+## Mail servers
+
+A mail server is kept once, as a record of its own, and chosen by any number of accounts: a company sets its IMAP
+and submission servers one time, and each of its people adds only their address and password.
+
+- **A server is incoming or outgoing, by its protocol.** An incoming server is read over `imap` or `pop3`, an
+  outgoing one is handed mail over `smtp`, submission. Each record holds:
+  - its name, what a person chooses it by, the host where none is given;
+  - its host and its port, the protocol's usual port for its security where none is given — 993 for IMAP over
+    TLS and 143 otherwise, 995 for POP3 over TLS and 110 plain, 587 for submission with STARTTLS, 465 over TLS
+    and 25 plain;
+  - its security: `tls`, spoken from the first byte; `starttls`, upgraded after the greeting; or `none`, a plain
+    connection, which only a stand-in server or a relay on the machine itself uses. IMAP and submission take all
+    three; POP3 takes `tls` and `none`, since the POP3 client upgrades no session. The default is `tls` for an
+    incoming server and `starttls` for an outgoing one;
+  - the name its certificate is checked against, the host where none is given;
+  - its sign-in: `password`, the account's login and password, which every incoming server takes; or, for an
+    outgoing server alone, `none`, a server that takes mail without a sign-in.
+- **A server never holds a secret.** The login and the password are each account's own and stay sealed on the
+  account (「Accounts and credentials」); a server record is no secret, and is answered whole to whoever reaches
+  it.
+- **Who holds a server.** Every record stands under one holder:
+  - **a person's own:** the owner key that made it, which alone reads, changes and chooses it;
+  - **the platform's, or a company's or a unit's:** a link of the account service's delegation chain (bmo-web's
+    `docs/accounts.md`, 「The delegation chain」), offered to every person whose chain the link stands on — the
+    platform's to everyone, a company's to everyone of the company, a unit's to the people whose home unit is
+    at or under it.
+- **The chain says who offers what, and who may change it.** The service declares the chain's kind
+  `mail.servers` as it stands: a `json` value, `layered`, at the platform's link and a unit's, a unit's link
+  written by its heads. A link's value is the list of the servers it holds, which the service alone writes, in
+  the name of the person changing them, every time a server of that link is added, changed or removed — so who
+  may change a link's servers and whether a lock above withholds it are the account service's word, and a write
+  it refuses leaves the server as it stood. A unit that locks the kind holds its servers for everyone under it:
+  the units below it change none, and the servers they held stay kept and are offered to nobody until the lock
+  is lifted.
+- **What a person reaches** is read afresh for each list and each choice: the servers of every link on their
+  chain the account service resolves, down to the link whose lock cuts it, and their own. Their organisation's
+  stand first, the company's and then each unit's down to their own unit, then the platform's, then their own.
+  A person the account service does not know — an owner key that is no user, the harness's — reaches the
+  platform's servers and their own; a service whose settings name no account service keeps no server of a link
+  and offers the person's own alone.
+- **An account keeps the servers it was added on.** A person who leaves a unit keeps the accounts on its servers;
+  the servers are no longer offered to them for another account.
+- **A change of a server reaches every account on it,** at the next connection each one opens: the watchers
+  follow at once and the work connections open again on the new settings. No account signs in again; the
+  connection test says beforehand whether the server answers (「The screen」).
+- **A server some account stands on is not removed.** It answers how many accounts stand on it, every owner's
+  together and none named, and a removal is refused while that count is not zero.
+- **A connection test** opens a connection to a server — kept, or as a form holds it before it is kept — with its
+  security, reads its greeting and, where a login and a password are given, signs in, and lets go. It answers
+  whether the server was reached and whether it took the sign-in, never what it was signed in with.
+- **The accounts kept before servers were records** were moved onto them once, by the store's migration: each
+  account's IMAP or POP3 settings and its submission settings became server records of its owner's own, one
+  record for every set of identical settings an owner held — the same protocol, host, port, security and
+  certificate name — so every account of one owner on one server points at one record. The security was read
+  as each connection was made: a certificate name of `-` is `none`; else IMAP on 993 and submission on 465 are
+  `tls`, POP3 is `tls`, and every other port is `starttls`. Each account kept its login and its password.
+
+## The platform's system mail
+
+The platform sends mail of its own — a reset link, an email's verification, a security notice — through one of the
+platform's outgoing servers. The account service decides when such a mail goes, who reads it and in what words
+(bmo-web's `docs/accounts.md`, 「The platform's own mail」); this service only hands it to the server.
+
+- **The system mail is the platform administrator's alone.** It is set on the console's platform settings, and
+  its outgoing server is one of the platform's own server records, never a company's, a unit's or a person's.
+  This service holds to that at every send: a send naming any server but one of the platform's outgoing servers
+  is refused.
+- **The account service asks this service, under a credential of its own,** the one the setting
+  `system_mail.token` names (`docs/api.md`, 「System mail」): the outgoing servers it may choose from, which are
+  the platform's alone, and one send at a time.
+- **A send names everything it goes with:** the platform's outgoing server, the sender's address and name, the
+  name of the secret it signs in with, the recipient, the subject, the text and the HTML, and the kind of mail
+  it is. Nothing of it is kept: the service keeps no copy, no row and no event, and its log names the kind and
+  the server, never an address or a word of the mail.
+- **The secret is named, never handed over.** It is a secret of the platform's space of the secret store, the
+  folder the setting `system_mail.secrets_dir` names — the data root's `env/` — a file of `USERNAME` and
+  `PASSWORD` lines, each line's key before its first `=` and its value exactly as written after it. The service
+  reads it at the send and keeps nothing of it. A send that names no secret goes only through a server that
+  takes mail without a sign-in.
+- **A send goes at once,** with no undo span and no waiting: the account service hears it went, or the
+  server's refusal in a sentence of its own.
+- **Where this service is not installed,** or its settings name no credential for the account service, there is
+  no system mail, and the account service offers what stands in its place: the administrator's one-time link.
 
 ## Where each piece of state lives
 
@@ -174,9 +273,10 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   - Spam reported and un-reported set `$Junk` or `$NotJunk`, the keywords a learning filter reads.
   - A read receipt answered, sent or declined, sets `$MDNSent`, so it is asked once.
   - Drafts are messages in the drafts folder; sent mail is a copy in the sent folder.
-- **In the service's store** (`docs/api.md`, 「The store」), the accounts themselves: each one's owner
-  key, name, kind, address, place in its owner's list and settings, and its secrets sealed
-  (「Accounts and credentials」). Then, per account:
+- **In the service's store** (`docs/api.md`, 「The store」), the mail servers, each with its holder
+  (「Mail servers」), and the accounts themselves: each one's owner key, name, kind, address, place in its
+  owner's list, settings, incoming and outgoing server, and its secrets sealed (「Accounts and credentials」).
+  Then, per account:
   - Labels: the keyword, the name, the colour, the order.
   - Filter rules: an ordered list of conditions and actions, each rule on or off.
   - Settings: the signature as the markup it is written in, whether read receipts are asked by
@@ -192,6 +292,8 @@ neither the service nor its store (「A person's sent mail, read on their own ma
     thrown away (「A POP3 account」).
   - Sender logos: one row per sender domain holding the picture found there or nothing found, and
     when the looking was done.
+- **On the account service's delegation chain,** the list of servers each link of the platform and the units
+  holds, written by this service alone (「Mail servers」).
 - **In the staging folder** the setting `staging.dir` names: a file posted to a draft until the draft
   carrying it is saved; files older than a day are swept every hour.
 - **In the store's event window:** the events of the last day, so a reader that was away resumes
@@ -701,18 +803,30 @@ submission server, with its drafts kept in the store.
   adds an account instead of composing, at the right end of a row of its own over that line on a wide
   screen and floating on a phone; there is nothing to compose from until an account stands.
 - **The accounts** are one modal, opened from the mail nav's accounts button and, where the owner has
-  no account yet, from the empty state's create button; on a phone it is a bottom drawer. It lists
-  the owner's own accounts, each with its kind and address and a remove action that asks first, and
-  adds one:
-  - The kinds offered are the ones the service declares; the screen names a kind and each of its
-    fields by the words its pack holds under that name, and knows nothing else of any kind.
-  - A kind that signs in with a password draws a form from its declared fields: the address, a name
-    that may be left empty, then each field — a secret one in a password box, a port as a number, an
-    optional one marked so and given its default where it declares one.
+  no account yet, from the empty state's create button; on a phone it is a bottom drawer. It holds two
+  sections, the accounts and the servers, as tabs at its head:
+  - **The accounts** lists the owner's own accounts, each with its address, its incoming and outgoing server by name and
+    a remove action that asks first, and adds one. The form asks the address, a name that may be left empty, the
+    incoming server and the outgoing server, each bmo-ui's one select over the servers the owner reaches —
+    their organisation's first, each under the name of the company or unit holding it, then the platform's,
+    then their own — and then the fields the kind declares: a login that may be left empty and the password in
+    a password box. The kind is the one whose incoming protocol is the chosen incoming server's, so a person
+    never picks a protocol. Each select ends with a new server, which opens the server form over the account
+    form and chooses the server it keeps.
   - A kind that signs in by authorization offers one button, which opens the provider's page; the
     browser comes back to the mail screen, which finishes the adding with what the provider answered.
-  - Adding signs in before anything is kept; a refused sign-in, a name taken or a kind not offered is
-    said in the form by its refusal's words, and an account added opens.
+  - Adding signs in before anything is kept; a refused sign-in, a name taken, a server not reached or a kind not
+    offered is said in the form by its refusal's words, and an account added opens.
+  - **The servers** lists every server the owner reaches, the incoming ones and then the outgoing ones, each with its
+    name, its host and port, its security and who holds it — the company or unit by its name, the platform, or
+    the owner — and how many accounts stand on it. The owner's own carry an edit and a remove, a removal asking
+    first and refused while an account stands on it; an organisation's and the platform's are read here and
+    changed on the console's organisation screen (bmo-web's `docs/web.md`, 「메일 서버」). The tab's add opens
+    the form.
+  - **The server form** asks the protocol, the name, the host, the port (the protocol's usual one for the
+    security chosen, written in as the placeholder), the security, the certificate name where the security is
+    not `none` and the sign-in where the protocol is `smtp`. A connection test at its foot tests the server as the
+    form holds it, without keeping it, and says beside it whether the server was reached; the save keeps it.
 - **The settings** — signature, images, read receipts, filters, labels, spam senders — are one modal
   with a section each, opened from the mail nav; on a phone it is a bottom drawer. Signature, images
   and read receipts are a form, saved together by the one save at the foot, and closing with changes
@@ -808,12 +922,16 @@ What the mail server's operator does by hand, in this order:
 1. Write the key file the deployment's `secrets.key_file` names — 32 random bytes as base64, readable
    by the service's user alone — and name the administrator's owner key in `accounts.administrator`.
    Keep the key file beside the store's backups: a store without its key opens no account.
-2. Confirm the IMAP server's per-user connection limit leaves room for two connections per account
+2. Name the account service in `account_service`, so the platform's and the organisations' servers stand, and,
+   for the platform's system mail, give the account service a credential of its own in `system_mail.token` (or
+   its file) and the same value in the account service's `mail.token`, and name the platform's secret folder in
+   `system_mail.secrets_dir` (「The platform's system mail」).
+3. Confirm the IMAP server's per-user connection limit leaves room for two connections per account
    from the service besides the account's other clients. For a POP3 account, set every other client of
    the mailbox to leave mail on the server: a message another client takes off it is gone from the
    service too.
-3. Put a content spam filter at delivery — Postfix delivering through Dovecot's LDA or LMTP with
+4. Put a content spam filter at delivery — Postfix delivering through Dovecot's LDA or LMTP with
    Sieve lets it tag or file mail — so the spam-header rule has a verdict to read.
-4. With Sieve at delivery, vacation auto-reply becomes possible; it is a later item of its own.
-5. Publish one SPF record, a DKIM key with Postfix signing, and a DMARC record for the sending
+5. With Sieve at delivery, vacation auto-reply becomes possible; it is a later item of its own.
+6. Publish one SPF record, a DKIM key with Postfix signing, and a DMARC record for the sending
    domain, so mail sent from the service is not itself filed as spam elsewhere.

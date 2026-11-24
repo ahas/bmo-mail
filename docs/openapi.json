@@ -209,6 +209,8 @@
           "bad-request",
           "conflict",
           "unknown-kind",
+          "unknown-server",
+          "server-mismatch",
           "sign-in-failed",
           "unknown-authorization",
           "not-ready",
@@ -403,6 +405,8 @@
           "bad-request",
           "not-found",
           "conflict",
+          "unknown-server",
+          "server-mismatch",
           "sign-in-failed",
           "not-ready",
           "failed",
@@ -3291,6 +3295,465 @@
         ]
       }
     },
+    "/outgoing-servers": {
+      "get": {
+        "operationId": "listOutgoingServers",
+        "tags": [
+          "system-mail"
+        ],
+        "summary": "The platform's outgoing servers, which the account service chooses the system mail's from.",
+        "responses": {
+          "200": {
+            "description": "The platform's outgoing servers, which the account service chooses the system mail's from.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutgoingServers"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "failed"
+        ]
+      }
+    },
+    "/server-tests": {
+      "post": {
+        "operationId": "createServerTests",
+        "tags": [
+          "servers"
+        ],
+        "summary": "Test a connection to a server, signing in where a login and a password are given.",
+        "responses": {
+          "200": {
+            "description": "Test a connection to a server, signing in where a login and a password are given.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerTest"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "not-found",
+          "upstream-failed",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewServerTest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/servers": {
+      "get": {
+        "operationId": "listServers",
+        "tags": [
+          "servers"
+        ],
+        "summary": "The servers the owner reaches, or the servers a link of the delegation chain holds.",
+        "responses": {
+          "200": {
+            "description": "The servers the owner reaches, or the servers a link of the delegation chain holds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "forbidden",
+          "not-ready",
+          "upstream-failed",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Direction"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The incoming or the outgoing servers alone."
+            },
+            "description": "The incoming or the outgoing servers alone."
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "A link of the delegation chain, `platform` or `unit:<id>`, whose servers are read; the servers the owner\nreaches where none is named."
+            },
+            "description": "A link of the delegation chain, `platform` or `unit:<id>`, whose servers are read; the servers the owner\nreaches where none is named."
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createServers",
+        "tags": [
+          "servers"
+        ],
+        "summary": "Keep a server of the owner's own, or of a link the owner may write on the delegation chain.",
+        "responses": {
+          "201": {
+            "description": "Keep a server of the owner's own, or of a link the owner may write on the delegation chain.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Server"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "forbidden",
+          "locked",
+          "not-found",
+          "not-ready",
+          "upstream-failed",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewServer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/servers/{serverId}": {
+      "delete": {
+        "operationId": "deleteServersByServerId",
+        "tags": [
+          "servers"
+        ],
+        "summary": "Remove a server no account stands on.",
+        "responses": {
+          "204": {
+            "description": "Remove a server no account stands on."
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "not-found",
+          "forbidden",
+          "locked",
+          "server-in-use",
+          "upstream-failed",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "serverId",
+            "in": "path",
+            "required": true,
+            "description": "The server's id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ]
+      },
+      "get": {
+        "operationId": "readServersByServerId",
+        "tags": [
+          "servers"
+        ],
+        "summary": "One server the owner reaches or may read.",
+        "responses": {
+          "200": {
+            "description": "One server the owner reaches or may read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Server"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "not-found",
+          "upstream-failed",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "serverId",
+            "in": "path",
+            "required": true,
+            "description": "The server's id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "changeServersByServerId",
+        "tags": [
+          "servers"
+        ],
+        "summary": "Change a server's settings; its protocol stays.",
+        "responses": {
+          "200": {
+            "description": "Change a server's settings; its protocol stays.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Server"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "not-found",
+          "forbidden",
+          "locked",
+          "upstream-failed",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "serverId",
+            "in": "path",
+            "required": true,
+            "description": "The server's id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": true,
+            "description": "The role the reader holds; either allows the screen's, member. The console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "Owner-Key",
+            "in": "header",
+            "required": true,
+            "description": "The opaque key of the owner the caller acts for; the console sets it for the person signed in.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerPatch"
+              }
+            }
+          }
+        }
+      }
+    },
     "/summary": {
       "get": {
         "operationId": "listSummary",
@@ -3346,6 +3809,49 @@
           }
         ]
       }
+    },
+    "/system-mails": {
+      "post": {
+        "operationId": "createSystemMails",
+        "tags": [
+          "system-mail"
+        ],
+        "summary": "Send one mail of the platform's own through one of its outgoing servers, at once.",
+        "responses": {
+          "201": {
+            "description": "Send one mail of the platform's own through one of its outgoing servers, at once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemMailSent"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "unknown-server",
+          "unknown-secret",
+          "sign-in-failed",
+          "upstream-failed",
+          "failed"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSystemMail"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3384,6 +3890,17 @@
             "type": "boolean",
             "description": "Whether its mailbox moves mail between folders: a move, spam and not spam, trash and deleting for good.\nThe screen draws none of them for an account whose kind does not."
           },
+          "servers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KindServers"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The protocols of the servers an account of it is reached through; null for a kind that names none."
+          },
           "fields": {
             "type": "array",
             "items": {
@@ -3414,6 +3931,33 @@
           }
         ],
         "description": "How an account of a kind signs in."
+      },
+      "KindServers": {
+        "type": "object",
+        "properties": {
+          "incoming": {
+            "$ref": "#/components/schemas/Protocol",
+            "description": "The incoming server's."
+          },
+          "outgoing": {
+            "$ref": "#/components/schemas/Protocol",
+            "description": "The outgoing server's."
+          }
+        },
+        "required": [
+          "incoming",
+          "outgoing"
+        ],
+        "description": "The protocols of the servers a kind reaches its accounts through."
+      },
+      "Protocol": {
+        "type": "string",
+        "enum": [
+          "imap",
+          "pop3",
+          "smtp"
+        ],
+        "description": "What a mail server speaks."
       },
       "KindField": {
         "type": "object",
@@ -3510,6 +4054,22 @@
             },
             "description": "Its fields that are not secret."
           },
+          "incomingServer": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The incoming server's id; null for a kind that names none."
+          },
+          "outgoingServer": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The outgoing server's id; null for a kind that names none."
+          },
           "unreadCount": {
             "type": "integer",
             "format": "uint32",
@@ -3537,7 +4097,11 @@
         "additionalProperties": false,
         "properties": {
           "kind": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where none is given, the kind whose incoming protocol is the incoming server's."
           },
           "name": {
             "type": [
@@ -3552,6 +4116,21 @@
               "null"
             ],
             "description": "Required for a kind that signs in by password."
+          },
+          "incomingServer": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Required for a kind that names servers: a server the owner reaches."
+          },
+          "outgoingServer": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "settings": {
             "type": [
@@ -3585,9 +4164,6 @@
             "description": "For a kind that signs in by authorization: the authorization and what the provider answered."
           }
         },
-        "required": [
-          "kind"
-        ],
         "description": "An account to add: by password from its fields, or by an authorization's answer."
       },
       "AuthorizationAnswer": {
@@ -3634,6 +4210,20 @@
               "string",
               "null"
             ]
+          },
+          "incomingServer": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "outgoingServer": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "settings": {
             "type": [
@@ -5049,6 +5639,425 @@
         ],
         "description": "Readiness and version."
       },
+      "OutgoingServers": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OutgoingServer"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "description": "The platform's outgoing servers."
+      },
+      "OutgoingServer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "security": {
+            "$ref": "#/components/schemas/Security"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/ServerAuth"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "host",
+          "port",
+          "security",
+          "auth"
+        ],
+        "description": "One of the platform's outgoing servers, as the account service chooses the system mail's."
+      },
+      "Security": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "tls",
+            "description": "TLS from the first byte."
+          },
+          {
+            "type": "string",
+            "const": "starttls",
+            "description": "Upgraded with STARTTLS after the greeting."
+          },
+          {
+            "type": "string",
+            "const": "none",
+            "description": "A plain connection, for a stand-in server or a relay on the machine itself."
+          }
+        ],
+        "description": "How a connection to a server is secured."
+      },
+      "ServerAuth": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "password",
+            "description": "The account's login and password."
+          },
+          {
+            "type": "string",
+            "const": "none",
+            "description": "No sign-in, for an outgoing server that takes mail without one."
+          }
+        ],
+        "description": "How a server is signed in to."
+      },
+      "ServerTest": {
+        "type": "object",
+        "properties": {
+          "reached": {
+            "type": "boolean",
+            "description": "Whether a connection, its security and the server's greeting stood."
+          },
+          "signedIn": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the server took the sign-in; null where no login and password were given."
+          },
+          "failure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`unreachable` or `sign-in-failed`; null where nothing failed."
+          }
+        },
+        "required": [
+          "reached"
+        ],
+        "description": "What a connection test came to."
+      },
+      "NewServerTest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "serverId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "A kept server; the fields below are read where none is named."
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Protocol"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "security": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Security"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tlsName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "login": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "description": "A connection test: a kept server, or the fields a form holds, with a login to sign in as where one is given."
+      },
+      "Direction": {
+        "type": "string",
+        "enum": [
+          "incoming",
+          "outgoing"
+        ],
+        "description": "Whether a server is read from or handed mail."
+      },
+      "ServerPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Server"
+            }
+          },
+          "more": {
+            "type": "boolean",
+            "description": "Whether anything stands past the last item."
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "description": "A page of a list."
+      },
+      "Server": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "security": {
+            "$ref": "#/components/schemas/Security"
+          },
+          "tlsName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name its certificate is checked against; null for the host."
+          },
+          "auth": {
+            "$ref": "#/components/schemas/ServerAuth"
+          },
+          "holder": {
+            "$ref": "#/components/schemas/ServerHolder"
+          },
+          "mayChange": {
+            "type": "boolean",
+            "description": "Whether the owner may change and remove it now."
+          },
+          "accountCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many accounts stand on it, every owner's together."
+          }
+        },
+        "required": [
+          "id",
+          "protocol",
+          "direction",
+          "name",
+          "host",
+          "port",
+          "security",
+          "auth",
+          "holder",
+          "mayChange",
+          "accountCount"
+        ],
+        "description": "A mail server accounts are reached through (`docs/api.md`, 「Servers」)."
+      },
+      "ServerHolder": {
+        "type": "object",
+        "properties": {
+          "link": {
+            "type": "string",
+            "description": "`own` for the owner's own, else the delegation chain's link: `platform` or `unit:<id>`."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The company's or unit's name; null for the others."
+          }
+        },
+        "required": [
+          "link"
+        ],
+        "description": "Who holds a server."
+      },
+      "NewServer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "link": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The link of the delegation chain that holds it, `platform` or `unit:<id>`; the owner's own where none is\nnamed."
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The host where none is given."
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535,
+            "description": "The protocol's usual port for its security where none is given."
+          },
+          "security": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Security"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`tls` for an incoming server and `starttls` for an outgoing one where none is given."
+          },
+          "tlsName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServerAuth"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`password` where none is given."
+          }
+        },
+        "required": [
+          "protocol",
+          "host"
+        ],
+        "description": "A server to keep."
+      },
+      "ServerPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "security": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Security"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tlsName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An empty one checks the certificate against the host."
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServerAuth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "A server's change; its protocol stays."
+      },
       "Summary": {
         "type": "object",
         "properties": {
@@ -5070,6 +6079,81 @@
           "unreadCount"
         ],
         "description": "Unread counts across the accounts."
+      },
+      "SystemMailSent": {
+        "type": "object",
+        "properties": {
+          "sent": {
+            "type": "boolean"
+          },
+          "messageId": {
+            "type": "string",
+            "description": "The `Message-ID` it went under, without angle brackets."
+          }
+        },
+        "required": [
+          "sent",
+          "messageId"
+        ],
+        "description": "A system mail that went."
+      },
+      "NewSystemMail": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "type": "integer",
+            "format": "int64",
+            "description": "One of the platform's outgoing servers."
+          },
+          "from": {
+            "type": "string",
+            "description": "The sender's address."
+          },
+          "fromName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name shown with it."
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name of a secret in the platform's space holding `USERNAME` and `PASSWORD`; none for a server that\ntakes mail without a sign-in."
+          },
+          "to": {
+            "type": "string",
+            "description": "The one recipient's address."
+          },
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "html": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "description": "What the mail is, a kebab-case word the log keeps."
+          }
+        },
+        "required": [
+          "server",
+          "from",
+          "to",
+          "subject",
+          "text",
+          "kind"
+        ],
+        "description": "One mail of the platform's own, as the account service sends it (`docs/api.md`, 「System mail」)."
       },
       "WireError": {
         "type": "object",

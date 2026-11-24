@@ -11,9 +11,7 @@ use futures::future::BoxFuture;
 use sqlx::SqlitePool;
 
 use crate::accounts::Account;
-use crate::adapters::servers::{
-  LOGIN, MailAccount, MailEndpoint, PASSWORD, SMTP_HOST, SMTP_PORT, SMTP_TLS_NAME, field, refused_sign_in,
-};
+use crate::adapters::servers::{LOGIN, MailEndpoint, PASSWORD, field, refused_sign_in, servers_of};
 use crate::adapters::{Adapter, Context, Mailbox, Pending, Watch};
 use crate::imap::messages::{Cursor, heads, message_of, settable_flag};
 use crate::imap::part_number;
@@ -36,7 +34,7 @@ use crate::pop3::{DRAFTS, INBOX};
 use crate::routes::downloads::Disposition;
 use crate::routes::requests::{Asked, MailFault};
 use crate::rules::{RulesRun, message_facts, plan_rules, rule_context};
-use crate::wire::{AccountKind, FieldKind, Fields, MessageQuery, SignIn};
+use crate::wire::{AccountKind, FieldKind, KindServers, MessageQuery, Protocol, SignIn};
 use crate::wording::Wording;
 use crate::writing::compose::{Purpose, build_message, new_message_id};
 use crate::writing::drafts::{PartSource, draft_of, resolve_attachments};
@@ -45,22 +43,6 @@ use crate::writing::submission::{self, SendingLimit, original_mark, outgoing, su
 
 /// The kind's name.
 pub const KIND: &str = "pop3-smtp";
-
-const POP3_HOST: &str = "pop3Host";
-const POP3_PORT: &str = "pop3Port";
-const POP3_TLS_NAME: &str = "pop3TlsName";
-
-/// An account's POP3 server, submission server and login, read from its fields.
-fn servers(
-  address: &str,
-  settings: &Fields,
-  secrets: &Fields,
-) -> Result<(MailEndpoint, MailEndpoint, MailAccount), MailFault> {
-  let pop3 = MailEndpoint::of(settings, POP3_HOST, POP3_PORT, POP3_TLS_NAME)?;
-  let smtp = MailEndpoint::of(settings, SMTP_HOST, SMTP_PORT, SMTP_TLS_NAME)?;
-
-  Ok((pop3, smtp, MailAccount::of(address, settings, secrets)?))
-}
 
 /// The refusal of what moves mail on a POP3 account.
 fn not_offered() -> MailFault {
@@ -76,23 +58,21 @@ impl Adapter for Pop3Smtp {
       name: KIND.to_owned(),
       sign_in: SignIn::Password,
       moves: false,
+      servers: Some(KindServers {
+        incoming: Protocol::Pop3,
+        outgoing: Protocol::Smtp,
+      }),
       fields: vec![
-        field(POP3_HOST, FieldKind::Text, true, None),
-        field(POP3_PORT, FieldKind::Port, true, Some("995")),
-        field(POP3_TLS_NAME, FieldKind::Text, false, None),
-        field(SMTP_HOST, FieldKind::Text, true, None),
-        field(SMTP_PORT, FieldKind::Port, true, Some("587")),
-        field(SMTP_TLS_NAME, FieldKind::Text, false, None),
         field(LOGIN, FieldKind::Text, false, None),
         field(PASSWORD, FieldKind::Secret, true, None),
       ],
     }
   }
 
-  fn sign_in<'a>(&'a self, address: &'a str, settings: &'a Fields, secrets: &'a Fields) -> Pending<'a, ()> {
+  fn sign_in<'a>(&'a self, account: &'a Account) -> Pending<'a, ()> {
     Box::pin(async move {
-      let refused = |why: MailFault| refused_sign_in(address, why);
-      let (pop3, smtp, login) = servers(address, settings, secrets).map_err(refused)?;
+      let refused = |why: MailFault| refused_sign_in(&account.address, why);
+      let (pop3, smtp, login) = servers_of(account).map_err(refused)?;
       let mut session = open(&pop3, &login).await.map_err(refused)?;
       let listed = session.listing().await;
 
@@ -103,7 +83,7 @@ impl Adapter for Pop3Smtp {
   }
 
   fn open(&self, account: &Account, context: &Context) -> Result<Arc<dyn Mailbox>, MailFault> {
-    let (pop3, smtp, login) = servers(&account.address, &account.settings, &account.secrets)?;
+    let (pop3, smtp, login) = servers_of(account)?;
 
     Ok(Arc::new(Pop3SmtpMailbox {
       maildrop: Arc::new(Maildrop::new(pop3, login, context.pool.clone(), account.store_key())),

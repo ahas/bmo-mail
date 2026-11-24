@@ -10,9 +10,10 @@ use std::time::Duration;
 
 use bmo_mail::accounts::Keeping;
 use bmo_mail::http::Standing;
+use bmo_mail::servers::{ServerDraft, ServerFields, own_holder};
 use bmo_mail::settings::Settings;
 use bmo_mail::store::Store;
-use bmo_mail::wire::Fields;
+use bmo_mail::wire::{Fields, Protocol, Security};
 use bmo_mail::wording::Wording;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -225,7 +226,24 @@ async fn a_message_that_arrives_while_both_connections_drop_is_still_said() {
     drop_idle_delivering: Some(11),
     ..Server::default()
   }));
-  let port = stand_in(Arc::clone(&server)).await.to_string();
+  let port = stand_in(Arc::clone(&server)).await;
+  let server_id = {
+    let mut connection = standing.store.pool().acquire().await.expect("a connection");
+    let draft = ServerDraft::checked(
+      Protocol::Imap,
+      ServerFields {
+        host: Some("127.0.0.1".to_owned()),
+        port: Some(port),
+        security: Some(Security::None),
+        ..ServerFields::default()
+      },
+    )
+    .expect("the server's settings check");
+
+    bmo_mail::servers::keep(&mut connection, &own_holder("owner-one"), &draft)
+      .await
+      .expect("the server is kept")
+  };
   let account = standing
     .accounts
     .add(
@@ -234,15 +252,10 @@ async fn a_message_that_arrives_while_both_connections_drop_is_still_said() {
         name: "box".to_owned(),
         kind: "imap-smtp".to_owned(),
         address: "box@example.com".to_owned(),
-        settings: fields(&[
-          ("imapHost", "127.0.0.1"),
-          ("imapPort", &port),
-          ("imapTlsName", "-"),
-          ("smtpHost", "127.0.0.1"),
-          ("smtpPort", &port),
-          ("smtpTlsName", "-"),
-        ]),
+        settings: Fields::new(),
         secrets: fields(&[("password", "stand-in")]),
+        incoming_server: Some(server_id),
+        outgoing_server: Some(server_id),
       },
     )
     .await

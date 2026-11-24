@@ -1,16 +1,41 @@
 import type { BrowserContext, Route } from "playwright-core";
 
-import type { Draft, DraftPatch, FolderRole, MailAccount, MailAccountKind, MailAddress, MailFolder, MailLabel, MailMessage, MailRule, MailSettings } from "../../shared/mail";
+import type {
+  Draft,
+  DraftPatch,
+  FolderRole,
+  MailAccount,
+  MailAccountKind,
+  MailAddress,
+  MailFolder,
+  MailLabel,
+  MailMessage,
+  MailRule,
+  MailServer,
+  MailServerPatch,
+  MailSettings,
+  NewMailAccount,
+  NewMailServer,
+  NewMailServerTest,
+} from "../../shared/mail";
 
 // A stand-in for the mail service behind the screen's relay address (docs/api.md): one account of a kind that
 // declares whether its mailbox moves mail between folders, holding the role folders a test names and the folders
 // of its own it names, the labels it names, a few messages in the inbox, three
-// filter rules, the known addresses it names and the drafts the composer writes. It keeps what the screen
-// changes, so a page loaded again reads what an earlier one saved, and it answers only the routes the list, the
-// nav, the settings and the composer ask; any other is answered 404 and counted, so a test sees a route the
-// screen began asking that the stand-in does not hold.
+// filter rules, the known addresses it names and the drafts the composer writes; and the mail servers the owner
+// reaches — a company's incoming and outgoing server the account stands on and the platform's outgoing one — with
+// the servers of the owner's own added, changed and removed, the connection tests asked and the accounts added on
+// them. It keeps what the screen changes, so a page loaded again reads what an earlier one saved, and it answers
+// only the routes the list, the nav, the settings, the composer and the accounts ask; any other is answered 404
+// and counted, so a test sees a route the screen began asking that the stand-in does not hold.
 
 export const ACCOUNT = "box";
+
+// The company holding the servers the account stands on, by its name on the delegation chain.
+export const COMPANY = "Example Company";
+
+// A host a connection test does not reach.
+export const UNREACHED_HOST = "unreached.example.com";
 
 const ROLE_FOLDERS: Array<Pick<MailFolder, "name" | "role">> = [
   { name: "INBOX", role: "inbox" },
@@ -34,6 +59,14 @@ export interface StandIn {
   // The addresses the service knows, found by the words typed.
   known: MailAddress[];
   drafts: Draft[];
+  // The owner's accounts, the one above first.
+  accounts: MailAccount[];
+  // The servers the owner reaches, in the order the service answers them.
+  servers: MailServer[];
+  // The connection tests asked, as they were sent.
+  serverTests: NewMailServerTest[];
+  // The accounts added, as they were sent.
+  added: NewMailAccount[];
   // The routes asked that the stand-in does not answer, as `METHOD path`.
   unanswered: string[];
 }
@@ -75,16 +108,32 @@ export function standIn(): StandIn {
     folders: ["Projects"],
     known: [],
     drafts: [],
+    accounts: [{ ...ACCOUNT_BODY }],
+    servers: [
+      server(1, "imap", "imap.example.com", 993, "tls", COMPANY_HOLDER, 4),
+      server(2, "smtp", "smtp.example.com", 587, "starttls", COMPANY_HOLDER, 4),
+      server(3, "smtp", "relay.example.net", 465, "tls", { link: "platform", name: null }, 0),
+    ],
+    serverTests: [],
+    added: [],
     unanswered: [],
   };
 }
 
+const COMPANY_HOLDER = { link: "unit:7", name: COMPANY };
+
+function server(id: number, protocol: MailServer["protocol"], host: string, port: number, security: MailServer["security"], holder: MailServer["holder"], accountCount: number): MailServer {
+  return { id, protocol, direction: protocol === "smtp" ? "outgoing" : "incoming", name: host, host, port, security, tlsName: null, auth: "password", holder, mayChange: holder.link === "own", accountCount };
+}
+
 const ACCOUNT_BODY: MailAccount = {
   name: ACCOUNT,
-  kind: "imap",
+  kind: "imap-smtp",
   address: "box@example.com",
   position: 1,
   settings: {},
+  incomingServer: 1,
+  outgoingServer: 2,
   unreadCount: 0,
   reachable: true,
 };
@@ -93,9 +142,104 @@ const SETTINGS: MailSettings = { signature: "", undoSendMs: 0, readReceipts: fal
 
 const page = <T>(items: T[]) => ({ items, more: false });
 
-// The kinds the service declares: the account's own alone, where it declares any.
+const PASSWORD_FIELDS: MailAccountKind["fields"] = [
+  { name: "login", kind: "text", required: false, default: null },
+  { name: "password", kind: "secret", required: true, default: null },
+];
+
+// The kinds the service declares, where it declares any: the account's own, moving mail or not as the test says,
+// and the POP3 kind beside it.
 function kinds(state: StandIn): MailAccountKind[] {
-  return state.moves === null ? [] : [{ name: ACCOUNT_BODY.kind, signIn: "password", moves: state.moves, fields: [] }];
+  if (state.moves === null) return [];
+
+  return [
+    { name: ACCOUNT_BODY.kind, signIn: "password", moves: state.moves, servers: { incoming: "imap", outgoing: "smtp" }, fields: PASSWORD_FIELDS },
+    { name: "pop3-smtp", signIn: "password", moves: false, servers: { incoming: "pop3", outgoing: "smtp" }, fields: PASSWORD_FIELDS },
+  ];
+}
+
+const USUAL_PORTS: Record<MailServer["protocol"], Partial<Record<MailServer["security"], number>>> = {
+  imap: { tls: 993, starttls: 143, none: 143 },
+  pop3: { tls: 995, none: 110 },
+  smtp: { tls: 465, starttls: 587, none: 25 },
+};
+
+// A server of the owner's own added, its defaults filled in as the service fills them.
+function addServer(state: StandIn, sent: NewMailServer): MailServer {
+  const security = sent.security ?? (sent.protocol === "smtp" ? "starttls" : "tls");
+  const kept: MailServer = {
+    ...server(Math.max(0, ...state.servers.map((one) => one.id)) + 1, sent.protocol, sent.host, sent.port ?? USUAL_PORTS[sent.protocol][security]!, security, { link: "own", name: null }, 0),
+    name: sent.name ?? sent.host,
+    tlsName: sent.tlsName ?? null,
+    auth: sent.auth ?? "password",
+  };
+
+  state.servers.push(kept);
+
+  return kept;
+}
+
+// What the server routes answer: the servers, an own one added, changed or removed, and a connection test.
+function answerServers(state: StandIn, method: string, parts: string[], query: URLSearchParams, sent: unknown): Answer | null {
+  const [what, id] = parts;
+  const found = state.servers.find((one) => String(one.id) === id);
+
+  if (what === "server-tests" && method === "POST") {
+    const test = sent as NewMailServerTest;
+
+    state.serverTests.push(test);
+
+    return { status: 200, body: { reached: test.host !== UNREACHED_HOST, signedIn: null, failure: test.host === UNREACHED_HOST ? "unreachable" : null } };
+  }
+
+  if (what !== "servers") return null;
+  if (method === "GET" && id === undefined) {
+    const direction = query.get("direction");
+
+    return { status: 200, body: page(state.servers.filter((one) => direction === null || one.direction === direction)) };
+  }
+  if (method === "POST" && id === undefined) return { status: 201, body: addServer(state, sent as NewMailServer) };
+  if (found === undefined || !found.mayChange) return { status: 404, body: { code: "not-found", error: "No such server." } };
+  if (method === "PATCH") {
+    Object.assign(found, Object.fromEntries(Object.entries(sent as MailServerPatch).filter(([, value]) => value !== null && value !== undefined)));
+
+    return { status: 200, body: found };
+  }
+  if (method === "DELETE") {
+    if (found.accountCount > 0) return { status: 409, body: { code: "server-in-use", error: "Accounts stand on the server." } };
+
+    state.servers = state.servers.filter((one) => one !== found);
+
+    return { status: 204 };
+  }
+
+  return null;
+}
+
+// An account added on the servers it names, standing on them from then on.
+function addAccount(state: StandIn, sent: NewMailAccount): Answer {
+  const incoming = state.servers.find((one) => one.id === sent.incomingServer);
+  const outgoing = state.servers.find((one) => one.id === sent.outgoingServer);
+
+  if (incoming === undefined || outgoing === undefined) return { status: 422, body: { code: "unknown-server", error: "No such server." } };
+
+  const address = sent.address ?? "";
+  const added: MailAccount = {
+    ...ACCOUNT_BODY,
+    name: sent.name ?? address.split("@")[0]!,
+    kind: sent.kind ?? ACCOUNT_BODY.kind,
+    address,
+    position: state.accounts.length + 1,
+    incomingServer: incoming.id,
+    outgoingServer: outgoing.id,
+  };
+
+  state.added.push(sent);
+  state.accounts.push(added);
+  incoming.accountCount += 1;
+  outgoing.accountCount += 1;
+
+  return { status: 201, body: added };
 }
 
 function folders(state: StandIn): MailFolder[] {
@@ -121,12 +265,17 @@ type Answer = { status: number; body?: unknown };
 function answer(state: StandIn, method: string, path: string, query: URLSearchParams, sent: unknown): Answer | null {
   const parts = path.split("/").filter((part) => part !== "").map(decodeURIComponent);
 
-  if (method === "GET" && path === "/accounts") return { status: 200, body: page([ACCOUNT_BODY]) };
-  if (method === "GET" && path === "/summary") return { status: 200, body: { accounts: [ACCOUNT_BODY], unreadCount: 0 } };
+  if (method === "GET" && path === "/accounts") return { status: 200, body: page(state.accounts) };
+  if (method === "POST" && path === "/accounts") return addAccount(state, sent as NewMailAccount);
+  if (method === "GET" && path === "/summary") return { status: 200, body: { accounts: state.accounts, unreadCount: 0 } };
   if (method === "GET" && path === "/account-kinds") return { status: 200, body: page(kinds(state)) };
+
+  const serverAnswer = answerServers(state, method, parts, query, sent);
+
+  if (serverAnswer !== null) return serverAnswer;
   // No sender has a logo, which the service answers as it does a domain it found none for.
   if (method === "GET" && parts[0] === "avatars") return { status: 404, body: { code: "not-found", error: "No logo." } };
-  if (parts[0] !== "accounts" || parts[1] !== ACCOUNT) return null;
+  if (parts[0] !== "accounts" || !state.accounts.some((one) => one.name === parts[1])) return null;
 
   const [, , what, id] = parts;
 
@@ -235,7 +384,9 @@ export async function standBehind(context: BrowserContext, state: StandIn): Prom
         return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ code: "not-found", error: "Not in the stand-in." }) });
       }
 
-      return route.fulfill({ status: given.status, contentType: "application/json", body: JSON.stringify(given.body ?? null) });
+      if (given.body === undefined) return route.fulfill({ status: given.status });
+
+      return route.fulfill({ status: given.status, contentType: "application/json", body: JSON.stringify(given.body) });
     },
   );
 }

@@ -1,86 +1,46 @@
 <template>
-  <!-- One's own mail accounts (docs/mail.md, 「The screen」): listed with their kind and address, each
-       removed from its row after a second press, and one added from a kind the service declares. A kind
-       that signs in by password draws its form from the fields it declares; one that signs in by
-       authorization offers the button that opens its provider's page. The screen names a kind and its
-       fields by the pack's words under their names and knows nothing else of any kind. -->
-  <div class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-    <section class="flex flex-col gap-3 border-b border-default p-4" aria-labelledby="mail-accounts-list">
-      <h3 id="mail-accounts-list" class="text-lg font-semibold">{{ $t("mail.title.accounts") }}</h3>
-      <p v-if="props.accounts.length === 0" class="text-sm text-muted">{{ $t("mail.status.no_accounts") }}</p>
-      <ul class="flex flex-col gap-2">
-        <li v-for="account in props.accounts" :key="account.name" class="flex items-center gap-2 rounded-md border border-default px-3 py-2">
-          <div class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-sm font-medium" :title="account.address">{{ account.address }}</span>
-            <span class="truncate text-xs text-muted">{{ account.name }} · {{ kindName(account.kind) }}</span>
-          </div>
-          <template v-if="removing === account.name">
-            <UButton size="sm" color="neutral" variant="ghost" :label="$t('common.action.cancel')" @click="removing = null" />
-            <UButton size="sm" color="error" :label="$t('mail.action.account_remove_confirm')" :loading="busy === account.name" @click="remove(account)" />
-          </template>
-          <UTooltip v-else :text="$t('mail.action.account_remove')">
-            <UButton size="sm" color="neutral" variant="ghost" square icon="i-material-symbols-delete-outline" :aria-label="$t('mail.action.account_remove')" @click="removing = account.name" />
-          </UTooltip>
-        </li>
-      </ul>
-      <p v-if="removing !== null" class="text-sm text-muted" role="status">{{ $t("mail.message.account_remove_warning") }}</p>
-    </section>
+  <!-- The accounts modal's body (docs/mail.md, 「The screen」): two tabs at its head, the owner's own accounts and
+       the servers they reach. The kinds the service declares and the servers are read once here and shared by
+       both; the server form stands over either, opened from the servers tab's add and edit and from the account
+       form's server selects. Both tabs stay drawn while the other stands, so an account half written keeps what
+       it holds. -->
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex h-9 shrink-0 items-stretch pointer-coarse:h-10" :class="TAB_ROW_LINE">
+      <UTabs v-model="tab" :items="tabItems" variant="link" :content="false" :ui="TAB_ROW_UI" class="min-w-0 flex-1" />
+      <div v-if="tab === 'servers'" class="flex shrink-0 items-center border-s border-default px-1">
+        <CreateButton contained :label="$t('mail.action.server_add')" @click="openForm(null, SERVER_PROTOCOLS)" />
+      </div>
+    </div>
 
-    <section class="flex flex-col gap-3 p-4" aria-labelledby="mail-accounts-add">
-      <h3 id="mail-accounts-add" class="text-lg font-semibold">{{ $t("mail.action.account_add") }}</h3>
-      <p v-if="failure !== ''" role="alert" class="text-sm text-error">{{ failure }}</p>
-      <ContentSkeleton v-if="kinds === null" :rows="4" :label="$t('mail.status.kinds_loading')">
-        <div class="flex flex-col gap-2">
-          <SkeletonBar v-for="row in 4" :key="row" class="h-8 w-full" />
-        </div>
-      </ContentSkeleton>
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+      <div v-show="tab === 'accounts'">
+        <p v-if="kindsFailure !== ''" role="alert" class="px-4 pt-4 text-sm text-error">{{ kindsFailure }}</p>
+        <MailAccountList
+          v-model:dirty="dirty"
+          :accounts="props.accounts"
+          :kinds="kinds"
+          :servers="servers"
+          :new-server="newServer"
+          @added="emit('added', $event)"
+          @removed="emit('removed')"
+        />
+      </div>
+      <MailServerList v-show="tab === 'servers'" :servers="servers" :failure="serversFailure" @edit="openForm($event, [$event.protocol])" @removed="readServers" />
+    </div>
 
-      <form v-else-if="kind !== null" class="flex flex-col gap-3" @submit.prevent="add">
-        <UFormField :label="$t('mail.label.account_kind')">
-          <ChoiceSelect v-model="chosenKind" :items="kindItems" value-key="value" class="w-full" />
-        </UFormField>
-
-        <template v-if="kind.signIn === 'password'">
-          <UFormField :label="$t('mail.label.account_address')" required>
-            <UInput v-model="address" type="email" autocomplete="off" class="w-full" />
-          </UFormField>
-          <UFormField :label="$t('mail.label.account_name')" :hint="$t('mail.label.optional')">
-            <UInput v-model="name" autocomplete="off" :placeholder="localPart" class="w-full" />
-          </UFormField>
-          <UFormField v-for="field in kind.fields" :key="field.name" :label="fieldName(field.name)" :hint="field.required ? undefined : $t('mail.label.optional')" :required="field.required">
-            <UInput
-              v-model="values[field.name]"
-              :type="field.kind === 'secret' ? 'password' : field.kind === 'port' ? 'number' : 'text'"
-              :autocomplete="field.kind === 'secret' ? 'new-password' : 'off'"
-              class="w-full"
-            />
-          </UFormField>
-          <div class="flex justify-end">
-            <UButton type="submit" :label="$t('mail.action.account_add')" :loading="busy === 'add'" />
-          </div>
-        </template>
-
-        <template v-else>
-          <UFormField :label="$t('mail.label.account_name')" :hint="$t('mail.label.optional')">
-            <UInput v-model="name" autocomplete="off" class="w-full" />
-          </UFormField>
-          <div class="flex justify-end">
-            <UButton type="submit" :label="$t('mail.action.account_sign_in', { kind: kindName(kind.name) })" :loading="busy === 'add'" />
-          </div>
-        </template>
-      </form>
-    </section>
+    <MailServerForm v-model:open="formOpen" :server="editing" :protocols="formProtocols" @saved="onSaved" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { addMailAccount, mailAccountKinds, removeMailAccount } from "../domain/mail-api";
-import { beginAuthorization } from "../domain/mail-authorization";
+import { TAB_ROW_LINE, TAB_ROW_UI } from "bmo-ui/app/domain/tabs";
+
+import { mailAccountKinds, mailServers } from "../domain/mail-api";
 import { mailFailure } from "../domain/mail-refusals";
+import { SERVER_PROTOCOLS } from "../domain/mail-servers";
 
-import type { MailAccount, MailAccountKind } from "../../shared/mail";
+import type { MailAccount, MailAccountKind, MailServer, ServerDirection, ServerProtocol } from "../../shared/mail";
 
-const { t, te } = useI18n();
 const props = defineProps<{
   accounts: MailAccount[];
 }>();
@@ -92,110 +52,80 @@ const emit = defineEmits<{
   removed: [];
 }>();
 
+// Whether the account form holds what is not yet added.
+const dirty = defineModel<boolean>("dirty", { default: false });
+
+const { t } = useI18n();
+
+const tab = ref<"accounts" | "servers">("accounts");
+const tabItems = computed(() => [
+  { label: t("mail.label.tab_accounts"), value: "accounts" },
+  { label: t("mail.label.tab_servers"), value: "servers" },
+]);
+
 const kinds = ref<MailAccountKind[] | null>(null);
-const chosenKind = ref("");
-const address = ref("");
-const name = ref("");
-const values = ref<Record<string, string>>({});
-const removing = ref<string | null>(null);
-const busy = ref<string | null>(null);
-const failure = ref("");
+const servers = ref<MailServer[] | null>(null);
+const kindsFailure = ref("");
+const serversFailure = ref("");
 
-const kind = computed(() => kinds.value?.find((one) => one.name === chosenKind.value) ?? null);
-const kindItems = computed(() => (kinds.value ?? []).map((one) => ({ label: kindName(one.name), value: one.name })));
-const localPart = computed(() => address.value.split("@")[0] ?? "");
+const formOpen = ref(false);
+const editing = ref<MailServer | null>(null);
+const formProtocols = ref<readonly ServerProtocol[]>(SERVER_PROTOCOLS);
+// What waits on the server form opened from an account's server select: the server it kept, or null.
+let waiting: ((server: MailServer | null) => void) | null = null;
 
-// A kind's or a field's words where the pack holds them, else the name the service declares.
-function kindName(name: string): string {
-  const key = `mail.account_kind.${name}`;
-
-  return te(key) ? t(key) : name;
+async function readServers(): Promise<void> {
+  try {
+    servers.value = await mailServers();
+    serversFailure.value = "";
+  } catch (error) {
+    servers.value ??= [];
+    serversFailure.value = mailFailure(t, error, t("mail.error.servers_failed"));
+  }
 }
 
-function fieldName(name: string): string {
-  const key = `mail.account_field.${name}`;
-
-  return te(key) ? t(key) : name;
+function openForm(server: MailServer | null, protocols: readonly ServerProtocol[]): void {
+  editing.value = server;
+  formProtocols.value = protocols;
+  formOpen.value = true;
 }
 
-// A kind chosen starts its form over, each field at its default.
-watch(kind, (chosen) => {
-  values.value = Object.fromEntries((chosen?.fields ?? []).map((field) => [field.name, field.default ?? ""]));
+// A new server for an account's select: of the protocols a declared kind reaches in that direction.
+function newServer(direction: ServerDirection): Promise<MailServer | null> {
+  const protocols = SERVER_PROTOCOLS.filter((protocol) => (kinds.value ?? []).some((kind) => kind.servers?.[direction] === protocol));
+
+  waiting?.(null);
+  openForm(null, protocols);
+
+  return new Promise((resolve) => (waiting = resolve));
+}
+
+async function onSaved(server: MailServer): Promise<void> {
+  const answer = waiting;
+
+  waiting = null;
+  await readServers();
+  answer?.(server);
+}
+
+// The form closed without keeping anything answers what waits on it with nothing.
+watch(formOpen, (standing) => {
+  if (standing) return;
+
+  waiting?.(null);
+  waiting = null;
 });
 
-async function run(what: string, work: () => Promise<void>, fallback: string): Promise<void> {
-  busy.value = what;
-  failure.value = "";
-
-  try {
-    await work();
-  } catch (error) {
-    failure.value = mailFailure(t, error, fallback);
-  } finally {
-    busy.value = null;
-  }
-}
-
-function add(): Promise<void> {
-  const chosen = kind.value;
-
-  if (chosen === null) return Promise.resolve();
-
-  return run(
-    "add",
-    async () => {
-      if (chosen.signIn !== "password") {
-        await beginAuthorization(chosen.name, name.value.trim());
-        return;
-      }
-
-      const settings: Record<string, string> = {};
-      const secrets: Record<string, string> = {};
-
-      for (const field of chosen.fields) {
-        const value = String(values.value[field.name] ?? "").trim();
-
-        if (value === "") continue;
-        if (field.kind === "secret") secrets[field.name] = value;
-        else settings[field.name] = value;
-      }
-
-      const added = await addMailAccount({
-        kind: chosen.name,
-        address: address.value.trim(),
-        ...(name.value.trim() === "" ? {} : { name: name.value.trim() }),
-        settings,
-        secrets,
-      });
-
-      address.value = "";
-      name.value = "";
-      values.value = Object.fromEntries(chosen.fields.map((field) => [field.name, field.default ?? ""]));
-      emit("added", added.name);
-    },
-    t("mail.error.account_add_failed"),
-  );
-}
-
-function remove(account: MailAccount): Promise<void> {
-  return run(
-    account.name,
-    async () => {
-      await removeMailAccount(account.name);
-      removing.value = null;
-      emit("removed");
-    },
-    t("mail.error.account_remove_failed"),
-  );
-}
-
 onMounted(async () => {
+  const reading = readServers();
+
   try {
     kinds.value = await mailAccountKinds();
-    chosenKind.value = kinds.value[0]?.name ?? "";
   } catch (error) {
     kinds.value = [];
-    failure.value = mailFailure(t, error, t("mail.error.kinds_failed"));
+    kindsFailure.value = mailFailure(t, error, t("mail.error.kinds_failed"));
   }
+
+  await reading;
 });
 </script>

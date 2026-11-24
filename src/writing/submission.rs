@@ -17,12 +17,10 @@ use crate::imap::session::MailSession;
 use crate::imap::{append_landing, store_flags, uid_search};
 use crate::mail::{Draft, DraftKind, FolderRole, MailAddress, MailRef};
 use crate::routes::requests::{Asked, MailFault};
+use crate::wire::Security;
 use crate::writing::compose::{Purpose, ResolvedAttachment, build_message, new_message_id};
 use crate::writing::drafts::{PartSource, discard_draft, draft_named, resolve_attachments};
 
-/// The submission port that speaks TLS from the first byte; any other with a TLS name is upgraded with
-/// STARTTLS.
-const IMPLICIT_TLS_PORT: u16 = 465;
 /// The span the SMTP client takes for each step of a conversation, given as one it never reaches: a step
 /// waits for the server's answer, and the connection's keep-alive probes break it where the server is gone
 /// (`docs/mail.md`, 「Connections and the watcher」).
@@ -48,10 +46,10 @@ async fn greeted<T: MailStream>(client: &mut SmtpClient<T>) -> Result<(), MailFa
     .map_err(MailFault::server)
 }
 
-/// A conversation opened with the submission server: over TLS on port 465, upgraded with STARTTLS on
-/// another port with a TLS name, and plain where the TLS name is `-`; greeted, its capabilities asked, and
-/// where a login is given, signed in as it.
-async fn conversation(
+/// A conversation opened with the submission server: over TLS from the first byte, upgraded with STARTTLS, or
+/// plain, as the server's security says; greeted, its capabilities asked, and where a login is given and the
+/// server signs in, signed in as it. A sign-in the server refuses is `sign-in-failed`.
+pub async fn conversation(
   endpoint: &MailEndpoint,
   login: Option<&MailAccount>,
 ) -> Result<(Submission, EhloResponse<String>), MailFault> {
@@ -61,18 +59,21 @@ async fn conversation(
     stream: endpoint.connect().await?,
     timeout: UNBOUNDED,
   };
-  let mut client = match endpoint.tls_name.as_deref() {
-    None => {
+  let mut client = match endpoint.security {
+    Security::None => {
       greeted(&mut opened).await?;
       boxed(opened)
     }
-    Some(name) if endpoint.port == IMPLICIT_TLS_PORT => {
-      let mut client = opened.into_tls(&builder.tls_connector, name).await.map_err(MailFault::server)?;
+    Security::Tls => {
+      let mut client = opened
+        .into_tls(&builder.tls_connector, &endpoint.tls_name)
+        .await
+        .map_err(MailFault::server)?;
 
       greeted(&mut client).await?;
       boxed(client)
     }
-    Some(name) => {
+    Security::Starttls => {
       greeted(&mut opened).await?;
 
       if !opened
@@ -85,15 +86,25 @@ async fn conversation(
       }
 
       // After STARTTLS the server greets no more; the conversation goes on over TLS.
-      boxed(opened.start_tls(&builder.tls_connector, name).await.map_err(MailFault::server)?)
+      boxed(
+        opened
+          .start_tls(&builder.tls_connector, &endpoint.tls_name)
+          .await
+          .map_err(MailFault::server)?,
+      )
     }
   };
   let capabilities = client.capabilities(&builder.local_host, false).await.map_err(MailFault::server)?;
 
-  if let Some(login) = login {
+  if let Some(login) = login.filter(|_| endpoint.signs_in()) {
     let credentials = Credentials::new(login.login.as_str(), login.password.as_str());
 
-    client.authenticate(&credentials, &capabilities).await.map_err(MailFault::server)?;
+    client.authenticate(&credentials, &capabilities).await.map_err(|why| {
+      MailFault::from(Asked::rule(
+        "sign-in-failed",
+        format!("the submission server refused the sign-in: {why}"),
+      ))
+    })?;
   }
 
   Ok((client, capabilities))

@@ -10,6 +10,7 @@ use crate::accounts::file::read_accounts_file;
 use crate::accounts::{ACCOUNT_TABLES, Accounts, Keeping, keep};
 use crate::adapters::imap_smtp;
 use crate::routes::requests::MailFault;
+use crate::servers::{kept_or_keep, own_holder};
 use crate::settings::Settings;
 
 /// The name the accounts file's import is recorded under.
@@ -36,7 +37,7 @@ async fn recorded(pool: &SqlitePool) -> Result<Option<String>, MailFault> {
   )
 }
 
-/// Carries every account of the earlier administrator's key, and its events, to the key the settings name
+/// Carries every account of the earlier administrator's key, its own servers and its events, to the key the settings name
 /// now. An account whose name the new key already holds stays where it was, said in the log by its name.
 async fn follow(pool: &SqlitePool, earlier: &str, now: &str) -> Result<(), MailFault> {
   let mut transaction = pool.begin().await?;
@@ -62,6 +63,11 @@ async fn follow(pool: &SqlitePool, earlier: &str, now: &str) -> Result<(), MailF
   sqlx::query("UPDATE events SET owner = ? WHERE owner = ?")
     .bind(now)
     .bind(earlier)
+    .execute(&mut *transaction)
+    .await?;
+  sqlx::query("UPDATE servers SET holder = ? WHERE holder = ?")
+    .bind(own_holder(now))
+    .bind(own_holder(earlier))
     .execute(&mut *transaction)
     .await?;
   sqlx::query("UPDATE imports SET owner = ? WHERE source = ?")
@@ -119,14 +125,20 @@ pub async fn import_accounts_file(
     .fetch_one(&mut *transaction)
     .await?;
 
+  let holder = own_holder(administrator);
+  let incoming = kept_or_keep(&mut transaction, &holder, &config.imap).await?;
+  let outgoing = kept_or_keep(&mut transaction, &holder, &config.smtp).await?;
+
   for (index, one) in config.accounts.iter().enumerate() {
-    let (settings, secrets_of) = imap_smtp::file_fields(&config.imap, &config.smtp, &one.account);
+    let (settings, secrets_of) = imap_smtp::file_fields(&one.account);
     let keeping = Keeping {
       name: one.key.clone(),
       kind: imap_smtp::KIND.to_owned(),
       address: one.account.address.clone(),
       settings,
       secrets: secrets_of,
+      incoming_server: Some(incoming),
+      outgoing_server: Some(outgoing),
     };
     let position = first.unwrap_or(0) + index as i64 + 1;
     let id = keep(&mut transaction, secrets, administrator, &keeping, position)

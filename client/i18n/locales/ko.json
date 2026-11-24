@@ -1,15 +1,6 @@
 {
   "mail": {
     "account_field": {
-      "imapHost": "IMAP 서버",
-      "imapPort": "IMAP 포트",
-      "imapTlsName": "IMAP 인증서 이름",
-      "pop3Host": "POP3 서버",
-      "pop3Port": "POP3 포트",
-      "pop3TlsName": "POP3 인증서 이름",
-      "smtpHost": "SMTP 서버",
-      "smtpPort": "SMTP 포트",
-      "smtpTlsName": "SMTP 인증서 이름",
       "login": "로그인 아이디",
       "password": "비밀번호"
     },
@@ -18,6 +9,20 @@
       "pop3-smtp": "POP3/SMTP",
       "gmail": "Gmail",
       "graph": "Microsoft 365"
+    },
+    "server_protocol": {
+      "imap": "IMAP",
+      "pop3": "POP3",
+      "smtp": "SMTP"
+    },
+    "server_security": {
+      "tls": "SSL/TLS",
+      "starttls": "STARTTLS",
+      "none": "암호화 없음"
+    },
+    "server_auth": {
+      "password": "비밀번호",
+      "none": "없음"
     },
     "action": {
       "account_add": "계정 추가",
@@ -87,7 +92,12 @@
       "undo": "실행취소",
       "unread_only": "안읽음만",
       "unstar": "별표 해제",
-      "remove_address_named": "{address} 제거"
+      "remove_address_named": "{address} 제거",
+      "server_add": "서버 추가",
+      "server_edit": "편집",
+      "server_remove": "서버 삭제",
+      "server_remove_confirm": "삭제",
+      "server_test": "연결 테스트"
     },
     "aria": {
       "accounts": "계정",
@@ -180,7 +190,17 @@
       "unknown-label": "라벨을 찾을 수 없습니다.",
       "unknown-message": "메일을 찾을 수 없습니다.",
       "unstar_failed": "별표를 해제하지 못했습니다.",
-      "upstream-failed": "메일 서버가 응답하지 않습니다."
+      "upstream-failed": "메일 서버가 응답하지 않습니다.",
+      "servers_failed": "메일 서버를 불러오지 못했습니다.",
+      "server_save_failed": "서버를 저장하지 못했습니다.",
+      "server_remove_failed": "서버를 삭제하지 못했습니다.",
+      "server_test_failed": "연결을 테스트하지 못했습니다.",
+      "server-in-use": "사용 중인 계정이 있어 삭제할 수 없습니다.",
+      "unknown-server": "선택할 수 없는 서버입니다.",
+      "server-mismatch": "계정 종류와 맞지 않는 서버입니다.",
+      "locked": "상위 조직이 잠가 두어 바꿀 수 없습니다.",
+      "forbidden": "권한이 없습니다.",
+      "unknown-secret": "저장된 비밀 정보를 찾을 수 없습니다."
     },
     "label": {
       "account_address": "메일 주소",
@@ -279,7 +299,24 @@
       "unread": "안읽음",
       "view_label": "라벨",
       "view_search": "검색",
-      "view_starred": "별표"
+      "view_starred": "별표",
+      "tab_accounts": "계정",
+      "tab_servers": "서버",
+      "account_by_servers": "메일 서버",
+      "incoming_server": "받는 서버",
+      "outgoing_server": "보내는 서버",
+      "server_new": "새 서버",
+      "server_protocol": "프로토콜",
+      "server_name": "이름",
+      "server_host": "호스트",
+      "server_port": "포트",
+      "server_security": "암호화",
+      "server_tls_name": "인증서 이름",
+      "server_auth": "인증",
+      "holder_own": "내 서버",
+      "holder_platform": "플랫폼",
+      "server_accounts": "계정 {n}개",
+      "default_value": "{value} (기본값)"
     },
     "message": {
       "account_remove_warning": "이 계정의 라벨, 필터와 설정도 함께 지워집니다. 메일 서버의 메일은 그대로 남습니다.",
@@ -334,7 +371,12 @@
       "saving": "저장 중",
       "sending": "보내는 중",
       "settings_loading": "설정 불러오는 중…",
-      "uploading": "업로드 중"
+      "uploading": "업로드 중",
+      "servers_loading": "메일 서버 불러오는 중…",
+      "no_servers": "서버 없음",
+      "server_reached": "연결됨",
+      "server_unreached": "연결 안 됨",
+      "server_sign_in_failed": "로그인 실패"
     },
     "title": {
       "accounts": "메일 계정",
@@ -346,7 +388,9 @@
       "receipts": "읽음 확인",
       "screen": "메일",
       "signature": "서명",
-      "spam_senders": "스팸 발신자"
+      "spam_senders": "스팸 발신자",
+      "server_add": "서버 추가",
+      "server_edit": "서버 편집"
     }
   }
 }

@@ -1,8 +1,8 @@
-//! The servers an account that signs in by password names, as its fields hold them (`docs/mail.md`,
-//! 「Accounts and credentials」): each server's host, port and the name its certificate is checked against, and
-//! the login and password the account signs in with. A connection to one carries keep-alive probes and runs over
-//! TLS checked against the web's root certificates, or plain where the TLS name is `-` (`docs/mail.md`,
-//! 「Connections and the watcher」).
+//! The servers an account that signs in by password is reached through (`docs/mail.md`, 「Mail servers」): each
+//! server's host, port, security and the name its certificate is checked against, and the login and password the
+//! account signs in with. A connection to one carries keep-alive probes and runs over TLS checked against the
+//! web's root certificates, or plain where the server's security is none (`docs/mail.md`, 「Connections and the
+//! watcher」).
 
 use std::fmt::{self, Debug};
 use std::sync::{Arc, LazyLock};
@@ -15,18 +15,13 @@ use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 
+use crate::accounts::Account;
 use crate::routes::requests::{Asked, MailFault};
-use crate::wire::{FieldKind, Fields, KindField};
+use crate::wire::{FieldKind, Fields, KindField, Security, ServerAuth};
 
-/// The TLS name that means a plain connection, which only a stand-in server uses.
-pub const PLAIN: &str = "-";
 /// The fields every such account names its login by.
 pub const LOGIN: &str = "login";
 pub const PASSWORD: &str = "password";
-/// The fields every such account names its submission server by.
-pub const SMTP_HOST: &str = "smtpHost";
-pub const SMTP_PORT: &str = "smtpPort";
-pub const SMTP_TLS_NAME: &str = "smtpTlsName";
 
 /// How long a connection to a mail server stays silent before the first keep-alive probe asks whether the
 /// server is still there, and how far apart the probes after it go.
@@ -62,14 +57,17 @@ pub async fn tls(stream: TcpStream, name: &str) -> Result<Box<dyn MailStream>, M
   Ok(Box::new(stream))
 }
 
-/// A server an account names.
+/// A server an account names, as a connection is opened to it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MailEndpoint {
   pub host: String,
   pub port: u16,
-  /// The name the server's certificate is checked against, or none for a plain connection, which only a
-  /// stand-in server uses.
-  pub tls_name: Option<String>,
+  /// How the connection is secured.
+  pub security: Security,
+  /// The name the server's certificate is checked against.
+  pub tls_name: String,
+  /// How the server is signed in to.
+  pub auth: ServerAuth,
 }
 
 impl MailEndpoint {
@@ -84,42 +82,23 @@ impl MailEndpoint {
     Ok(tcp)
   }
 
-  /// A connection to the server that speaks TLS from its first byte, or plain where the TLS name is `-`.
+  /// A connection that speaks TLS from its first byte, or a plain one, for a protocol whose client upgrades no
+  /// session: POP3's.
   pub async fn connect_secured(&self) -> Result<Box<dyn MailStream>, MailFault> {
     let tcp = self.connect().await?;
 
-    match self.tls_name.as_deref() {
-      None => Ok(Box::new(tcp)),
-      Some(name) => tls(tcp, name).await,
+    match self.security {
+      Security::None => Ok(Box::new(tcp)),
+      Security::Tls => tls(tcp, &self.tls_name).await,
+      Security::Starttls => {
+        Err(MailFault::server("the server's protocol upgrades no session with STARTTLS"))
+      }
     }
   }
 
-  /// A server of the settings: its host, its port, and its TLS name — the host where none is written, none
-  /// where it is `-`.
-  pub fn of(settings: &Fields, host: &str, port: &str, tls_name: &str) -> Result<Self, MailFault> {
-    let unread = || MailFault::server("the account's servers do not read");
-    let host = settings.get(host).filter(|host| !host.is_empty()).ok_or_else(unread)?.clone();
-    let port = settings
-      .get(port)
-      .and_then(|port| port.parse::<u16>().ok())
-      .filter(|port| *port > 0)
-      .ok_or_else(unread)?;
-    let tls_name = match settings.get(tls_name).map(String::as_str) {
-      Some(PLAIN) => None,
-      Some(name) if !name.is_empty() => Some(name.to_owned()),
-      _ => Some(host.clone()),
-    };
-
-    Ok(Self {
-      host,
-      port,
-      tls_name,
-    })
-  }
-
-  /// The TLS name as a field keeps it: `-` for a plain connection.
-  pub fn tls_field(&self) -> String {
-    self.tls_name.clone().unwrap_or_else(|| PLAIN.to_owned())
+  /// Whether the server is signed in to with the account's login.
+  pub fn signs_in(&self) -> bool {
+    self.auth == ServerAuth::Password
   }
 }
 
@@ -160,6 +139,24 @@ impl MailAccount {
       password,
     })
   }
+}
+
+/// An account's incoming server, outgoing server and login, as the servers it names and its fields hold them.
+pub fn servers_of(account: &Account) -> Result<(MailEndpoint, MailEndpoint, MailAccount), MailFault> {
+  let incoming = account
+    .incoming
+    .as_ref()
+    .ok_or_else(|| MailFault::server("the account names no incoming server"))?;
+  let outgoing = account
+    .outgoing
+    .as_ref()
+    .ok_or_else(|| MailFault::server("the account names no outgoing server"))?;
+
+  Ok((
+    incoming.endpoint(),
+    outgoing.endpoint(),
+    MailAccount::of(&account.address, &account.settings, &account.secrets)?,
+  ))
 }
 
 /// One field a kind declares.

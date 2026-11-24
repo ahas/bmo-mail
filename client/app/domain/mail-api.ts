@@ -17,11 +17,16 @@ import type {
   MailMessagePage,
   MailRule,
   MailSend,
+  MailServer,
+  MailServerPatch,
+  MailServerTest,
   MailSettings,
   MailSettingsPatch,
   MailSummary,
   MailThread,
   NewMailAccount,
+  NewMailServer,
+  NewMailServerTest,
   NewRule,
   RulePatch,
 } from "../../shared/mail";
@@ -77,6 +82,29 @@ export async function removeMailAccount(name: string): Promise<void> {
 
 export function startAuthorization(kind: string, returnTo: string): Promise<MailAuthorization> {
   return $fetch<MailAuthorization>(mailAddress("/authorizations"), { method: "POST", body: { kind, returnTo } });
+}
+
+// The mail servers the owner reaches (docs/api.md, 「Servers」), their organisation's first, then the platform's,
+// then their own; a server of their own added, changed or removed; and a server tested as a form holds it,
+// keeping nothing.
+export async function mailServers(): Promise<MailServer[]> {
+  return (await $fetch<Page<MailServer>>(mailAddress("/servers"))).items;
+}
+
+export function addMailServer(server: NewMailServer): Promise<MailServer> {
+  return $fetch<MailServer>(mailAddress("/servers"), { method: "POST", body: server });
+}
+
+export function changeMailServer(id: number, patch: MailServerPatch): Promise<MailServer> {
+  return $fetch<MailServer>(mailAddress(`/servers/${id}`), { method: "PATCH", body: patch });
+}
+
+export async function removeMailServer(id: number): Promise<void> {
+  await $fetch(mailAddress(`/servers/${id}`), { method: "DELETE" });
+}
+
+export function testMailServer(test: NewMailServerTest): Promise<MailServerTest> {
+  return $fetch<MailServerTest>(mailAddress("/server-tests"), { method: "POST", body: test });
 }
 
 // What a change of messages asks for: flags set and taken off, labels added and taken away, a folder to

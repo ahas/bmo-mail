@@ -11,9 +11,13 @@ use bmo_mail::accounts::{Account, Keeping};
 use bmo_mail::client::{ClientFailure, MailClient};
 use bmo_mail::http::{Standing, router};
 use bmo_mail::secrets::{Secrets, SecretsError};
+use bmo_mail::servers::{ServerDraft, ServerFields, keep, own_holder};
 use bmo_mail::settings::Settings;
 use bmo_mail::store::Store;
-use bmo_mail::wire::{AccountPatch, EventQuery, Fields, ListQuery, NewAccount, NewAuthorization, Role};
+use bmo_mail::wire::{
+  AccountPatch, EventQuery, Fields, ListQuery, NewAccount, NewAuthorization, NewServer, Protocol, Role,
+  Security,
+};
 use bmo_mail::wording::Wording;
 
 const TOKEN: &str = "test-token";
@@ -56,19 +60,44 @@ fn fields(pairs: &[(&str, &str)]) -> Fields {
   pairs.iter().map(|(name, value)| ((*name).to_owned(), (*value).to_owned())).collect()
 }
 
-/// An `imap-smtp` account's fields at a server that does not answer.
-fn unanswered() -> (Fields, Fields) {
-  let port = closed_port().to_string();
-  let settings = fields(&[
-    ("imapHost", "127.0.0.1"),
-    ("imapPort", &port),
-    ("imapTlsName", "-"),
-    ("smtpHost", "127.0.0.1"),
-    ("smtpPort", &port),
-    ("smtpTlsName", "-"),
-  ]);
+/// A server of a protocol on this machine, plain, at a port nothing listens on.
+fn unanswered(protocol: Protocol) -> NewServer {
+  NewServer {
+    link: None,
+    protocol,
+    name: None,
+    host: "127.0.0.1".to_owned(),
+    port: Some(closed_port()),
+    security: Some(Security::None),
+    tls_name: None,
+    auth: None,
+  }
+}
 
-  (settings, fields(&[("password", "not-a-real-one")]))
+/// An owner's own IMAP and submission servers that do not answer, kept in the store: their ids.
+async fn unanswered_servers(standing: &Standing, owner: &str) -> (i64, i64) {
+  let mut connection = standing.store.pool().acquire().await.expect("a connection");
+  let kept = |protocol: Protocol| {
+    let server = unanswered(protocol);
+
+    ServerDraft::checked(
+      protocol,
+      ServerFields {
+        host: Some(server.host),
+        port: server.port,
+        security: server.security,
+        ..ServerFields::default()
+      },
+    )
+    .expect("the server's settings check")
+  };
+  let (imap, smtp) = (kept(Protocol::Imap), kept(Protocol::Smtp));
+  let holder = own_holder(owner);
+
+  (
+    keep(&mut connection, &holder, &imap).await.expect("the IMAP server is kept"),
+    keep(&mut connection, &holder, &smtp).await.expect("the submission server is kept"),
+  )
 }
 
 /// A service answering on a port of its own, and its standing.
@@ -97,8 +126,8 @@ fn refused(failure: ClientFailure) -> (u16, String) {
   }
 }
 
-async fn keep(standing: &Standing, owner: &str, name: &str) -> Account {
-  let (settings, secrets) = unanswered();
+async fn keep_account(standing: &Standing, owner: &str, name: &str) -> Account {
+  let (incoming, outgoing) = unanswered_servers(standing, owner).await;
 
   standing
     .accounts
@@ -108,8 +137,10 @@ async fn keep(standing: &Standing, owner: &str, name: &str) -> Account {
         name: name.to_owned(),
         kind: "imap-smtp".to_owned(),
         address: format!("{name}@example.com"),
-        settings,
-        secrets,
+        settings: Fields::new(),
+        secrets: fields(&[("password", "not-a-real-one")]),
+        incoming_server: Some(incoming),
+        outgoing_server: Some(outgoing),
       },
     )
     .await
@@ -156,13 +187,19 @@ async fn the_routes_add_change_and_remove_an_owners_accounts() {
     (403, "forbidden".into())
   );
 
-  let (settings, secrets) = unanswered();
+  let imap = one.create_server(&unanswered(Protocol::Imap)).await.expect("the IMAP server is kept");
+  let smtp = one
+    .create_server(&unanswered(Protocol::Smtp))
+    .await
+    .expect("the submission server is kept");
   let adding = |kind: &str, name: Option<&str>| NewAccount {
-    kind: kind.to_owned(),
+    kind: Some(kind.to_owned()),
     name: name.map(str::to_owned),
     address: Some("first@example.com".to_owned()),
-    settings: Some(settings.clone()),
-    secrets: Some(secrets.clone()),
+    incoming_server: Some(imap.id),
+    outgoing_server: Some(smtp.id),
+    settings: None,
+    secrets: Some(fields(&[("password", "not-a-real-one")])),
     authorization: None,
   };
 
@@ -183,7 +220,7 @@ async fn the_routes_add_change_and_remove_an_owners_accounts() {
     (400, "bad-request".into())
   );
 
-  keep(&standing, OWNER, "first").await;
+  keep_account(&standing, OWNER, "first").await;
   assert_eq!(
     refused(one.create_account(&adding("imap-smtp", None)).await.unwrap_err()),
     (409, "conflict".into())
@@ -203,7 +240,7 @@ async fn the_routes_add_change_and_remove_an_owners_accounts() {
     (422, "unknown-kind".into())
   );
 
-  keep(&standing, OWNER, "second").await;
+  keep_account(&standing, OWNER, "second").await;
 
   let listed = one.accounts(&ListQuery::default()).await.expect("the accounts answer");
 
@@ -280,9 +317,9 @@ async fn one_owner_key_never_reaches_anothers_accounts() {
   let one = MailClient::new(&address, TOKEN).acting_for(OWNER, Role::Member);
   let other = MailClient::new(&address, TOKEN).acting_for(OTHER, Role::Member);
 
-  keep(&standing, OWNER, "shared").await;
-  keep(&standing, OTHER, "shared").await;
-  keep(&standing, OWNER, "own").await;
+  keep_account(&standing, OWNER, "shared").await;
+  keep_account(&standing, OTHER, "shared").await;
+  keep_account(&standing, OWNER, "own").await;
 
   let names = |page: bmo_mail::wire::Page<bmo_mail::wire::Account>| {
     page.items.into_iter().map(|one| one.name).collect::<Vec<_>>()
@@ -335,13 +372,14 @@ async fn a_service_without_a_key_keeps_no_account() {
   let folder = scratch("unsealed");
   let (_standing, address) = service(&folder, false).await;
   let one = MailClient::new(&address, TOKEN).acting_for(OWNER, Role::Member);
-  let (settings, secrets) = unanswered();
   let adding = NewAccount {
-    kind: "imap-smtp".to_owned(),
+    kind: Some("imap-smtp".to_owned()),
     name: None,
     address: Some("first@example.com".to_owned()),
-    settings: Some(settings),
-    secrets: Some(secrets),
+    incoming_server: Some(1),
+    outgoing_server: Some(2),
+    settings: None,
+    secrets: Some(fields(&[("password", "not-a-real-one")])),
     authorization: None,
   };
 
@@ -419,8 +457,22 @@ async fn the_accounts_file_is_imported_once_with_what_the_store_held() {
   assert_eq!(imported[1].address, "second@example.com");
   assert_eq!(imported[1].secrets.get("password").map(String::as_str), Some("second-password"));
   assert_eq!(imported[1].settings.get("login").map(String::as_str), Some("second-login"));
-  assert_eq!(imported[1].settings.get("imapTlsName").map(String::as_str), Some("imap.example.com"));
-  assert_eq!(imported[1].settings.get("smtpTlsName").map(String::as_str), Some("-"));
+  assert_eq!(imported[0].server_ids(), imported[1].server_ids());
+
+  let imap = imported[1].incoming.as_ref().expect("the account names its IMAP server");
+  let smtp = imported[1].outgoing.as_ref().expect("the account names its submission server");
+
+  assert_eq!(
+    (
+      imap.draft.protocol,
+      imap.draft.port,
+      imap.draft.security,
+      imap.draft.tls_name.as_deref()
+    ),
+    (Protocol::Imap, 993, Security::Tls, Some("imap.example.com"))
+  );
+  assert_eq!((smtp.draft.protocol, smtp.draft.security), (Protocol::Smtp, Security::None));
+  assert_eq!(imap.owner(), Some("administrator"));
 
   let sealed: Vec<u8> = sqlx::query_scalar("SELECT secret FROM accounts WHERE name = 'second'")
     .fetch_one(pool)
@@ -459,5 +511,12 @@ async fn the_accounts_file_is_imported_once_with_what_the_store_held() {
     Imported::Before
   );
   assert!(standing.accounts.list("administrator").await.unwrap().is_empty());
-  assert_eq!(standing.accounts.list("the-new-administrator").await.unwrap().len(), 2);
+
+  let followed = standing.accounts.list("the-new-administrator").await.unwrap();
+
+  assert_eq!(followed.len(), 2);
+  assert_eq!(
+    followed[0].incoming.as_ref().and_then(|server| server.owner()),
+    Some("the-new-administrator")
+  );
 }

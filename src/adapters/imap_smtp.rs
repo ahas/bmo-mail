@@ -12,7 +12,7 @@ use sqlx::SqlitePool;
 
 use crate::accounts::Account;
 use crate::adapters::servers::{
-  LOGIN, MailAccount, MailEndpoint, PASSWORD, SMTP_HOST, SMTP_PORT, SMTP_TLS_NAME, field, refused_sign_in,
+  LOGIN, MailAccount, MailEndpoint, PASSWORD, field, refused_sign_in, servers_of,
 };
 use crate::adapters::{Adapter, Context, Mailbox, Pending, Watch};
 use crate::imap::folders::folders_of;
@@ -29,7 +29,7 @@ use crate::mail::{Draft, MailAddress, MailFolder, MailFolderState, MailMessage, 
 use crate::routes::downloads::Disposition;
 use crate::routes::requests::{Asked, MailFault};
 use crate::rules::{RulesRun, run_rules_over_folder};
-use crate::wire::{AccountKind, FieldKind, Fields, MessageQuery, SignIn};
+use crate::wire::{AccountKind, FieldKind, Fields, KindServers, MessageQuery, Protocol, SignIn};
 use crate::wording::Wording;
 use crate::writing::drafts::{discard_draft, draft_named, find_draft, save_and_open};
 use crate::writing::receipts::send_receipt;
@@ -38,36 +38,12 @@ use crate::writing::submission::{self, SendingLimit, send_draft};
 /// The kind's name.
 pub const KIND: &str = "imap-smtp";
 
-const IMAP_HOST: &str = "imapHost";
-const IMAP_PORT: &str = "imapPort";
-const IMAP_TLS_NAME: &str = "imapTlsName";
-
 /// The settings and secrets of an account of the accounts file, as this kind keeps them.
-pub fn file_fields(imap: &MailEndpoint, smtp: &MailEndpoint, account: &MailAccount) -> (Fields, Fields) {
-  let settings = Fields::from([
-    (IMAP_HOST.to_owned(), imap.host.clone()),
-    (IMAP_PORT.to_owned(), imap.port.to_string()),
-    (IMAP_TLS_NAME.to_owned(), imap.tls_field()),
-    (SMTP_HOST.to_owned(), smtp.host.clone()),
-    (SMTP_PORT.to_owned(), smtp.port.to_string()),
-    (SMTP_TLS_NAME.to_owned(), smtp.tls_field()),
-    (LOGIN.to_owned(), account.login.clone()),
-  ]);
+pub fn file_fields(account: &MailAccount) -> (Fields, Fields) {
+  let settings = Fields::from([(LOGIN.to_owned(), account.login.clone())]);
   let secrets = Fields::from([(PASSWORD.to_owned(), account.password.clone())]);
 
   (settings, secrets)
-}
-
-/// An account's IMAP server, submission server and login, read from its fields.
-fn servers(
-  address: &str,
-  settings: &Fields,
-  secrets: &Fields,
-) -> Result<(MailEndpoint, MailEndpoint, MailAccount), MailFault> {
-  let imap = MailEndpoint::of(settings, IMAP_HOST, IMAP_PORT, IMAP_TLS_NAME)?;
-  let smtp = MailEndpoint::of(settings, SMTP_HOST, SMTP_PORT, SMTP_TLS_NAME)?;
-
-  Ok((imap, smtp, MailAccount::of(address, settings, secrets)?))
 }
 
 /// The adapter.
@@ -79,23 +55,21 @@ impl Adapter for ImapSmtp {
       name: KIND.to_owned(),
       sign_in: SignIn::Password,
       moves: true,
+      servers: Some(KindServers {
+        incoming: Protocol::Imap,
+        outgoing: Protocol::Smtp,
+      }),
       fields: vec![
-        field(IMAP_HOST, FieldKind::Text, true, None),
-        field(IMAP_PORT, FieldKind::Port, true, Some("993")),
-        field(IMAP_TLS_NAME, FieldKind::Text, false, None),
-        field(SMTP_HOST, FieldKind::Text, true, None),
-        field(SMTP_PORT, FieldKind::Port, true, Some("587")),
-        field(SMTP_TLS_NAME, FieldKind::Text, false, None),
         field(LOGIN, FieldKind::Text, false, None),
         field(PASSWORD, FieldKind::Secret, true, None),
       ],
     }
   }
 
-  fn sign_in<'a>(&'a self, address: &'a str, settings: &'a Fields, secrets: &'a Fields) -> Pending<'a, ()> {
+  fn sign_in<'a>(&'a self, account: &'a Account) -> Pending<'a, ()> {
     Box::pin(async move {
-      let refused = |why: MailFault| refused_sign_in(address, why);
-      let (imap, smtp, login) = servers(address, settings, secrets).map_err(refused)?;
+      let refused = |why: MailFault| refused_sign_in(&account.address, why);
+      let (imap, smtp, login) = servers_of(account).map_err(refused)?;
       let mut session = open(&imap, &login).await.map_err(refused)?;
       let _ = session.logout().await;
 
@@ -104,7 +78,7 @@ impl Adapter for ImapSmtp {
   }
 
   fn open(&self, account: &Account, context: &Context) -> Result<Arc<dyn Mailbox>, MailFault> {
-    let (imap, smtp, login) = servers(&account.address, &account.settings, &account.secrets)?;
+    let (imap, smtp, login) = servers_of(account)?;
 
     Ok(Arc::new(ImapSmtpMailbox {
       session: Arc::new(MailSession::new(imap, login)),

@@ -56,10 +56,10 @@ pub trait Adapter: Send + Sync + 'static {
   /// The kind as the adapter declares it: its name, how it signs in, its fields.
   fn kind(&self) -> AccountKind;
 
-  /// Signs in as an account of the kind with its address and its fields, and lets go: what adding or changing
-  /// an account that signs in by password checks before anything is kept. A sign-in the servers refuse is
-  /// `sign-in-failed`.
-  fn sign_in<'a>(&'a self, address: &'a str, settings: &'a Fields, secrets: &'a Fields) -> Pending<'a, ()>;
+  /// Signs in as an account of the kind — its address, its fields and its servers — and lets go: what adding or
+  /// changing an account that signs in by password checks before anything is kept. A sign-in the servers refuse
+  /// is `sign-in-failed`.
+  fn sign_in<'a>(&'a self, account: &'a Account) -> Pending<'a, ()>;
 
   /// Begins an authorization on the provider's page, the browser to come back to `return_to` with `state`
   /// in its query; none for a kind that signs in by password.

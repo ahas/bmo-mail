@@ -6,5 +6,6 @@ mod console;
 mod import;
 mod pop3;
 mod sent_mail;
+mod servers;
 mod watcher;
 mod words;

@@ -19,7 +19,8 @@ use bmo_mail::settings::Settings;
 use bmo_mail::store::Store;
 use bmo_mail::wire::{
   DraftPatch, EventQuery, Fields, Mailbox, MessagePatch, MessageQuery, NewAccount, NewDraft, NewLabel,
-  NewReceipt, NewRule, NewRuleRun, NewSend, PartKind, Role, RuleMatching, SendState,
+  NewReceipt, NewRule, NewRuleRun, NewSend, NewServer, PartKind, Protocol, Role, RuleMatching, Security,
+  SendState,
 };
 use bmo_mail::wording::Wording;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -308,19 +309,33 @@ async fn fixture(name: &str, messages: &[(&str, &str)], bare: bool) -> Fixture {
   let client = MailClient::new(address, TOKEN).acting_for(OWNER, Role::Member);
   let (pop3, smtp) = (pop3.to_string(), smtp.to_string());
 
+  let own = |protocol: Protocol, port: &str| NewServer {
+    link: None,
+    protocol,
+    name: None,
+    host: "127.0.0.1".to_owned(),
+    port: Some(port.parse().expect("a port")),
+    security: Some(Security::None),
+    tls_name: None,
+    auth: None,
+  };
+  let incoming = client
+    .create_server(&own(Protocol::Pop3, &pop3))
+    .await
+    .expect("the POP3 server is kept");
+  let outgoing = client
+    .create_server(&own(Protocol::Smtp, &smtp))
+    .await
+    .expect("the submission server is kept");
+
   client
     .create_account(&NewAccount {
-      kind: "pop3-smtp".to_owned(),
+      kind: None,
       name: Some("box".to_owned()),
       address: Some("box@example.com".to_owned()),
-      settings: Some(fields(&[
-        ("pop3Host", "127.0.0.1"),
-        ("pop3Port", &pop3),
-        ("pop3TlsName", "-"),
-        ("smtpHost", "127.0.0.1"),
-        ("smtpPort", &smtp),
-        ("smtpTlsName", "-"),
-      ])),
+      incoming_server: Some(incoming.id),
+      outgoing_server: Some(outgoing.id),
+      settings: None,
       secrets: Some(fields(&[("password", PASSWORD)])),
       authorization: None,
     })

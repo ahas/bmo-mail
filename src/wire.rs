@@ -165,8 +165,232 @@ pub struct AccountKind {
   /// Whether its mailbox moves mail between folders: a move, spam and not spam, trash and deleting for good.
   /// The screen draws none of them for an account whose kind does not.
   pub moves: bool,
+  /// The protocols of the servers an account of it is reached through; null for a kind that names none.
+  pub servers: Option<KindServers>,
   /// What a person writes to add an account of it, in the order a form shows them.
   pub fields: Vec<KindField>,
+}
+
+/// The protocols of the servers a kind reaches its accounts through.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct KindServers {
+  /// The incoming server's.
+  pub incoming: Protocol,
+  /// The outgoing server's.
+  pub outgoing: Protocol,
+}
+
+/// What a mail server speaks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+  Imap,
+  Pop3,
+  Smtp,
+}
+
+/// Whether a server is read from or handed mail.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+  Incoming,
+  Outgoing,
+}
+
+/// How a connection to a server is secured.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Security {
+  /// TLS from the first byte.
+  Tls,
+  /// Upgraded with STARTTLS after the greeting.
+  Starttls,
+  /// A plain connection, for a stand-in server or a relay on the machine itself.
+  None,
+}
+
+/// How a server is signed in to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ServerAuth {
+  /// The account's login and password.
+  Password,
+  /// No sign-in, for an outgoing server that takes mail without one.
+  None,
+}
+
+/// Who holds a server.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ServerHolder {
+  /// `own` for the owner's own, else the delegation chain's link: `platform` or `unit:<id>`.
+  pub link: String,
+  /// The company's or unit's name; null for the others.
+  pub name: Option<String>,
+}
+
+/// A mail server accounts are reached through (`docs/api.md`, 「Servers」).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Server {
+  pub id: i64,
+  pub protocol: Protocol,
+  pub direction: Direction,
+  pub name: String,
+  pub host: String,
+  pub port: u16,
+  pub security: Security,
+  /// The name its certificate is checked against; null for the host.
+  pub tls_name: Option<String>,
+  pub auth: ServerAuth,
+  pub holder: ServerHolder,
+  /// Whether the owner may change and remove it now.
+  pub may_change: bool,
+  /// How many accounts stand on it, every owner's together.
+  pub account_count: i64,
+}
+
+/// What a page of servers reads.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerQuery {
+  /// The incoming or the outgoing servers alone.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub direction: Option<Direction>,
+  /// A link of the delegation chain, `platform` or `unit:<id>`, whose servers are read; the servers the owner
+  /// reaches where none is named.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub link: Option<String>,
+}
+
+/// A server to keep.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewServer {
+  /// The link of the delegation chain that holds it, `platform` or `unit:<id>`; the owner's own where none is
+  /// named.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub link: Option<String>,
+  pub protocol: Protocol,
+  /// The host where none is given.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub name: Option<String>,
+  pub host: String,
+  /// The protocol's usual port for its security where none is given.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub port: Option<u16>,
+  /// `tls` for an incoming server and `starttls` for an outgoing one where none is given.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub security: Option<Security>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub tls_name: Option<String>,
+  /// `password` where none is given.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub auth: Option<ServerAuth>,
+}
+
+/// A server's change; its protocol stays.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServerPatch {
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub name: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub host: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub port: Option<u16>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub security: Option<Security>,
+  /// An empty one checks the certificate against the host.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub tls_name: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub auth: Option<ServerAuth>,
+}
+
+/// A connection test: a kept server, or the fields a form holds, with a login to sign in as where one is given.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewServerTest {
+  /// A kept server; the fields below are read where none is named.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub server_id: Option<i64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub protocol: Option<Protocol>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub host: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub port: Option<u16>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub security: Option<Security>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub tls_name: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub login: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub password: Option<String>,
+}
+
+/// What a connection test came to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerTest {
+  /// Whether a connection, its security and the server's greeting stood.
+  pub reached: bool,
+  /// Whether the server took the sign-in; null where no login and password were given.
+  pub signed_in: Option<bool>,
+  /// `unreachable` or `sign-in-failed`; null where nothing failed.
+  pub failure: Option<String>,
+}
+
+/// One of the platform's outgoing servers, as the account service chooses the system mail's.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct OutgoingServer {
+  pub id: i64,
+  pub name: String,
+  pub host: String,
+  pub port: u16,
+  pub security: Security,
+  pub auth: ServerAuth,
+}
+
+/// The platform's outgoing servers.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct OutgoingServers {
+  pub items: Vec<OutgoingServer>,
+}
+
+/// One mail of the platform's own, as the account service sends it (`docs/api.md`, 「System mail」).
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewSystemMail {
+  /// One of the platform's outgoing servers.
+  pub server: i64,
+  /// The sender's address.
+  pub from: String,
+  /// The name shown with it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub from_name: Option<String>,
+  /// The name of a secret in the platform's space holding `USERNAME` and `PASSWORD`; none for a server that
+  /// takes mail without a sign-in.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub secret: Option<String>,
+  /// The one recipient's address.
+  pub to: String,
+  pub subject: String,
+  pub text: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub html: Option<String>,
+  /// What the mail is, a kebab-case word the log keeps.
+  pub kind: String,
+}
+
+/// A system mail that went.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemMailSent {
+  pub sent: bool,
+  /// The `Message-ID` it went under, without angle brackets.
+  pub message_id: String,
 }
 
 /// An account of the owner, as much of it as is answered: never its secrets.
@@ -182,6 +406,10 @@ pub struct Account {
   pub position: i64,
   /// Its fields that are not secret.
   pub settings: Fields,
+  /// The incoming server's id; null for a kind that names none.
+  pub incoming_server: Option<i64>,
+  /// The outgoing server's id; null for a kind that names none.
+  pub outgoing_server: Option<i64>,
   /// The unread messages of its inbox.
   pub unread_count: u32,
   /// Whether its server answered; where it did not, the count is 0.
@@ -202,13 +430,20 @@ pub struct AuthorizationAnswer {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewAccount {
-  pub kind: String,
+  /// Where none is given, the kind whose incoming protocol is the incoming server's.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub kind: Option<String>,
   /// The address's local part where none is given.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub name: Option<String>,
   /// Required for a kind that signs in by password.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub address: Option<String>,
+  /// Required for a kind that names servers: a server the owner reaches.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub incoming_server: Option<i64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub outgoing_server: Option<i64>,
   /// Its fields that are not secret, by name.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub settings: Option<Fields>,
@@ -230,6 +465,10 @@ pub struct AccountPatch {
   pub position: Option<i64>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub address: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub incoming_server: Option<i64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub outgoing_server: Option<i64>,
   /// Its fields that are not secret, replaced whole.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub settings: Option<Fields>,
