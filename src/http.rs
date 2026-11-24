@@ -91,6 +91,9 @@ pub enum Guard {
   Screen,
   /// The service's token or the account service's credential for the platform's system mail, and no owner.
   SystemMail,
+  /// The service's token, or the console's credential with `Owner-Role` `administrator`: a removal of an owner or
+  /// a unit (`docs/api.md`, 「Removing an owner」).
+  Administrator,
 }
 
 /// One route the service answers, registered beside its answer with `bmo_mail::route!`.
@@ -395,6 +398,27 @@ fn screen_reader(request: &Request) -> Result<(), Refused> {
   Ok(())
 }
 
+/// Refuses a removal the console's credential carries for anyone but the administrator; the service's token
+/// passes.
+fn administrator(standing: &Standing, request: &Request) -> Result<(), Refused> {
+  let token = &standing.settings.server.token;
+  let service = request
+    .headers()
+    .get(header::AUTHORIZATION)
+    .and_then(|value| value.to_str().ok())
+    .and_then(|value| value.strip_prefix("Bearer "))
+    .is_some_and(|presented| !token.is_empty() && presented == token);
+
+  if service || header_of(request, OWNER_ROLE) == ADMINISTRATOR {
+    Ok(())
+  } else {
+    Err(Refused::forbidden("a removal is the platform administrator's alone"))
+  }
+}
+
+/// The role a console call names to reach a removal.
+const ADMINISTRATOR: &str = "administrator";
+
 /// Whether a request carries as its bearer the service's token, or on a route the screen uses the console's
 /// credential; an empty token or credential lets nobody in.
 fn authorized(standing: &Standing, request: &Request, guard: Guard) -> bool {
@@ -410,7 +434,7 @@ fn authorized(standing: &Standing, request: &Request, guard: Guard) -> bool {
   let accepted = |expected: &str| !expected.is_empty() && presented == expected;
 
   accepted(&settings.server.token)
-    || (guard == Guard::Screen && accepted(&settings.console.token))
+    || (matches!(guard, Guard::Screen | Guard::Administrator) && accepted(&settings.console.token))
     || (guard == Guard::SystemMail
       && settings.system_mail.credential().is_some_and(|credential| accepted(&credential)))
 }
@@ -455,6 +479,12 @@ pub fn router(standing: Arc<Standing>) -> Result<Router, Vec<String>> {
 
       if route.operation().guard == Guard::Screen
         && let Err(refused) = screen_reader(&request)
+      {
+        return refused.into_response();
+      }
+
+      if route.operation().guard == Guard::Administrator
+        && let Err(refused) = administrator(&standing, &request)
       {
         return refused.into_response();
       }

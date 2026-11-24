@@ -8,6 +8,7 @@ pub mod filters;
 pub mod folders;
 pub mod labels;
 pub mod messages;
+pub mod removal;
 pub mod requests;
 pub mod servers;
 pub mod system_mail;

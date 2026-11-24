@@ -210,6 +210,32 @@ person, and a link's servers are written in their name.
   link is refused 503 `not-ready`. Where the account service is named and does not answer, a route that needs it
   is refused 502 `upstream-failed`.
 
+## Removing an owner
+
+The platform administrator deleting an account or an organisation unit for good takes what the service keeps of
+it (`docs/mail.md`, 「Accounts and credentials」 and 「Mail servers」). These routes take the service's token, or the
+console's credential with `Owner-Role` `administrator`; the console's credential with any other role is refused 403
+`forbidden`, and they read no `Owner-Key`. An owner or a unit is its key as the account service names it, positive
+decimal digits; any other is refused 400 `bad-request`. The owner's routes stand under `/owners`, since
+`/accounts/{accountName}` names a mail account.
+
+| Method and path | Sends | Answers |
+|---|---|---|
+| `GET /owners/{owner}/removal` | | `counts`: what the removal below would take now, changing nothing |
+| `DELETE /owners/{owner}` | | `removed`: what it took |
+| `GET /org-units/{unit}/removal` | query `company?`, not read | `counts`: what the removal below would take now |
+| `DELETE /org-units/{unit}` | query `company?`, not read | `removed`: what it took |
+
+- **An owner's removal** forgets every account the owner key holds, each as `DELETE /accounts/{accountName}`
+  forgets one (its sends cancelled, its mailbox closed, `account.deleted` published), and the owner's own servers;
+  the event window's rows of the owner go with them. Its kinds are `accounts` and `servers`.
+- **A unit's removal** forgets the servers the unit's link holds that no account stands on any more; a server an
+  account still stands on is kept and counted, so nobody's account loses its server. Its kinds are `servers` and
+  `servers-in-use`. The link's value on the delegation chain is the account service's, which removes the unit's
+  links with the unit.
+- **Each kind is always answered,** zero where nothing stands, and a second removal takes nothing, so a removal
+  broken half-way is finished by calling again.
+
 ## System mail
 
 The account service's sends of the platform's own mail (`docs/mail.md`, 「The platform's system mail」). These

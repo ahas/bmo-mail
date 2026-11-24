@@ -400,6 +400,31 @@ impl Servers {
     Self { pool }
   }
 
+  /// The ids of the servers a holder keeps, each with how many accounts stand on it.
+  pub async fn held_with_use(&self, holder: &str) -> Result<Vec<(i64, i64)>, MailFault> {
+    Ok(
+      sqlx::query_as(
+        "SELECT s.id, (SELECT COUNT(*) FROM accounts a WHERE a.incoming_server = s.id OR a.outgoing_server = s.id) \
+         FROM servers s WHERE s.holder = ? ORDER BY s.id",
+      )
+      .bind(holder)
+      .fetch_all(&self.pool)
+      .await?,
+    )
+  }
+
+  /// The servers of a holder that no account stands on forgotten in one statement; answers how many went.
+  pub async fn forget_unused(&self, holder: &str) -> Result<i64, MailFault> {
+    let gone = sqlx::query(
+      "DELETE FROM servers WHERE holder = ? AND NOT EXISTS \
+       (SELECT 1 FROM accounts a WHERE a.incoming_server = servers.id OR a.outgoing_server = servers.id)",
+    )
+    .bind(holder)
+    .execute(&self.pool)
+    .await?;
+    Ok(i64::try_from(gone.rows_affected()).unwrap_or(i64::MAX))
+  }
+
   /// The store's pool, for a change made in one transaction.
   pub fn pool(&self) -> &SqlitePool {
     &self.pool

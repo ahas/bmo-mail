@@ -413,6 +413,39 @@ impl Accounts {
       .ok_or_else(|| MailFault::server("the changed account could not be read"))
   }
 
+  /// The ids and names of every account an owner key holds, read without opening their secrets, so an account
+  /// whose secret no longer opens is found as any other.
+  pub async fn held_by_owner(&self, owner: &str) -> Result<Vec<(i64, String)>, MailFault> {
+    Ok(
+      sqlx::query_as("SELECT id, name FROM accounts WHERE owner = ? ORDER BY position, id")
+        .bind(owner)
+        .fetch_all(&self.pool)
+        .await?,
+    )
+  }
+
+  /// Forgets the account of this id and every row the store holds under it, as an owner is removed for good.
+  pub async fn forget_id(&self, id: i64) -> Result<(), MailFault> {
+    let mut transaction = self.pool.begin().await?;
+
+    sqlx::query("DELETE FROM accounts WHERE id = ?")
+      .bind(id)
+      .execute(&mut *transaction)
+      .await?;
+
+    for table in ACCOUNT_TABLES {
+      sqlx::query(&format!("DELETE FROM {table} WHERE account = ?"))
+        .bind(id.to_string())
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    transaction.commit().await?;
+    self.touch();
+
+    Ok(())
+  }
+
   /// Forgets an account and every row the store holds under it, and numbers its owner's others again.
   pub async fn remove(&self, account: &Account) -> Result<(), MailFault> {
     let mut transaction = self.pool.begin().await?;

@@ -947,3 +947,42 @@ pub struct SettingsPatch {
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub show_images: Option<bool>,
 }
+
+/// What an owner's removal counts and takes (`docs/api.md`, 「Removing an owner」).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct OwnerHeld {
+  /// The owner's mail accounts.
+  pub accounts: i64,
+  /// The owner's own servers.
+  pub servers: i64,
+}
+
+/// What a unit's removal counts and takes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct UnitHeld {
+  /// The servers the unit's link holds that no account stands on.
+  pub servers: i64,
+  /// The servers the unit's link holds that an account still stands on, which stay.
+  pub servers_in_use: i64,
+}
+
+/// What a removal would take now.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RemovalCounts<T> {
+  pub counts: T,
+}
+
+/// What a removal took.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Removed<T> {
+  pub removed: T,
+}
+
+/// The company a unit's removal may name, which the service does not read.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct UnitRemovalQuery {
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub company: Option<String>,
+}

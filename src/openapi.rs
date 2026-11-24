@@ -106,6 +106,16 @@ fn operation_of(operation: Operation, generator: &mut SchemaGenerator) -> Value 
 
   let screen = operation.guard == Guard::Screen;
 
+  if operation.guard == Guard::Administrator {
+    parameters.push(json!({
+      "name": "Owner-Role",
+      "in": "header",
+      "required": false,
+      "description": "The role the reader holds; a call carrying the console's credential names administrator.",
+      "schema": { "type": "string", "enum": ["administrator"] },
+    }));
+  }
+
   if screen {
     parameters.push(json!({
       "name": "Owner-Role",
@@ -129,7 +139,7 @@ fn operation_of(operation: Operation, generator: &mut SchemaGenerator) -> Value 
 
   let mut codes = vec!["unauthorized"];
 
-  if screen {
+  if screen || operation.guard == Guard::Administrator {
     codes.push("forbidden");
   }
 

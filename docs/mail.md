@@ -108,6 +108,9 @@ neither the service nor its store (「A person's sent mail, read on their own ma
   accounts and checks nothing of the key but that it is given. Each owner has a list of their own, in
   the order they put it. One owner key never sees, reads or changes another's account: every route
   under an account answers an owner who does not hold it as if the account did not stand.
+- **An owner deleted for good takes their accounts with them.** The platform administrator's removal of an owner
+  forgets every account and every own server the owner key holds (`docs/api.md`, 「Removing an owner」); a unit's
+  removal forgets the servers its link holds that no account stands on any more.
 - **An account is of a kind,** the name of the adapter that reaches its mailbox. Each adapter declares
   its kind: how an account of it signs in, the fields a person writes to add one, and, for a kind reached
   through mail servers, the protocol of the incoming server it reads and of the outgoing server it sends

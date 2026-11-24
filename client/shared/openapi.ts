@@ -477,6 +477,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/org-units/{unit}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove what the unit's link holds for good: its servers no account stands on. */
+        delete: operations["deleteOrgUnitsByUnit"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/org-units/{unit}/removal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What removing the unit for good would take now; nothing changes. */
+        get: operations["getOrgUnitsByUnitRemoval"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/outgoing-servers": {
         parameters: {
             query?: never;
@@ -486,6 +520,40 @@ export interface paths {
         };
         /** The platform's outgoing servers, which the account service chooses the system mail's from. */
         get: operations["listOutgoingServers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/owners/{owner}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove the owner for good: every account and own server the owner key holds. */
+        delete: operations["deleteOwnersByOwner"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/owners/{owner}/removal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What removing the owner for good would take now; nothing changes. */
+        get: operations["getOwnersByOwnerRemoval"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1172,6 +1240,19 @@ export interface components {
             reason?: string | null;
             version: string;
         };
+        /** @description What a unit's removal counts and takes. */
+        UnitHeld: {
+            /**
+             * Format: int64
+             * @description The servers the unit's link holds that no account stands on.
+             */
+            servers: number;
+            /**
+             * Format: int64
+             * @description The servers the unit's link holds that an account still stands on, which stay.
+             */
+            "servers-in-use": number;
+        };
         /** @description The platform's outgoing servers. */
         OutgoingServers: {
             items: components["schemas"]["OutgoingServer"][];
@@ -1191,6 +1272,19 @@ export interface components {
         Security: "tls" | "starttls" | "none";
         /** @description How a server is signed in to. */
         ServerAuth: "password" | "none";
+        /** @description What an owner's removal counts and takes (`docs/api.md`, 「Removing an owner」). */
+        OwnerHeld: {
+            /**
+             * Format: int64
+             * @description The owner's mail accounts.
+             */
+            accounts: number;
+            /**
+             * Format: int64
+             * @description The owner's own servers.
+             */
+            servers: number;
+        };
         /** @description What a connection test came to. */
         ServerTest: {
             /** @description Whether a connection, its security and the server's greeting stood. */
@@ -2688,6 +2782,68 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    deleteOrgUnitsByUnit: {
+        parameters: {
+            query?: {
+                company?: string | null;
+            };
+            header?: {
+                /** @description The role the reader holds; a call carrying the console's credential names administrator. */
+                "Owner-Role"?: "administrator";
+            };
+            path: {
+                /** @description The organisation unit's id as the account service names it. */
+                unit: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remove what the unit's link holds for good: its servers no account stands on. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        removed: components["schemas"]["UnitHeld"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getOrgUnitsByUnitRemoval: {
+        parameters: {
+            query?: {
+                company?: string | null;
+            };
+            header?: {
+                /** @description The role the reader holds; a call carrying the console's credential names administrator. */
+                "Owner-Role"?: "administrator";
+            };
+            path: {
+                /** @description The organisation unit's id as the account service names it. */
+                unit: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What removing the unit for good would take now; nothing changes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        counts: components["schemas"]["UnitHeld"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listOutgoingServers: {
         parameters: {
             query?: never;
@@ -2704,6 +2860,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutgoingServers"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteOwnersByOwner: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The role the reader holds; a call carrying the console's credential names administrator. */
+                "Owner-Role"?: "administrator";
+            };
+            path: {
+                /** @description The owner's key as the account service names it: positive decimal digits. */
+                owner: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remove the owner for good: every account and own server the owner key holds. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        removed: components["schemas"]["OwnerHeld"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getOwnersByOwnerRemoval: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The role the reader holds; a call carrying the console's credential names administrator. */
+                "Owner-Role"?: "administrator";
+            };
+            path: {
+                /** @description The owner's key as the account service names it: positive decimal digits. */
+                owner: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What removing the owner for good would take now; nothing changes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        counts: components["schemas"]["OwnerHeld"];
+                    };
                 };
             };
             default: components["responses"]["Error"];

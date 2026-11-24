@@ -3295,6 +3295,152 @@
         ]
       }
     },
+    "/org-units/{unit}": {
+      "delete": {
+        "operationId": "deleteOrgUnitsByUnit",
+        "tags": [
+          "removal"
+        ],
+        "summary": "Remove what the unit's link holds for good: its servers no account stands on.",
+        "responses": {
+          "200": {
+            "description": "Remove what the unit's link holds for good: its servers no account stands on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "What a removal took.",
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "$ref": "#/components/schemas/UnitHeld"
+                    }
+                  },
+                  "required": [
+                    "removed"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "unit",
+            "in": "path",
+            "required": true,
+            "description": "The organisation unit's id as the account service names it.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": false,
+            "description": "The role the reader holds; a call carrying the console's credential names administrator.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator"
+              ]
+            }
+          },
+          {
+            "name": "company",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/org-units/{unit}/removal": {
+      "get": {
+        "operationId": "getOrgUnitsByUnitRemoval",
+        "tags": [
+          "removal"
+        ],
+        "summary": "What removing the unit for good would take now; nothing changes.",
+        "responses": {
+          "200": {
+            "description": "What removing the unit for good would take now; nothing changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "What a removal would take now.",
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "$ref": "#/components/schemas/UnitHeld"
+                    }
+                  },
+                  "required": [
+                    "counts"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "unit",
+            "in": "path",
+            "required": true,
+            "description": "The organisation unit's id as the account service names it.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": false,
+            "description": "The role the reader holds; a call carrying the console's credential names administrator.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator"
+              ]
+            }
+          },
+          {
+            "name": "company",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    },
     "/outgoing-servers": {
       "get": {
         "operationId": "listOutgoingServers",
@@ -3320,6 +3466,130 @@
         "x-codes": [
           "unauthorized",
           "failed"
+        ]
+      }
+    },
+    "/owners/{owner}": {
+      "delete": {
+        "operationId": "deleteOwnersByOwner",
+        "tags": [
+          "removal"
+        ],
+        "summary": "Remove the owner for good: every account and own server the owner key holds.",
+        "responses": {
+          "200": {
+            "description": "Remove the owner for good: every account and own server the owner key holds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "What a removal took.",
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "$ref": "#/components/schemas/OwnerHeld"
+                    }
+                  },
+                  "required": [
+                    "removed"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "description": "The owner's key as the account service names it: positive decimal digits.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": false,
+            "description": "The role the reader holds; a call carrying the console's credential names administrator.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/owners/{owner}/removal": {
+      "get": {
+        "operationId": "getOwnersByOwnerRemoval",
+        "tags": [
+          "removal"
+        ],
+        "summary": "What removing the owner for good would take now; nothing changes.",
+        "responses": {
+          "200": {
+            "description": "What removing the owner for good would take now; nothing changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "What a removal would take now.",
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "$ref": "#/components/schemas/OwnerHeld"
+                    }
+                  },
+                  "required": [
+                    "counts"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "forbidden",
+          "bad-request",
+          "failed"
+        ],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "description": "The owner's key as the account service names it: positive decimal digits.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Owner-Role",
+            "in": "header",
+            "required": false,
+            "description": "The role the reader holds; a call carrying the console's credential names administrator.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator"
+              ]
+            }
+          }
         ]
       }
     },
@@ -5639,6 +5909,26 @@
         ],
         "description": "Readiness and version."
       },
+      "UnitHeld": {
+        "type": "object",
+        "properties": {
+          "servers": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The servers the unit's link holds that no account stands on."
+          },
+          "servers-in-use": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The servers the unit's link holds that an account still stands on, which stay."
+          }
+        },
+        "required": [
+          "servers",
+          "servers-in-use"
+        ],
+        "description": "What a unit's removal counts and takes."
+      },
       "OutgoingServers": {
         "type": "object",
         "properties": {
@@ -5724,6 +6014,26 @@
           }
         ],
         "description": "How a server is signed in to."
+      },
+      "OwnerHeld": {
+        "type": "object",
+        "properties": {
+          "accounts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The owner's mail accounts."
+          },
+          "servers": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The owner's own servers."
+          }
+        },
+        "required": [
+          "accounts",
+          "servers"
+        ],
+        "description": "What an owner's removal counts and takes (`docs/api.md`, 「Removing an owner」)."
       },
       "ServerTest": {
         "type": "object",

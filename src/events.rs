@@ -111,6 +111,15 @@ impl Events {
   /// Publishes an event of `kind` about `data`, the member it is of, under the owner and the account it
   /// belongs to. An event that cannot be kept is said in the log and published to nobody, since a reader
   /// resuming would never find it.
+  /// The window's rows of one owner let go of, as the owner is removed for good.
+  pub async fn forget_owner(&self, owner: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM events WHERE owner = ?")
+      .bind(owner)
+      .execute(&self.pool)
+      .await?;
+    Ok(())
+  }
+
   pub async fn publish(
     &self,
     kind: &'static str,

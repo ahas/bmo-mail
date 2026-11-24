@@ -5,6 +5,7 @@ mod accounts;
 mod console;
 mod import;
 mod pop3;
+mod removal;
 mod sent_mail;
 mod servers;
 mod watcher;
