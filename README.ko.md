@@ -53,7 +53,7 @@ Microsoft Graph에서 읽으며, 에이전시, 수신기, 계정 서비스, 노�
 | `docs/` | 서비스가 하는 일에 대한 정본 문서와 OpenAPI 문서 |
 | `tests/` | 현재 있는 동작 테스트 |
 
-루트에는 Cargo 매니페스트, `VERSION`, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
+루트에는 Cargo 매니페스트, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml`, 그리고 배포가 주는 로컬 설정의 예시인
 `settings.local.toml.example`이 있습니다.
 
@@ -80,6 +80,6 @@ Microsoft Graph에서 읽으며, 에이전시, 수신기, 계정 서비스, 노�
 
 ## 버전
 
-`VERSION`은 저장소의 버전이자 크레이트 자체의 버전을 담으며, 상태 확인, OpenAPI 문서, MCP 서버, 번들이 이
-버전으로 답합니다. 버전은 bmo-chat의 `docs/conventions.md` 「Versions」가 정한 대로 소유자가 선언한
+버전은 세트 전체의 것이며 빌드할 때 git 태그에서 읽고, 상태 확인, MCP 서버, `--version`이 이 버전으로
+답합니다. 크레이트의 버전은 움직이지 않는 자리표시 값입니다. 버전은 bmo-chat의 `docs/conventions.md` 「Versions」가 정한 대로 소유자가 선언한
 릴리스에서만 올라갑니다. 커밋, 배포, 계약 변경은 버전을 올리지 않으며, 배포는 커밋으로 구별합니다.

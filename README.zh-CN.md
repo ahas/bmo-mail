@@ -48,7 +48,7 @@
 | `docs/` | 关于服务行为的规范文档，以及 OpenAPI 文档 |
 | `tests/` | 现有的行为测试 |
 
-根目录下有 Cargo 清单、`VERSION`、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、`PERSONAL-DATA.md`、
+根目录下有 Cargo 清单、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、`PERSONAL-DATA.md`、
 `korean-ledger.json`、`settings.toml`，以及部署所提供的本地设置的示例 `settings.local.toml.example`。
 
 ## 控制台插件包
@@ -73,6 +73,6 @@
 
 ## 版本
 
-`VERSION` 保存仓库的版本，也就是 crate 自身的版本，健康检查、OpenAPI 文档、MCP 服务器和包都以此版本作答。
+版本属于整个套件，在构建时从 git 标签读取，健康检查、MCP 服务器和 `--version` 都以此版本作答；crate 的版本只是永不变动的占位值。
 如 bmo-chat 的 `docs/conventions.md`「Versions」所述，版本只在所有者宣布的发布时变动：提交、部署或契约变更都
 不会改变版本，部署以其提交区分。

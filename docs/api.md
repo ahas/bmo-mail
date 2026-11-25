@@ -1,6 +1,6 @@
 # The mail service's boundary
 
-Fixed at 0.1.0-rev.3.
+Fixed at the release the commit is tagged with.
 
 Every route this service answers, its event stream, its command, its client, its harness plugin, its hosted
 tool, its store, its settings, the words it writes and the console plugin bundle it serves. The service is an upstream: a coding
@@ -740,7 +740,7 @@ guards them, and this section states only what mail supplies and chooses within 
 
 ## Versions
 
-The repository has one version, the crate's, which the health, the OpenAPI document, the MCP server and the
-bundle answer. It moves only at a release the owner declares: until the first release it is `0.1.0` and
-counts revisions, `0.1.0-rev.<n>`, one revision a release, and a commit or a deploy moves none, as bmo-chat's
-`docs/conventions.md`, 「Versions」, states.
+The version is the set's, read off the git tag when a build is made and handed to the build as
+`BMO_VERSION`, which the health, the MCP server and `--version` answer; the crate's version, the OpenAPI
+document's and the bundle's are a placeholder that never moves. It moves only at a release the owner
+declares, and a commit or a deploy moves none, as bmo-chat's `docs/conventions.md`, 「Versions」, states.

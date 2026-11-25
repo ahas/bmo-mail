@@ -55,7 +55,7 @@
 | `docs/` | サービスが行うことについての正典となるドキュメントと、OpenAPI ドキュメント |
 | `tests/` | 現在ある振る舞いテスト |
 
-ルートには、Cargo マニフェスト、`VERSION`、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、
+ルートには、Cargo マニフェスト、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、
 `PERSONAL-DATA.md`、`korean-ledger.json`、`settings.toml`、そしてデプロイが与えるローカル設定の例である
 `settings.local.toml.example` があります。
 
@@ -83,7 +83,7 @@
 
 ## バージョン
 
-`VERSION` はリポジトリのバージョンであり、クレート自身のバージョンでもあります。ヘルス、OpenAPI ドキュメント、
-MCP サーバー、バンドルはこのバージョンで応答します。バージョンは bmo-chat の `docs/conventions.md`「Versions」が
+バージョンはセット全体のもので、ビルド時に git タグから読み取り、ヘルス、MCP サーバー、`--version` が
+このバージョンで応答します。クレートのバージョンは動かないプレースホルダーです。バージョンは bmo-chat の `docs/conventions.md`「Versions」が
 定めるとおり、オーナーが宣言したリリースでのみ上がります。コミット、デプロイ、契約の変更ではバージョンは
 上がらず、デプロイはコミットで区別します。

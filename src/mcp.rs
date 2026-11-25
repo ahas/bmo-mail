@@ -436,7 +436,7 @@ impl ServerHandler for MailServer {
     let mut server = Implementation::default();
 
     server.name = "bmo-mail".to_owned();
-    server.version = env!("CARGO_PKG_VERSION").to_owned();
+    server.version = crate::VERSION.to_owned();
     info.server_info = server;
     info.instructions = Some(ENTRY.to_owned());
     info

@@ -10,7 +10,7 @@ use bmo_mail::wire::Role;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "bmo-mail", version, about = "Mailboxes read, written and watched behind one API")]
+#[command(name = "bmo-mail", version = bmo_mail::VERSION, about = "Mailboxes read, written and watched behind one API")]
 struct Command {
   #[command(subcommand)]
   word: Word,

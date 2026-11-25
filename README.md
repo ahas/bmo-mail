@@ -56,7 +56,7 @@ held to. The build check is `cargo check --all-targets` and the bundle's typeche
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
 | `tests/` | The behaviour tests that stand |
 
-At the root stand the Cargo manifest, `VERSION`, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
+At the root stand the Cargo manifest, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the
 local settings a deployment gives.
 
@@ -83,7 +83,7 @@ for its own install, typecheck and build, so a clone needs no other checkout. It
 
 ## Version
 
-`VERSION` holds the repository's version, the crate's own, which the health, the OpenAPI document, the MCP
-server and the bundle answer. It moves only at a release the owner declares, as bmo-chat's
+The version is the set's, read off the git tag when a build is made, which the health, the MCP server and
+`--version` answer; the crate's version is a placeholder that never moves. It moves only at a release the owner declares, as bmo-chat's
 `docs/conventions.md`, 「Versions」, states: a commit, a deploy or a contract change moves none, and a
 deployment is told apart by its commit.
