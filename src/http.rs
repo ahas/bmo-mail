@@ -16,7 +16,6 @@ use schemars::generate::SchemaGenerator;
 use schemars::{JsonSchema, Schema};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde_json::json;
 
 use crate::accounts::Accounts;
 use crate::accounts::authorizations::Authorizations;

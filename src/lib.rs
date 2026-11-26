@@ -121,4 +121,3 @@ pub async fn serve(settings: Settings) -> Result<(), String> {
 
   served
 }
-
