@@ -53,9 +53,10 @@
 | `client/` | コンソールプラグインのバンドル: メール画面。独立したプロジェクトです |
 | `deploy/` | サービスのユーザーユニット |
 | `docs/` | サービスが行うことについての正典となるドキュメントと、OpenAPI ドキュメント |
+| `scripts/` | 宣言物とともに生成される、このアプリをマシンから除く手順 |
 | `tests/` | 現在ある振る舞いテスト |
 
-ルートには、Cargo マニフェスト、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、
+ルートには、Cargo マニフェスト、`LICENSE`、`bmo-app.toml`(単一のマニフェスト。`testbed.toml`、`install.toml`、`deploy/` のユニットと `scripts/remove.sh` はここから生成される)、`rustfmt.toml`、`CLAUDE.md`、
 `PERSONAL-DATA.md`、`korean-ledger.json`、`settings.toml`、そしてデプロイが与えるローカル設定の例である
 `settings.local.toml.example` があります。
 

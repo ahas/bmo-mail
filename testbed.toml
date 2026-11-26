@@ -1,44 +1,41 @@
-# How the testbed checks, builds and deploys this repository, in the testbed's declaration format. The quick
-# checks hold the personal-data rule (PERSONAL-DATA.md); the behaviour tests are deferred (README.md).
+# Generated from bmo-app.toml by bmo-app-sdk's bmo-app-declare.
+# Change the manifest and run `bmo-app-declare bmo-app.toml` again; do not hand-edit this file.
 
 testbed = 0
 name = "bmo-mail"
 
+# The shared base whose generator and skeletons this repository stands on.
+upstreams = ["bmo-app-sdk"]
+
 [test]
-# The Cargo workspace's crate, and the TypeScript console plugin under client/, a Bun project whose check
-# script is its typecheck and its browser tests.
 languages = ["cargo", "bun"]
-# A fresh tree gets the client's locked packages through the same frozen install its check step runs.
+# What a fresh tree lacks, laid before any unit runs.
 setup = ["cd client && bun install --frozen-lockfile"]
 
-[tools]
-# The hosted tool, checked by the command its tool.toml names (docs/api.md, 「The hosted tool」).
-dir = "tools"
-
 [projects]
-# The console plugin bundle under client/ is a project of its own: its manifest stands outside any package
-# workspace. Bun runs its check script in the suite: the install, the typecheck and the browser tests, one file
-# after another, since the testbed gathers no test file inside a project. The client-typecheck step below runs
-# the same install and typecheck in the static check.
+# The console bundle is a project of its own, its manifest and lockfile outside any package workspace.
 paths = ["client"]
 check_script = "check"
 
+# The tool the service places on the tool host.
+[tools]
+dir = "tools"
+
 [check]
-# The sweeps that read the tree before anything runs: Korean in the code, the README's folder table and the
-# dependencies the manifests name. The ledger is the count of lines with Korean each file may hold, a file it
-# does not name being allowed none: the service's own Korean words stand there.
+# The sweeps that read the tree before anything runs.
 quick = ["korean", "layout", "dependencies", "cargo-profile", "shared-versions", "personal-data"]
-# The one address PERSONAL-DATA.md allows.
+# The addresses the personal-data rule allows.
 personal_data_allowed = ["dev@ahas.io"]
+# The debt of Korean left in a code file; a file it does not name is allowed none.
 korean_ledger = "korean-ledger.json"
-base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-console-face", "bmo-ui", "bmo-text"]
+# The base library the service crate takes by a path beside this checkout.
+base_libraries = ["bmo-app-service", "bmo-chat", "bmo-chat-client", "bmo-console-face", "bmo-ui", "bmo-text"]
 
 # The repository whose root holds the shared versions the manifests and the lock hold to.
 [check.shared_versions]
 repository = "bmo-chat"
 
-# The testbed formats, lints and type-checks the crate itself; the declared steps add only the console plugin
-# bundle, a project of its own under client/, typechecked against its own install.
+# The console bundle is typechecked against its own install, as its check script does.
 [[check.step]]
 id = "client-typecheck"
 dir = "client"
@@ -48,11 +45,8 @@ when = ["client/**"]
 [build]
 binaries = ["bmo-mail"]
 
-# The console bundle the service serves (docs/api.md, 「The console plugin bundle」), built in the build tree, where
-# its install and Nuxt's generated project stay warm between deployments, and written into the release being
-# built: the release beside the build tree, named by the first twelve hex digits of the commit (the testbed's
-# docs/deploy.md, 「The places」). Its console/ is the folder the setting console.dir names by default, read once
-# as the service starts.
+# The console bundle, installed and built in the build tree and written into the
+# release being built, where the service reads its console folder from.
 [[build.step]]
 id = "console-install"
 dir = "client"
@@ -64,44 +58,39 @@ dir = "client"
 lane = "wide"
 command = "BMO_MAIL_CONSOLE_OUT=\"$(git rev-parse --show-toplevel)/../deploy-releases/$(git rev-parse HEAD | cut -c1-12)/console\" bun run bundle"
 
-# The service's own deploy tree, and the data root its settings stand under: the data root's env/mail.toml,
-# which each release links to as settings.local.toml, the file the service reads beside settings.toml
-# (docs/api.md, 「Settings」). It names the token, the accounts file and a store path under the data root.
+# The service's deploy tree and its data, kept apart from every release.
 [deploy]
 root = "~/.local/share/bmo-mail"
 link = "deploy"
 data_root = "~/.local/share/bmo/data"
+# The deployed settings each release links beside its own.
 env_links = [{ link = "settings.local.toml", target = "env/mail.toml" }]
-# The service's user unit, marked bot: the repository's one service, whose health the deployment waits on.
 units = ["deploy/*.service"]
-# Answers 0 once the service the deployed settings name answers ready (docs/api.md, 「Health」).
 health = "~/.local/share/bmo-mail/deploy/bin/bmo-mail health"
 
-# The hosted tool is placed in its folder's .placed/: the binary the release's bin/ holds, its manifest, the schemas
-# and the manual beside it (docs/api.md, 「The hosted tool」).
+# The screen the service brings to a console, whose face the deployment probes once
+# the service is up.
+[deploy.console]
+reach = "bin/bmo-mail console-reach"
+
+# The tool placed in its folder's .placed/, the folder the tool host reads: the executable
+# the release's bin/ holds, its manifest, its manual and the schemas beside it.
 [[deploy.step]]
-id = "place-tools"
+id = "place-sent-mail-tool"
 phase = "before-flip"
 command = '''
 set -eu
 rm -rf tools/sent-mail/.placed
 mkdir -p tools/sent-mail/.placed
-cp bin/bmo-mail tools/sent-mail/tool.toml tools/sent-mail/*.json tools/sent-mail/manual.md tools/sent-mail/.placed/
+cp bin/bmo-mail tools/sent-mail/tool.toml tools/sent-mail/manual.md tools/sent-mail/*.json tools/sent-mail/.placed/
 '''
 
-# The tool is registered with the tool host once the service answers ready, as this service's own, so a person's
-# supervisor reaches it with `bmo use bmo/mail_sent`; the registration declares the mail app its manifest names,
-# the screen and the tool as one, on the delegation chain (docs/api.md, 「The hosted tool」).
+# The placed tool registered with the tool host under this service's name, carrying the
+# capability its entries ask for.
 [[deploy.step]]
-id = "register-tools"
+id = "register-sent-mail-tool"
 phase = "after-health"
 command = '''
 set -eu
 bmo pocket put tools/sent-mail/.placed --placed --service bmo-mail --allow room.tools
 '''
-
-[deploy.console]
-# The service brings the mail screen to a console; once it is up the deployment probes its console face
-# (docs/api.md, 「The console plugin bundle」). Run from the release, the command prints how a console reaches the
-# service from the release's settings (docs/api.md, 「The command」).
-reach = "bin/bmo-mail console-reach"

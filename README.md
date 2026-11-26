@@ -54,9 +54,10 @@ held to. The build check is `cargo check --all-targets` and the bundle's typeche
 | `client/` | The console plugin bundle: the mail screen, a project of its own |
 | `deploy/` | The service's user unit |
 | `docs/` | The canonical statements of what the service does, and the OpenAPI document |
+| `scripts/` | The application's removal from a machine, generated like the declarations |
 | `tests/` | The behaviour tests that stand |
 
-At the root stand the Cargo manifest, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
+At the root stand the Cargo manifest, `LICENSE`, `bmo-app.toml` (the one manifest, whose generated readings are `testbed.toml`, `install.toml`, the unit under `deploy/` and `scripts/remove.sh`), `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml` and `settings.local.toml.example`, the example of the
 local settings a deployment gives.
 

@@ -34,7 +34,6 @@ pub mod wire;
 pub mod wording;
 pub mod writing;
 
-use std::io;
 use std::sync::Arc;
 
 use tokio::net::TcpListener;
@@ -109,13 +108,12 @@ pub async fn serve(settings: Settings) -> Result<(), String> {
   let (stop, stopping) = tokio::sync::watch::channel(false);
   let watching = tokio::spawn(watcher::watch(Arc::clone(&standing), stopping));
   let closing = Arc::clone(&standing);
-  let served = axum::serve(listener, router)
-    .with_graceful_shutdown(async move {
-      stopped().await;
-      closing.events.close();
-    })
-    .await
-    .map_err(|why: io::Error| why.to_string());
+  let served = bmo_app_service::serve_until(listener, router, async move {
+    bmo_app_service::shutdown_signal().await;
+    closing.events.close();
+  })
+  .await
+  .map_err(|why| why.to_string());
 
   let _ = stop.send(true);
   let _ = watching.await;
@@ -124,22 +122,3 @@ pub async fn serve(settings: Settings) -> Result<(), String> {
   served
 }
 
-/// Resolves once the process is told to stop: an interrupt, or the service manager's terminate.
-async fn stopped() {
-  let interrupt = async {
-    let _ = tokio::signal::ctrl_c().await;
-  };
-  let terminate = async {
-    match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-      Ok(mut signal) => {
-        signal.recv().await;
-      }
-      Err(_) => std::future::pending().await,
-    }
-  };
-
-  tokio::select! {
-    () = interrupt => {}
-    () = terminate => {}
-  }
-}

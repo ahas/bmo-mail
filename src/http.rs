@@ -231,7 +231,7 @@ impl Refused {
 
 impl IntoResponse for Refused {
   fn into_response(self) -> Response {
-    (self.status, Json(json!({ "code": self.code, "error": self.error }))).into_response()
+    bmo_app_service::code_problem(self.status, self.code, self.error)
   }
 }
 

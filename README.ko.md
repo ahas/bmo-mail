@@ -51,9 +51,10 @@ Microsoft Graph에서 읽으며, 에이전시, 수신기, 계정 서비스, 노�
 | `client/` | 콘솔 플러그인 번들: 메일 화면. 독립된 프로젝트입니다 |
 | `deploy/` | 서비스의 사용자 유닛 |
 | `docs/` | 서비스가 하는 일에 대한 정본 문서와 OpenAPI 문서 |
+| `scripts/` | 선언물과 함께 생성되는, 이 앱을 컴퓨터에서 제거하는 절차 |
 | `tests/` | 현재 있는 동작 테스트 |
 
-루트에는 Cargo 매니페스트, `LICENSE`, `testbed.toml`, `install.toml`, `rustfmt.toml`, `CLAUDE.md`,
+루트에는 Cargo 매니페스트, `LICENSE`, `bmo-app.toml`(단 하나의 선언; `testbed.toml`, `install.toml`, `deploy/`의 유닛과 `scripts/remove.sh`는 여기서 생성된다), `rustfmt.toml`, `CLAUDE.md`,
 `PERSONAL-DATA.md`, `korean-ledger.json`, `settings.toml`, 그리고 배포가 주는 로컬 설정의 예시인
 `settings.local.toml.example`이 있습니다.
 

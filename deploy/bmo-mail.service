@@ -1,10 +1,10 @@
-# The mail service's user unit. A deployment runs it from its deploy tree, whose settings.local.toml links to
-# the data root's env/mail.toml (docs/api.md, 「Settings」).
+# Generated from bmo-app.toml by bmo-app-sdk's bmo-app-declare.
+# The bmo-mail service, run from its deploy tree.
 [Unit]
 Description=bmo-mail: mailboxes read, written and watched behind one API
 After=network-online.target
-# Without its settings the service has no token and no accounts file, so the unit does not start where the
-# deployment wrote none.
+# Without its deployed settings the service has no credential, so it does not
+# start where the deployment wrote none.
 ConditionPathExists=%h/.local/share/bmo/data/env/mail.toml
 
 [Service]
@@ -13,9 +13,8 @@ WorkingDirectory=%h/.local/share/bmo-mail/deploy
 ExecStart=%h/.local/share/bmo-mail/deploy/bin/bmo-mail serve
 Restart=always
 RestartSec=2
-# A stop waits for the service to end: on the terminate it ends its event streams, finishes the calls in flight
-# and lets its connections go (docs/api.md, 「The command」). A message held for undo send stays a draft on the
-# server, so a stop never leaves one half-sent (docs/mail.md, 「Writing」).
+# A stop waits for the service to end on its own, however long its open streams and
+# in-hand requests take; it is never escalated to a kill.
 TimeoutStopSec=infinity
 
 [Install]

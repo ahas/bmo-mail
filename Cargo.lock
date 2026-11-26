@@ -361,6 +361,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bmo-app-service"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "bmo-console-face"
 version = "0.1.0-rev.10"
 dependencies = [
@@ -381,6 +392,7 @@ dependencies = [
  "async-pop",
  "axum",
  "base64 0.23.1",
+ "bmo-app-service",
  "bmo-console-face",
  "chrono",
  "chrono-tz",

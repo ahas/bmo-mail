@@ -46,9 +46,10 @@
 | `client/` | 控制台插件包：邮件页面，是一个独立的项目 |
 | `deploy/` | 服务的用户单元 |
 | `docs/` | 关于服务行为的规范文档，以及 OpenAPI 文档 |
+| `scripts/` | 与声明一并生成的、把本应用从机器上移除的脚本 |
 | `tests/` | 现有的行为测试 |
 
-根目录下有 Cargo 清单、`LICENSE`、`testbed.toml`、`install.toml`、`rustfmt.toml`、`CLAUDE.md`、`PERSONAL-DATA.md`、
+根目录下有 Cargo 清单、`LICENSE`、`bmo-app.toml`(唯一声明;`testbed.toml`、`install.toml`、`deploy/` 单元与 `scripts/remove.sh` 由它生成)、`rustfmt.toml`、`CLAUDE.md`、`PERSONAL-DATA.md`、
 `korean-ledger.json`、`settings.toml`，以及部署所提供的本地设置的示例 `settings.local.toml.example`。
 
 ## 控制台插件包

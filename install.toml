@@ -1,6 +1,7 @@
-# What installing the mail service on a fresh machine needs, read by the testbed's install verb (bmo-testbed's
-# docs/install.md, 「The install declaration」). The settings are docs/api.md's 「Settings」.
+# Generated from bmo-app.toml by bmo-app-sdk's bmo-app-declare.
+# Change the manifest and run `bmo-app-declare bmo-app.toml` again; do not hand-edit this file.
 
+# What installing this application needs on a machine, read by the testbed's install verb.
 install = 1
 
 restart = "systemctl --user restart bmo-mail.service"
@@ -15,7 +16,7 @@ what = "Builds the console bundle at every release; the Bun runtime from https:/
 
 [[port]]
 name = "mail.server"
-number = 3330
+number = 13109
 
 [[token]]
 name = "mail.service"
@@ -25,17 +26,13 @@ file = "env/mail-service.token"
 name = "mail.console"
 file = "env/mail-console.token"
 
-# The key an account's secrets are sealed with: 32 random bytes as base64 on one line.
 [[token]]
 name = "mail.secrets"
 file = "env/mail-secrets.key"
 bytes = 32
 encoding = "base64"
 
-# The release's settings.local.toml. The store and the staging folder stand under the data root; no accounts file
-# is imported, so mailboxes are added on the console; the administrator is the owner's account on the account
-# service. The hosted tool's upstreams are named by their tokens outright; the node service and the page-token service stay
-# unnamed, so a person's sent Outlook mail is not read.
+# The deployed settings the release links beside its own.
 [[settings]]
 file = "env/mail.toml"
 text = """

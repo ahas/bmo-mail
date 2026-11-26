@@ -1,0 +1,99 @@
+# The one declaration this application answers to: bmo-app-sdk's docs/manifest.md states every
+# field, and testbed.toml, install.toml, the unit and the removal script are generated from this
+# file by bmo-app-declare. What is bmo-mail's own — its routes, its stores, its plugin and words —
+# stands in src/, client/ and docs/.
+
+app = 1
+name = "bmo-mail"
+description = "mailboxes read, written and watched behind one API"
+env_prefix = "BMO_MAIL"
+deploy_root = "~/.local/share/bmo-mail"
+data_root = "~/.local/share/bmo/data"
+data_folder = "mail"
+service_port = 13109
+port_name = "mail.server"
+checkout = "~/repos/ahas/bmo/services/mail"
+base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-console-face", "bmo-ui", "bmo-text"]
+shared_versions = "bmo-chat"
+korean_ledger = "korean-ledger.json"
+personal_data_allowed = ["dev@ahas.io"]
+test_setup = ["cd client && bun install --frozen-lockfile"]
+
+[console]
+project = "client"
+install = "bun install --frozen-lockfile"
+built = "build"
+release_out = "BMO_MAIL_CONSOLE_OUT"
+check_script = "check"
+typecheck = true
+reach = true
+
+# The service's own binary is the tool's executable, so the binaries line stays one.
+[tool]
+name = "sent-mail"
+service = "bmo-mail"
+
+[[token]]
+name = "mail.service"
+file = "env/mail-service.token"
+
+[[token]]
+name = "mail.console"
+file = "env/mail-console.token"
+
+[[token]]
+name = "mail.secrets"
+file = "env/mail-secrets.key"
+bytes = 32
+encoding = "base64"
+
+# The store and the staging folder stand under the data root; no accounts file is imported, so
+# mailboxes are added on the console; the administrator is the owner's account on the account
+# service. The hosted tool's upstreams are named by their tokens outright; the node service and
+# the page-token service stay unnamed, so a person's sent Outlook mail is not read. (The machine
+# has since gained node, page-token, ms-teams and system-mail values by hand, and moved tokens to
+# files; that drift is in the migration report, not chosen away here.)
+[[settings]]
+file = "env/mail.toml"
+text = """
+[server]
+listen = "127.0.0.1:{{port.mail.server}}"
+token = "{{token.mail.service}}"
+
+[store]
+path = "{{data_root}}/mail/mail.db"
+
+[accounts]
+administrator = "{{value.web.owner-account}}"
+
+[secrets]
+key_file = "{{data_root}}/env/mail-secrets.key"
+
+[staging]
+dir = "{{data_root}}/mail/staging"
+
+[console]
+token = "{{token.mail.console}}"
+
+[agency]
+address = "http://127.0.0.1:{{port.agency.control}}"
+token = "{{token.agency.control}}"
+
+[receiver]
+address = "http://127.0.0.1:{{port.receiver.server}}"
+token = "{{token.receiver.service}}"
+
+[account_service]
+address = "{{value.web.address}}"
+token = "{{token.web.server}}"
+"""
+
+[[line]]
+file = "env/web-console.env"
+key = "MAIL_ADDRESS"
+value = "http://127.0.0.1:{{port.mail.server}}"
+
+[[line]]
+file = "env/web-console.env"
+key = "MAIL_TOKEN"
+value = "{{token.mail.console}}"
