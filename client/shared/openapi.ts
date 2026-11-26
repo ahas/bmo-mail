@@ -1411,8 +1411,9 @@ export interface components {
             /** @description The name shown with it. */
             fromName?: string | null;
             /**
-             * @description The name of a secret in the platform's space holding `USERNAME` and `PASSWORD`; none for a server that
-             *     takes mail without a sign-in.
+             * @description The address of a secret holding `USERNAME` and `PASSWORD`: a plain file name in the platform's space of the
+             *     secret store, or `units/<unit>/<name>` in an organisation unit's own space; none for a server that takes
+             *     mail without a sign-in.
              */
             secret?: string | null;
             /** @description The one recipient's address. */

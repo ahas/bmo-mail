@@ -238,9 +238,10 @@ decimal digits; any other is refused 400 `bad-request`. The owner's routes stand
 
 ## System mail
 
-The account service's sends of the platform's own mail (`docs/mail.md`, 「The platform's system mail」). These
-routes take the credential `system_mail.token` names, or the service's token, and no owner headers; any other
-bearer is refused 401 `unauthorized`, and where the setting names none, only the service's token reaches them.
+The account service's sends of the platform's own mail, and of a unit's own mail signed in with that unit's secret
+(`docs/mail.md`, 「The platform's system mail」). These routes take the credential `system_mail.token` names, or the
+service's token, and no owner headers; any other bearer is refused 401 `unauthorized`, and where the setting names
+none, only the service's token reaches them.
 
 | Method and path | Sends | Answers |
 |---|---|---|
@@ -252,10 +253,14 @@ bearer is refused 401 `unauthorized`, and where the setting names none, only the
   never goes through a server the platform administrator did not set.
 - **`from`** is the sender's address and `fromName` the name shown with it; **`to`** is one address. An address
   that is not one is refused 400 `bad-request`.
-- **`secret`** names a secret of the platform's space, the folder `system_mail.secrets_dir` names: a file name of
-  letters, digits, `.`, `_` and `-`, holding `USERNAME` and `PASSWORD` lines. The server is signed in with them; a
-  secret that is not a file there, or holds no `PASSWORD`, is refused 422 `unknown-secret` without its contents
-  being said. A login left out of it is `from`. A send with no secret goes through a server whose `auth` is
+- **`secret`** is an address in the secret store, read under the folder `system_mail.secrets_dir` names (bmo-web's
+  `docs/accounts.md`, 「The secret store」): a plain file name for a secret of the platform's space, or
+  `units/<unit>/<name>` for one of an organisation unit's own space, `<unit>` the unit's id in decimal digits. A
+  plain file name is letters, digits, `.`, `_` and `-` with no leading dot, and the file it names holds `USERNAME`
+  and `PASSWORD` lines, the server signed in with them. An address the store does not give is refused 422
+  `unknown-secret` naming the address: one of another space, one of a shape it does not allow, or one whose unit or
+  file does not stand. Nothing outside that folder is ever read, and a file holding no `PASSWORD` is refused the
+  same way. A login left out of the file is `from`. A send with no secret goes through a server whose `auth` is
   `none` alone, any other refused 422 `unknown-secret`.
 - **`subject`** is one line; **`text`** is the plain body and **`html`** the HTML one, the message going as both
   where both are given. **`kind`** is a kebab-case word saying what the mail is — `test`, `email-verification`,
@@ -447,7 +452,7 @@ log. A route answers the common codes of the conventions where they apply, and t
 | 422 | `sign-in-failed` | the account's servers did not take its sign-in, or a system mail's server did not take its secret |
 | 422 | `unknown-server` | a body names a server the owner does not reach, or a system mail one that is not the platform's outgoing server |
 | 422 | `server-mismatch` | an account's incoming server is not of its kind's protocol, or its outgoing server is not one |
-| 422 | `unknown-secret` | a system mail names a secret that does not stand, or none where its server needs one |
+| 422 | `unknown-secret` | a system mail names an address the secret store does not give or a secret that does not stand, or none where its server needs one |
 | 422 | `no-authorization` | an authorization is asked for a kind that signs in by password |
 | 422 | `unknown-authorization` | a body names an authorization that is not the owner's, has run out or was used |
 | 502 | `upstream-failed` | the mail server did not answer, or failed; or the account service did not answer |
@@ -636,8 +641,9 @@ the units 「The hosted tool」 names.
 - **The servers each account names,** through its kind's adapter: for `imap-smtp` the IMAP and submission
   servers, for `pop3-smtp` the POP3 and submission servers, over the security each server names. A system mail
   goes over the submission server it names.
-- **The platform's secret folder** the setting `system_mail.secrets_dir` names, where a system mail's secret is
-  read at its send (「System mail」).
+- **The secret store's folder** the setting `system_mail.secrets_dir` names, the platform's space that a system
+  mail's secret address is read under at its send, a unit's own space standing under it in `units/` (「System
+  mail」).
 - **The key file** the setting `secrets.key_file` names, read once at start.
 - **The accounts file** the setting `accounts.file` names, read once at start until it has been imported, and
   never after (`docs/mail.md`, 「The accounts file, imported once」).
@@ -676,7 +682,7 @@ the settings folder.
 | `receiver` | `address`, `token_file` | the receiver, which the hosted tool asks for the owner's sender | none: the deployment's own callers read no one's mail |
 | `account_service` | `address`, `token_file` | the account service, which the service asks for its servers' delegation chain (「Servers」) and the hosted tool for the account the owner's sender is linked to | none: only a person's own servers stand, and the deployment's own callers read no one's mail |
 | `system_mail` | `token`, `token_file` | the credential the account service presents for the platform's system mail (「System mail」) | none: only the service's token reaches the system mail's routes |
-| `system_mail` | `secrets_dir` | the platform's space of the secret store, the data root's `env/`, where a system mail's secret is read | none: a system mail that names a secret is refused |
+| `system_mail` | `secrets_dir` | the secret store's folder, the data root's `env/`, the platform's space a system mail's secret address is read under, each unit's space standing in `units/` below it | none: a system mail that names a secret is refused |
 | `outlook` | `owner_node` | the node the owner's account reads its sent mail on | none: its agency record is read as any account's |
 | `outlook` | `owner_account` | the account the owner is known by to agency's node records, the node service and the page-token service, which the run and the page token for his sent mail name (`docs/mail.md`, 「A person's sent mail, read on their own machine」) | none: his own account |
 | `node` | `address` | the node service's address, where the hosted tool makes its runs | none: the Outlook road does not stand |

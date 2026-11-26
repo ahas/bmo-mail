@@ -146,7 +146,7 @@ pub struct Upstream {
 }
 
 /// The platform's system mail (`docs/api.md`, 「System mail」): the credential the account service presents, and
-/// the folder a send's named secret is read from.
+/// the secret store's folder a send's secret address is read under.
 #[derive(Clone, Debug, Deserialize)]
 pub struct SystemMail {
   /// The credential itself; it stands before the file where both are given.
@@ -154,7 +154,8 @@ pub struct SystemMail {
   pub token: String,
   #[serde(default)]
   pub token_file: Option<PathBuf>,
-  /// The platform's space of the secret store; none where it is empty.
+  /// The secret store's folder, the platform's space that holds each unit's space below `units/`; none where it
+  /// is empty.
   #[serde(default)]
   pub secrets_dir: Option<PathBuf>,
 }

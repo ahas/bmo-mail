@@ -69,6 +69,17 @@ fn refused(failure: ClientFailure) -> (u16, String) {
   }
 }
 
+/// The sentence a refusal came back with, for a check on what it names.
+fn reason(failure: &ClientFailure) -> String {
+  match failure {
+    ClientFailure::Answered {
+      answer: Some(answer),
+      ..
+    } => answer.error.clone(),
+    other => panic!("the call was not answered: {other}"),
+  }
+}
+
 /// A plain server of a protocol on this machine, held by `link` where one is given.
 fn plain(protocol: Protocol, port: u16, link: Option<&str>) -> NewServer {
   NewServer {
@@ -456,10 +467,12 @@ async fn without_an_account_service_only_an_owners_own_servers_stand() {
   );
 }
 
-/// A submission stand-in that takes `AUTH PLAIN` with one login alone and keeps what it is handed: each
+/// A submission stand-in that takes `AUTH PLAIN` with one of `logins` alone and keeps what it is handed: each
 /// message's recipients, its bytes and the login it went under.
-async fn submission(kept: Arc<Mutex<Vec<(String, String)>>>) -> u16 {
-  async fn serve(stream: TcpStream, kept: Arc<Mutex<Vec<(String, String)>>>) {
+async fn submission(logins: &[&str], kept: Arc<Mutex<Vec<(String, String)>>>) -> u16 {
+  let taken: Arc<Vec<String>> = Arc::new(logins.iter().map(|login| (*login).to_owned()).collect());
+
+  async fn serve(stream: TcpStream, kept: Arc<Mutex<Vec<(String, String)>>>, taken: Arc<Vec<String>>) {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     let mut login = String::new();
@@ -483,7 +496,7 @@ async fn submission(kept: Arc<Mutex<Vec<(String, String)>>>) -> u16 {
 
         login = String::from_utf8_lossy(&decoded).replace('\0', " ").trim().to_owned();
 
-        if login == "mailer the-password" { "235 ok\r\n" } else { "535 no\r\n" }
+        if taken.contains(&login) { "235 ok\r\n" } else { "535 no\r\n" }
       } else if upper.starts_with("DATA") {
         let _ = reader.get_mut().write_all(b"354 go on\r\n").await;
         let mut data = Vec::new();
@@ -518,7 +531,7 @@ async fn submission(kept: Arc<Mutex<Vec<(String, String)>>>) -> u16 {
 
   tokio::spawn(async move {
     while let Ok((stream, _)) = listener.accept().await {
-      tokio::spawn(serve(stream, Arc::clone(&kept)));
+      tokio::spawn(serve(stream, Arc::clone(&kept), Arc::clone(&taken)));
     }
   });
 
@@ -547,7 +560,7 @@ async fn the_account_service_sends_system_mail_through_a_platform_server_with_a_
   )
   .await;
   let kept = Arc::new(Mutex::new(Vec::new()));
-  let port = submission(Arc::clone(&kept)).await;
+  let port = submission(&["mailer the-password"], Arc::clone(&kept)).await;
   let admin = MailClient::new(&address, TOKEN).acting_for("0", Role::Administrator);
   let platform = admin.create_server(&plain(Protocol::Smtp, port, Some("platform"))).await.unwrap();
   let own = admin.create_server(&plain(Protocol::Smtp, port, None)).await.unwrap();
@@ -647,4 +660,88 @@ async fn the_account_service_sends_system_mail_through_a_platform_server_with_a_
     refused(system.send_system_mail(&mail(platform.id, Some("wrong-mailer"))).await.unwrap_err()),
     (422, "sign-in-failed".into())
   );
+}
+
+#[tokio::test]
+async fn a_system_mail_signs_in_with_the_secret_at_a_unit_address() {
+  let folder = scratch("unit-address");
+  let secrets = folder.join("env");
+
+  std::fs::create_dir_all(secrets.join("units/7")).unwrap();
+  std::fs::write(secrets.join("platform-mailer"), "USERNAME=mailer\nPASSWORD=the-password\n").unwrap();
+  std::fs::write(secrets.join("units/7/login"), "USERNAME=unit-mailer\nPASSWORD=unit-password\n").unwrap();
+
+  let chain: Shared = Arc::default();
+  let accounts_address = account_service(chain).await;
+  let (_standing, address) = service(
+    &folder,
+    &[
+      ("BMO_MAIL_ACCOUNT_SERVICE__ADDRESS", accounts_address),
+      ("BMO_MAIL_ACCOUNT_SERVICE__TOKEN", "account-token".to_owned()),
+      ("BMO_MAIL_SYSTEM_MAIL__TOKEN", SYSTEM_TOKEN.to_owned()),
+      ("BMO_MAIL_SYSTEM_MAIL__SECRETS_DIR", secrets.display().to_string()),
+    ],
+  )
+  .await;
+  let kept = Arc::new(Mutex::new(Vec::new()));
+  let port = submission(&["mailer the-password", "unit-mailer unit-password"], Arc::clone(&kept)).await;
+  let admin = MailClient::new(&address, TOKEN).acting_for("0", Role::Administrator);
+  let platform = admin.create_server(&plain(Protocol::Smtp, port, Some("platform"))).await.unwrap();
+  let system = MailClient::new(&address, SYSTEM_TOKEN);
+  let last_login = || kept.lock().unwrap().last().expect("the stand-in took a mail").0.clone();
+
+  let mail = |named: &str| NewSystemMail {
+    server: platform.id,
+    from: "unit-noreply@example.com".to_owned(),
+    from_name: None,
+    secret: Some(named.to_owned()),
+    to: "person@example.com".to_owned(),
+    subject: "A notice of the unit".to_owned(),
+    text: "The unit's notice".to_owned(),
+    html: None,
+    kind: "test".to_owned(),
+  };
+
+  system
+    .send_system_mail(&mail("units/7/login"))
+    .await
+    .expect("the unit's own secret signs the send in");
+
+  assert_eq!(
+    last_login(),
+    "unit-mailer unit-password",
+    "the unit's file was read, not the platform's"
+  );
+
+  // A flat name keeps standing for the platform's own secret beside the unit's.
+  system
+    .send_system_mail(&mail("platform-mailer"))
+    .await
+    .expect("the platform's secret still reads");
+
+  assert_eq!(last_login(), "mailer the-password");
+
+  // An address whose unit or file does not stand is refused naming the whole address.
+  for named in ["units/8/login", "units/7/absent"] {
+    let failure = system.send_system_mail(&mail(named)).await.unwrap_err();
+    let why = reason(&failure);
+
+    assert_eq!(refused(failure), (422, "unknown-secret".into()), "{named} does not stand");
+    assert!(why.contains(named), "the refusal names the address: {why}");
+  }
+
+  // A space the service does not read, and an address reaching outside the store's folder, are refused alike.
+  for named in ["users/7/login", "units/7/../platform-mailer", "units/7", "units//login"] {
+    let failure = system.send_system_mail(&mail(named)).await.unwrap_err();
+    let why = reason(&failure);
+
+    assert_eq!(
+      refused(failure),
+      (422, "unknown-secret".into()),
+      "{named} is no address the store gives"
+    );
+    assert!(why.contains(named), "the refusal names the address: {why}");
+  }
+
+  assert_eq!(kept.lock().unwrap().len(), 2, "nothing refused reached a server");
 }

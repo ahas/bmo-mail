@@ -370,8 +370,9 @@ pub struct NewSystemMail {
   /// The name shown with it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub from_name: Option<String>,
-  /// The name of a secret in the platform's space holding `USERNAME` and `PASSWORD`; none for a server that
-  /// takes mail without a sign-in.
+  /// The address of a secret holding `USERNAME` and `PASSWORD`: a plain file name in the platform's space of the
+  /// secret store, or `units/<unit>/<name>` in an organisation unit's own space; none for a server that takes
+  /// mail without a sign-in.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub secret: Option<String>,
   /// The one recipient's address.

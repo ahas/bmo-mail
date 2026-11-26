@@ -79,7 +79,8 @@ token_file = ""
 # itself or as its file; empty, only the service's token reaches those routes.
 token = ""
 token_file = ""
-# The platform's space of the secret store, the data root's env/, where a system mail's named secret is read.
+# The secret store's folder, the data root's env/, the platform's space a system mail's secret address is read
+# under; an organisation unit's own secrets stand in units/<unit>/ below it.
 secrets_dir = ""
 
 [outlook]

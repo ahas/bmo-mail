@@ -1,8 +1,8 @@
 //! The platform's system mail (`docs/api.md`, 「System mail」): the account service's sends of the platform's own
-//! mail, under a credential of its own. A send names the platform's outgoing server, the sender, the name of the
+//! mail, under a credential of its own. A send names the platform's outgoing server, the sender, the address of the
 //! secret it signs in with, the recipient and the words; the mail goes at once and nothing of it is kept.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use axum::http::{Method, StatusCode};
 use axum::response::Response;
@@ -47,19 +47,42 @@ impl Route for ListOutgoingServers {
 
 crate::route!(ListOutgoingServers);
 
-/// A secret's login and password, read from its file in the platform's space: each line's key before its first
-/// `=` and its value exactly as written after it. The secret store's own line syntax, read here.
-fn secret_login(folder: Option<&Path>, name: &str, from: &str) -> Result<MailAccount, Asked> {
-  let unknown = || Asked::rule("unknown-secret", format!("no secret named {name} holds a password"));
-  let shaped = !name.is_empty()
-    && !name.starts_with('.')
-    && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+/// The folder below the secret store's own that an organisation unit's secrets stand in, named by the unit's id.
+const UNIT_SPACE: &str = "units";
 
-  if !shaped {
-    return Err(unknown());
+/// Whether `name` is one plain file name of the secret store: letters, digits, `.`, `_` and `-`, with no leading
+/// dot.
+fn plain_name(name: &str) -> bool {
+  !name.is_empty()
+    && !name.starts_with('.')
+    && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
+/// The file a secret's address stands for, or none where it is no address the store gives: a plain file name in
+/// its folder, which is the platform's space, or `units/<unit>/<name>` in a unit's space below it, `<unit>` the
+/// unit's id in decimal digits. Every part is judged on its own and the path is built from those parts alone, so
+/// an address never names a file outside the store's folder.
+fn secret_file(folder: &Path, address: &str) -> Option<PathBuf> {
+  if let Some((space, rest)) = address.split_once('/') {
+    if space != UNIT_SPACE {
+      return None;
+    }
+
+    let (unit, name) = rest.split_once('/')?;
+    let shaped = !unit.is_empty() && unit.chars().all(|c| c.is_ascii_digit()) && plain_name(name);
+
+    return shaped.then(|| folder.join(UNIT_SPACE).join(unit).join(name));
   }
 
-  let text = std::fs::read_to_string(folder.ok_or_else(unknown)?.join(name)).map_err(|_| unknown())?;
+  plain_name(address).then(|| folder.join(address))
+}
+
+/// A secret's login and password, read from the file its address stands for: each line's key before its first
+/// `=` and its value exactly as written after it. The secret store's own line syntax, read here.
+fn secret_login(folder: Option<&Path>, address: &str, from: &str) -> Result<MailAccount, Asked> {
+  let unknown = || Asked::rule("unknown-secret", format!("no secret named {address} holds a password"));
+  let file = folder.and_then(|folder| secret_file(folder, address)).ok_or_else(unknown)?;
+  let text = std::fs::read_to_string(file).map_err(|_| unknown())?;
   let value = |key: &str| {
     text
       .lines()

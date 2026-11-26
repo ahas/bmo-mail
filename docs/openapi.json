@@ -6432,7 +6432,7 @@
               "string",
               "null"
             ],
-            "description": "The name of a secret in the platform's space holding `USERNAME` and `PASSWORD`; none for a server that\ntakes mail without a sign-in."
+            "description": "The address of a secret holding `USERNAME` and `PASSWORD`: a plain file name in the platform's space of the\nsecret store, or `units/<unit>/<name>` in an organisation unit's own space; none for a server that takes\nmail without a sign-in."
           },
           "to": {
             "type": "string",

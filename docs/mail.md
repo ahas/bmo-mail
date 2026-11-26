@@ -236,8 +236,9 @@ and submission servers one time, and each of its people adds only their address 
 ## The platform's system mail
 
 The platform sends mail of its own — a reset link, an email's verification, a security notice — through one of the
-platform's outgoing servers. The account service decides when such a mail goes, who reads it and in what words
-(bmo-web's `docs/accounts.md`, 「The platform's own mail」); this service only hands it to the server.
+platform's outgoing servers, and a unit's own mail goes the same road, signed in with that unit's login. The account
+service decides when such a mail goes, who reads it and in what words (bmo-web's `docs/accounts.md`, 「The
+platform's own mail」); this service only hands it to the server.
 
 - **The system mail is the platform administrator's alone.** It is set on the console's platform settings, and
   its outgoing server is one of the platform's own server records, never a company's, a unit's or a person's.
@@ -247,14 +248,15 @@ platform's outgoing servers. The account service decides when such a mail goes, 
   `system_mail.token` names (`docs/api.md`, 「System mail」): the outgoing servers it may choose from, which are
   the platform's alone, and one send at a time.
 - **A send names everything it goes with:** the platform's outgoing server, the sender's address and name, the
-  name of the secret it signs in with, the recipient, the subject, the text and the HTML, and the kind of mail
+  address of the secret it signs in with, the recipient, the subject, the text and the HTML, and the kind of mail
   it is. Nothing of it is kept: the service keeps no copy, no row and no event, and its log names the kind and
   the server, never an address or a word of the mail.
-- **The secret is named, never handed over.** It is a secret of the platform's space of the secret store, the
-  folder the setting `system_mail.secrets_dir` names — the data root's `env/` — a file of `USERNAME` and
-  `PASSWORD` lines, each line's key before its first `=` and its value exactly as written after it. The service
-  reads it at the send and keeps nothing of it. A send that names no secret goes only through a server that
-  takes mail without a sign-in.
+- **The secret is named, never handed over.** It is a secret of the platform's space of the secret store, or of the
+  unit's own space where a unit's mail goes, read by its address under the folder the setting
+  `system_mail.secrets_dir` names, the data root's `env/` (`docs/api.md`, 「System mail」). A secret is a file of
+  `USERNAME` and `PASSWORD` lines, each line's key before its first `=` and its value exactly as written after it.
+  The service reads it at the send and keeps nothing of it, and reads nothing outside that folder. A send that
+  names no secret goes only through a server that takes mail without a sign-in.
 - **A send goes at once,** with no undo span and no waiting: the account service hears it went, or the
   server's refusal in a sentence of its own.
 - **Where this service is not installed,** or its settings name no credential for the account service, there is
@@ -921,7 +923,7 @@ What the mail server's operator does by hand, in this order:
    Keep the key file beside the store's backups: a store without its key opens no account.
 2. Name the account service in `account_service`, so the platform's and the organisations' servers stand, and,
    for the platform's system mail, give the account service a credential of its own in `system_mail.token` (or
-   its file) and the same value in the account service's `mail.token`, and name the platform's secret folder in
+   its file) and the same value in the account service's `mail.token`, and name the secret store's folder in
    `system_mail.secrets_dir` (「The platform's system mail」).
 3. Confirm the IMAP server's per-user connection limit leaves room for two connections per account
    from the service besides the account's other clients. For a POP3 account, set every other client of
