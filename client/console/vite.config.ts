@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,11 +7,10 @@ import vue from "@vitejs/plugin-vue";
 import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
 import { consoleBundle } from "bmo-ui/bundle/console-bundle.js";
+import { consoleTheme } from "bmo-ui/bundle/console-theme.js";
 import { defineConfig } from "vite";
 
 import type { Plugin } from "vite";
-
-import { quoted, themeStylesheet } from "./theme.ts";
 
 // The mail screen as the browser module a console loads (docs/api.md, "The console plugin bundle"), built
 // with bmo-ui's bundle build, which leaves every import of a library the console shares as an import of the
@@ -133,34 +132,6 @@ function sharedOnly(): Plugin {
   };
 }
 
-// The layer's stylesheet as the module's stylesheet reads it: its theme, variants and utilities with none
-// of the sources it scans, so the stylesheet carries the utilities of the screen's own sources alone and
-// none of the layer's or the component library's, which the console's own stylesheet carries. Each file
-// on the way is copied beside the generated project with its `@source` lines left out, its imports pointed
-// at the copies and every other relative import at the file beside the original (`theme.ts`).
-const THEME = join(generated, "console-theme");
-
-function writeTheme(): void {
-  const ui = join(packages, "@nuxt", "ui", "dist", "runtime");
-  const layer = join(packages, "bmo-ui", "app", "assets", "css", "main.css");
-
-  mkdirSync(THEME, { recursive: true });
-  writeFileSync(join(THEME, "ui.css"), themeStylesheet(join(generated, "ui.css")));
-  writeFileSync(
-    join(THEME, "nuxt-ui.css"),
-    themeStylesheet(join(ui, "index.css"), { "#build/ui.css": quoted(join(THEME, "ui.css")) })
-  );
-  writeFileSync(
-    join(THEME, "layer.css"),
-    themeStylesheet(layer, {
-      tailwindcss: `${quoted("tailwindcss")} source(none)`,
-      "@nuxt/ui": quoted(join(THEME, "nuxt-ui.css"))
-    })
-  );
-}
-
-writeTheme();
-
 // The bundle's words, one JSON object keyed by locale, each locale's tree from its file in the language
 // pack.
 function readWords(): Record<string, Record<string, unknown>> {
@@ -191,6 +162,7 @@ export default defineConfig({
   logLevel: "warn",
   plugins: [
     consoleBundle({ name: "mail", words: WORDS }),
+    consoleTheme(),
     sharedOnly(),
     vue({ isProduction: true }),
     AutoImport({
@@ -207,9 +179,6 @@ export default defineConfig({
     tailwindcss(),
     words()
   ],
-  resolve: {
-    alias: [{ find: /^#console-theme$/, replacement: join(THEME, "layer.css") }]
-  },
   define: {
     "import.meta.server": "false",
     "import.meta.client": "true",
