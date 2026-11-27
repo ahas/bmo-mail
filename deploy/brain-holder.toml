@@ -1,0 +1,9 @@
+# This service's standing line in every agent's brain: when to reach for it. How its tools are called is
+# their manuals', handed with a tool's first call in a session.
+held_by = "mail"
+
+[[memory]]
+key = "when"
+type = "tip"
+recall_condition = "a person's sent mail of a day"
+text = "Read the person's sent mail of that day with bmo/mail_sent."
