@@ -3,7 +3,7 @@
 held_by = "mail"
 
 [[memory]]
-key = "when"
+key = "mail.when"
 type = "tip"
 recall_condition = "a person's sent mail of a day"
 text = "Read the person's sent mail of that day with bmo/mail_sent."
