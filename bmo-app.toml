@@ -10,6 +10,7 @@ env_prefix = "BMO_MAIL"
 deploy_root = "~/.local/share/bmo-mail"
 data_root = "~/.local/share/bmo/data"
 data_folder = "mail"
+holder = "mail"
 service_port = 13109
 port_name = "mail.server"
 checkout = "~/repos/ahas/bmo/services/mail"
