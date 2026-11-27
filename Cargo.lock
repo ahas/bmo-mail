@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "bmo-console-face"
-version = "0.1.0-rev.10"
+version = "0.0.0"
 dependencies = [
  "axum",
  "headers",
@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "bmo-mail"
-version = "0.1.0-rev.3"
+version = "0.0.0"
 dependencies = [
  "async-imap",
  "async-pop",

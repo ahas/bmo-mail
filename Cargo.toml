@@ -4,7 +4,7 @@
 [package]
 name = "bmo-mail"
 description = "Mailboxes read, written and watched over IMAP and submission, behind one API."
-version = "0.1.0-rev.3"
+version = "0.0.0"
 edition = "2024"
 license = "MIT"
 publish = false

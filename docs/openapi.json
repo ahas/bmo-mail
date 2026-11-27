@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-mail",
-    "version": "0.1.0-rev.3",
+    "version": "0.0.0",
     "description": "Mailboxes read, written and watched behind one API, each account an owner's and of the kind whose adapter reaches it: accounts, folders, messages and threads, drafts and sends, labels, rules, spam senders and settings; the console face beside them is bmo-chat's and stated there. Every route the screen uses takes the role the reader holds in `Owner-Role` and the opaque owner key the caller acts for in `Owner-Key`; a route that reads or changes an account reaches that owner's accounts alone. A mailbox's members nest under its account. Bodies are JSON with camelCase keys; times are integers of epoch milliseconds. A list is a page; a page of messages is newest first with a message's `at` as its cursor, and the small lists are paged by `position`. A key holding a slash stands in a path percent-encoded. Every failure is answered in the error shape with its status. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`."
   },
   "servers": [
