@@ -130,6 +130,19 @@ where
   }
 }
 
+/// A page of an account's folders or labels.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AccountListInput {
+  account_name: String,
+  /// The position of the last item read; the items after it.
+  #[serde(default)]
+  after: Option<i64>,
+  /// The most items the page holds; the whole list where none is given.
+  #[serde(default)]
+  limit: Option<u32>,
+}
+
 /// A page of an account's messages.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -251,6 +264,34 @@ pub fn tools() -> Vec<MailTool> {
        inbox's unread count.",
       "GET /accounts",
       |client, query: ListQuery| async move { client.accounts(&query).await.map_err(client_failed) },
+    ),
+    tool(
+      "mail_folders",
+      "An account's folders: each one's name, which mail_messages and mail_update take as folderName, and its \
+       counts.",
+      "GET /accounts/{accountName}/folders",
+      |client, asked: AccountListInput| async move {
+        let query = ListQuery {
+          after: asked.after,
+          limit: asked.limit,
+        };
+
+        client.folders(&asked.account_name, &query).await.map_err(client_failed)
+      },
+    ),
+    tool(
+      "mail_labels",
+      "An account's labels in their order: each one's id, which mail_messages takes as labelId and mail_update \
+       among labelIds, its name and its colour.",
+      "GET /accounts/{accountName}/labels",
+      |client, asked: AccountListInput| async move {
+        let query = ListQuery {
+          after: asked.after,
+          limit: asked.limit,
+        };
+
+        client.labels(&asked.account_name, &query).await.map_err(client_failed)
+      },
     ),
     tool(
       "mail_messages",

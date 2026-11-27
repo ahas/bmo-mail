@@ -28,6 +28,8 @@ sees that owner's accounts alone. It holds the role `--role` or `BMO_MAIL_ROLE` 
 
 1. `mail_accounts`: the accounts, each with its `name` (every other tool takes it as `accountName`), its
    `address` and its inbox's `unreadCount`.
+   `mail_folders` and `mail_labels` with `accountName` list its folders (their `name` is a `folderName`) and its
+   labels (their `id` is a `labelId`).
 2. `mail_messages` with `accountName`: a page of messages newest first, without their bodies, each with its
    `id`, `threadId`, `folderName`, `from`, `subject`, `snippet`, `flags`, `labelIds` and `at`.
    - With nothing else it reads the inbox; `folderName` reads a folder, `labelId` a label's messages.

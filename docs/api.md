@@ -573,6 +573,8 @@ The plugin `bmo-mail`: the MCP server `bmo-mail mcp` starts on standard input an
 | Tool | Route | Input |
 |---|---|---|
 | `mail_accounts` | `GET /accounts` | `after`, `limit` |
+| `mail_folders` | `GET /accounts/{accountName}/folders` | `accountName`; `after`, `limit` |
+| `mail_labels` | `GET /accounts/{accountName}/labels` | `accountName`; `after`, `limit` |
 | `mail_messages` | `GET /accounts/{accountName}/messages` | `accountName`; `folderName`, `q`, `labelId`, `before`, `after`, `limit` |
 | `mail_message` | `GET /accounts/{accountName}/messages/{messageId}` | `accountName`, `messageId` |
 | `mail_update` | `PATCH /accounts/{accountName}/messages/{messageId}` | `accountName`, `messageId`, `flags`, `labelIds`; `folderName` |

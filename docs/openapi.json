@@ -6547,6 +6547,86 @@
       "route": "GET /accounts"
     },
     {
+      "name": "mail_folders",
+      "description": "An account's folders: each one's name, which mail_messages and mail_update take as folderName, and its counts.",
+      "input": {
+        "description": "A page of an account's folders or labels.",
+        "type": "object",
+        "properties": {
+          "accountName": {
+            "type": "string"
+          },
+          "after": {
+            "description": "The position of the last item read; the items after it.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "default": null
+          },
+          "limit": {
+            "description": "The most items the page holds; the whole list where none is given.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0,
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "accountName"
+        ]
+      },
+      "output": {
+        "$ref": "#/components/schemas/FolderPage"
+      },
+      "route": "GET /accounts/{accountName}/folders"
+    },
+    {
+      "name": "mail_labels",
+      "description": "An account's labels in their order: each one's id, which mail_messages takes as labelId and mail_update among labelIds, its name and its colour.",
+      "input": {
+        "description": "A page of an account's folders or labels.",
+        "type": "object",
+        "properties": {
+          "accountName": {
+            "type": "string"
+          },
+          "after": {
+            "description": "The position of the last item read; the items after it.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "default": null
+          },
+          "limit": {
+            "description": "The most items the page holds; the whole list where none is given.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0,
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "accountName"
+        ]
+      },
+      "output": {
+        "$ref": "#/components/schemas/LabelPage"
+      },
+      "route": "GET /accounts/{accountName}/labels"
+    },
+    {
       "name": "mail_messages",
       "description": "Messages of a folder, a label or matching search words, newest first, without their bodies. The next page is asked with before set to the last message's at.",
       "input": {
